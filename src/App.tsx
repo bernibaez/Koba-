@@ -8,6 +8,8 @@ import StockTransfersPage from './pages/StockTransfersPage';
 import StockAdjustmentsPage from './pages/StockAdjustmentsPage';
 import ContactsPage from './pages/ContactsPage';
 import ExpensesPage from './pages/ExpensesPage';
+import AccountsReceivablePage from './pages/AccountsReceivablePage';
+import AccountsPayablePage from './pages/AccountsPayablePage';
 import ReportsPage from './pages/ReportsPage';
 import UsersPage from './pages/UsersPage';
 import SettingsPage from './pages/SettingsPage';
@@ -25,6 +27,8 @@ export default function App() {
       <Route path="/stock-adjustments" element={<StockAdjustmentsPage />} />
       <Route path="/contacts" element={<ContactsPage />} />
       <Route path="/expenses" element={<ExpensesPage />} />
+      <Route path="/accounts-receivable" element={<AccountsReceivablePage />} />
+      <Route path="/accounts-payable" element={<AccountsPayablePage />} />
       <Route path="/reports" element={<ReportsPage />} />
       <Route path="/users" element={<UsersPage />} />
       <Route path="/settings" element={<SettingsPage />} />

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import AppLogo from './ui/AppLogo';
-import { LayoutDashboard, ShoppingCart, Package, Users, UserCheck, ShoppingBag, ArrowLeftRight, Sliders, BarChart2, Settings, ChevronRight, Store, FileText, DollarSign,  } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, Package, Users, UserCheck, ShoppingBag, ArrowLeftRight, Sliders, BarChart2, Settings, ChevronRight, Store, FileText, DollarSign, HandCoins, Wallet } from 'lucide-react';
 
 interface NavItem {
   id: string;
@@ -22,6 +22,8 @@ const navItems: NavItem[] = [
   { id: 'nav-stock-adjust', label: 'Ajustes Stock', icon: <Sliders size={18} />, href: '/stock-adjustments', group: 'Inventario' },
   { id: 'nav-contacts', label: 'Contactos', icon: <Users size={18} />, href: '/contacts', group: 'CRM' },
   { id: 'nav-expenses', label: 'Gastos', icon: <DollarSign size={18} />, href: '/expenses', group: 'Finanzas' },
+  { id: 'nav-receivable', label: 'Cuentas por Cobrar', icon: <HandCoins size={18} />, href: '/accounts-receivable', group: 'Finanzas' },
+  { id: 'nav-payable', label: 'Cuentas por Pagar', icon: <Wallet size={18} />, href: '/accounts-payable', group: 'Finanzas' },
   { id: 'nav-reports', label: 'Informes', icon: <BarChart2 size={18} />, href: '/reports', group: 'Análisis' },
   { id: 'nav-users', label: 'Usuarios', icon: <UserCheck size={18} />, href: '/users', group: 'Configuración' },
   { id: 'nav-settings', label: 'Configuración', icon: <Settings size={18} />, href: '/settings', group: 'Configuración' },
