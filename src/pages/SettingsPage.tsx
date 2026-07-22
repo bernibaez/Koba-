@@ -1,8 +1,15 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import {
-  Building2, MapPin, FileText, Printer, Tag, DollarSign, Globe, Bell, Shield, Mail, Upload, Save, ChevronRight
+  Building2, MapPin, FileText, Printer, Tag, DollarSign, Globe, Bell, Shield, Mail, Upload, Save, ChevronRight, Trash2, ImageIcon
 } from 'lucide-react';
+import { toast } from 'sonner';
+import {
+  clearCompanyLogo,
+  getCompanyLogo,
+  readLogoFile,
+  setCompanyLogo,
+} from '@/lib/companyLogo';
 
 const settingsSections = [
   { id: 'company', label: 'Empresa', icon: <Building2 size={18} /> },
@@ -19,6 +26,39 @@ const settingsSections = [
 
 export default function SettingsPage() {
   const [activeSection, setActiveSection] = useState('company');
+  const [logoPreview, setLogoPreview] = useState<string | null>(() => getCompanyLogo());
+  const [logoError, setLogoError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const openFilePicker = () => {
+    setLogoError(null);
+    fileInputRef.current?.click();
+  };
+
+  const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
+    try {
+      const dataUrl = await readLogoFile(file);
+      setLogoPreview(dataUrl);
+      setCompanyLogo(dataUrl);
+      setLogoError(null);
+      toast.success('Logo actualizado');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'No se pudo cargar la imagen';
+      setLogoError(message);
+      toast.error(message);
+    }
+  };
+
+  const handleRemoveLogo = () => {
+    clearCompanyLogo();
+    setLogoPreview(null);
+    setLogoError(null);
+    toast.success('Logo eliminado');
+  };
 
   return (
     <AppLayout>
@@ -46,13 +86,57 @@ export default function SettingsPage() {
               <div className="card p-6 space-y-6">
                 <h2 className="text-lg font-bold text-foreground">Información de la Empresa</h2>
                 <div className="flex items-center gap-6">
-                  <div className="w-24 h-24 rounded-xl border-2 border-dashed border-border flex flex-col items-center justify-center cursor-pointer hover:border-primary transition-colors bg-secondary/50">
-                    <Upload size={20} className="text-muted-foreground mb-1" />
-                    <span className="text-xs text-muted-foreground">Logo</span>
-                  </div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/jpg,image/webp,image/svg+xml,.png,.jpg,.jpeg,.webp,.svg"
+                    className="hidden"
+                    onChange={handleLogoChange}
+                  />
+                  <button
+                    type="button"
+                    onClick={openFilePicker}
+                    className="w-24 h-24 rounded-xl border-2 border-dashed border-border flex flex-col items-center justify-center cursor-pointer hover:border-primary transition-colors bg-secondary/50 overflow-hidden relative group"
+                    aria-label="Subir logo"
+                  >
+                    {logoPreview ? (
+                      <img
+                        src={logoPreview}
+                        alt="Logo de la empresa"
+                        className="w-full h-full object-contain p-1"
+                      />
+                    ) : (
+                      <>
+                        <Upload size={20} className="text-muted-foreground mb-1" />
+                        <span className="text-xs text-muted-foreground">Logo</span>
+                      </>
+                    )}
+                    <span className="absolute inset-0 bg-foreground/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <ImageIcon size={22} className="text-white" />
+                    </span>
+                  </button>
                   <div className="flex-1">
-                    <p className="text-sm text-muted-foreground">Sube el logo de tu empresa (PNG, JPG, max 2MB)</p>
-                    <button className="btn-secondary mt-2 text-xs py-1.5">Cambiar logo</button>
+                    <p className="text-sm text-muted-foreground">
+                      Sube el logo de tu empresa (PNG, JPG, WEBP o SVG, máx. 2MB). Se mostrará en el menú lateral.
+                    </p>
+                    {logoError && (
+                      <p className="text-xs text-danger mt-1">{logoError}</p>
+                    )}
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      <button type="button" onClick={openFilePicker} className="btn-secondary text-xs py-1.5">
+                        {logoPreview ? 'Cambiar logo' : 'Subir logo'}
+                      </button>
+                      {logoPreview && (
+                        <button
+                          type="button"
+                          onClick={handleRemoveLogo}
+                          className="btn-secondary text-xs py-1.5 text-danger flex items-center gap-1"
+                        >
+                          <Trash2 size={14} />
+                          Quitar
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
