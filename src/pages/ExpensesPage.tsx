@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { DollarSign, Tag, Plus, Search, Filter, Download, Eye, Edit2, Trash2, Upload } from 'lucide-react';
+import { exportTableToPdf, formatMoneyPdf } from '@/lib/exportPdf';
 
 interface Expense {
   id: number; code: string; category: string; description: string; amount: number;
@@ -49,6 +50,40 @@ export default function ExpensesPage() {
 
   const totalSpent = mockExpenses.filter(e => e.status === 'approved').reduce((sum, e) => sum + e.amount, 0);
 
+  const handleExportPdf = () => {
+    if (tab === 'list') {
+      exportTableToPdf({
+        title: 'Listado de Gastos',
+        filename: 'gastos',
+        headers: ['Código', 'Fecha', 'Categoría', 'Descripción', 'Responsable', 'Monto', 'Recibo', 'Estado'],
+        rows: filtered.map((e) => [
+          e.code,
+          e.date,
+          e.category,
+          e.description,
+          e.responsible,
+          formatMoneyPdf(e.amount),
+          e.receipt ? 'Sí' : 'No',
+          statusMap[e.status]?.label ?? e.status,
+        ]),
+        landscape: true,
+      });
+      return;
+    }
+    exportTableToPdf({
+      title: 'Categorías de Gastos',
+      filename: 'categorias-gastos',
+      headers: ['Categoría', 'Descripción', 'Presupuesto', 'Gastado', 'Disponible'],
+      rows: mockCategories.map((c) => [
+        c.name,
+        c.description,
+        formatMoneyPdf(c.budget),
+        formatMoneyPdf(c.spent),
+        formatMoneyPdf(c.budget - c.spent),
+      ]),
+    });
+  };
+
   return (
     <AppLayout>
       <div className="space-y-6 slide-up">
@@ -89,7 +124,7 @@ export default function ExpensesPage() {
           </div>
           <div className="flex gap-2">
             <button className="btn-secondary flex items-center gap-2"><Filter size={16} />Filtrar</button>
-            <button className="btn-secondary flex items-center gap-2"><Download size={16} />Exportar</button>
+            <button type="button" onClick={handleExportPdf} className="btn-secondary flex items-center gap-2"><Download size={16} />Exportar PDF</button>
           </div>
         </div>
 

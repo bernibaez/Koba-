@@ -24,6 +24,7 @@ import CustomersReport from './reports/CustomersReport';
 import AgentsReport from './reports/AgentsReport';
 import FiscalDGIIReport from './reports/FiscalDGIIReport';
 import CashierReport from './reports/CashierReport';
+import { exportReportPdf } from './reports/exportReportPdf';
 
 type ReportId =
   | 'profit-loss'
@@ -101,7 +102,7 @@ export default function ReportsPage() {
               <Printer size={16} />
               Imprimir
             </button>
-            <button type="button" className="btn-primary flex items-center gap-2">
+            <button type="button" className="btn-primary flex items-center gap-2" onClick={() => exportReportPdf(activeReport, activeLabel, dateFrom, dateTo)}>
               <Download size={16} />
               Exportar PDF
             </button>

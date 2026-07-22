@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { Plus, Search, Filter, Download, Eye, Edit2, Trash2 } from 'lucide-react';
+import { exportTableToPdf } from '@/lib/exportPdf';
 
 const mockTransfers = [
   { id: 1, code: 'TRF-001', from: 'Sucursal Principal', to: 'Sucursal Norte', date: '2024-01-15', items: 5, status: 'completed' as const },
@@ -13,6 +14,29 @@ const statusMap = { completed: { label: 'Completado', cls: 'badge-success' }, pe
 export default function StockTransfersPage() {
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
+
+  const filtered = mockTransfers.filter(
+    (t) =>
+      t.code.toLowerCase().includes(search.toLowerCase()) ||
+      t.from.toLowerCase().includes(search.toLowerCase()) ||
+      t.to.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const handleExportPdf = () => {
+    exportTableToPdf({
+      title: 'Transferencias de Stock',
+      filename: 'transferencias-stock',
+      headers: ['Código', 'Origen', 'Destino', 'Fecha', 'Ítems', 'Estado'],
+      rows: filtered.map((t) => [
+        t.code,
+        t.from,
+        t.to,
+        t.date,
+        t.items,
+        statusMap[t.status]?.label ?? t.status,
+      ]),
+    });
+  };
 
   return (
     <AppLayout>
@@ -33,7 +57,7 @@ export default function StockTransfersPage() {
           <div className="relative flex-1"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><input className="input-field pl-9" placeholder="Buscar transferencias..." value={search} onChange={e => setSearch(e.target.value)} /></div>
           <div className="flex gap-2">
             <button className="btn-secondary flex items-center gap-2"><Filter size={16} />Filtrar</button>
-            <button className="btn-secondary flex items-center gap-2"><Download size={16} />Exportar</button>
+            <button type="button" onClick={handleExportPdf} className="btn-secondary flex items-center gap-2"><Download size={16} />Exportar PDF</button>
           </div>
         </div>
         <div className="card overflow-hidden">

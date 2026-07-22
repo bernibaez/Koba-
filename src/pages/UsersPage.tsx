@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { Users, UserCheck, Shield, Plus, Search, Filter, Edit2, Trash2, ToggleLeft, ToggleRight, Download, Eye } from 'lucide-react';
+import { exportTableToPdf, formatMoneyPdf } from '@/lib/exportPdf';
 
 interface User {
   id: number; name: string; email: string; role: string; status: 'active' | 'inactive';
@@ -53,6 +54,47 @@ export default function UsersPage() {
     u.email.toLowerCase().includes(search.toLowerCase())
   );
 
+  const handleExportPdf = () => {
+    if (tab === 'users') {
+      exportTableToPdf({
+        title: 'Usuarios del Sistema',
+        filename: 'usuarios',
+        headers: ['Nombre', 'Email', 'Teléfono', 'Rol', 'Último acceso', 'Estado'],
+        rows: filteredUsers.map((u) => [
+          u.name,
+          u.email,
+          u.phone,
+          u.role,
+          u.lastLogin,
+          u.status === 'active' ? 'Activo' : 'Inactivo',
+        ]),
+      });
+      return;
+    }
+    if (tab === 'roles') {
+      exportTableToPdf({
+        title: 'Roles y Permisos',
+        filename: 'roles',
+        headers: ['Rol', 'Permisos', 'Usuarios', 'Descripción'],
+        rows: mockRoles.map((r) => [r.name, r.permissions, r.users, r.description]),
+      });
+      return;
+    }
+    exportTableToPdf({
+      title: 'Agentes Comerciales',
+      filename: 'agentes',
+      headers: ['Nombre', 'Email', 'Teléfono', 'Ventas', 'Comisión', 'Estado'],
+      rows: mockAgents.map((a) => [
+        a.name,
+        a.email,
+        a.phone,
+        a.sales,
+        formatMoneyPdf(a.commission),
+        a.status === 'active' ? 'Activo' : 'Inactivo',
+      ]),
+    });
+  };
+
   return (
     <AppLayout>
       <div className="space-y-6 slide-up">
@@ -85,7 +127,7 @@ export default function UsersPage() {
           </div>
           <div className="flex gap-2">
             <button className="btn-secondary flex items-center gap-2"><Filter size={16} />Filtrar</button>
-            <button className="btn-secondary flex items-center gap-2"><Download size={16} />Exportar</button>
+            <button type="button" onClick={handleExportPdf} className="btn-secondary flex items-center gap-2"><Download size={16} />Exportar PDF</button>
           </div>
         </div>
 

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { Users, Truck, Tag, Plus, Search, Filter, Edit2, Trash2, Download, Eye, Phone, MapPin, CreditCard } from 'lucide-react';
+import { exportTableToPdf, formatMoneyPdf } from '@/lib/exportPdf';
 
 interface Customer {
   id: number; name: string; phone: string; email: string; address: string;
@@ -56,6 +57,52 @@ export default function ContactsPage() {
     s.name.toLowerCase().includes(search.toLowerCase())
   );
 
+  const handleExportPdf = () => {
+    if (tab === 'customers') {
+      exportTableToPdf({
+        title: 'Clientes',
+        filename: 'clientes',
+        headers: ['Nombre', 'Teléfono', 'Email', 'Grupo', 'Crédito', 'Compras', 'Saldo', 'Estado'],
+        rows: filteredCustomers.map((c) => [
+          c.name,
+          c.phone,
+          c.email,
+          c.group,
+          formatMoneyPdf(c.credit),
+          c.purchases,
+          formatMoneyPdf(c.balance),
+          c.status === 'active' ? 'Activo' : 'Inactivo',
+        ]),
+        landscape: true,
+      });
+      return;
+    }
+    if (tab === 'suppliers') {
+      exportTableToPdf({
+        title: 'Proveedores',
+        filename: 'proveedores',
+        headers: ['Nombre', 'Contacto', 'Teléfono', 'Email', 'Compras', 'Saldo', 'Estado'],
+        rows: filteredSuppliers.map((s) => [
+          s.name,
+          s.contact,
+          s.phone,
+          s.email,
+          s.purchases,
+          formatMoneyPdf(s.balance),
+          s.status === 'active' ? 'Activo' : 'Inactivo',
+        ]),
+        landscape: true,
+      });
+      return;
+    }
+    exportTableToPdf({
+      title: 'Grupos de Clientes',
+      filename: 'grupos-clientes',
+      headers: ['Grupo', 'Descuento', 'Clientes', 'Descripción'],
+      rows: mockGroups.map((g) => [g.name, `${g.discount}%`, g.customers, g.description]),
+    });
+  };
+
   return (
     <AppLayout>
       <div className="space-y-6 slide-up">
@@ -105,7 +152,7 @@ export default function ContactsPage() {
           </div>
           <div className="flex gap-2">
             <button className="btn-secondary flex items-center gap-2"><Filter size={16} />Filtrar</button>
-            <button className="btn-secondary flex items-center gap-2"><Download size={16} />Exportar</button>
+            <button type="button" onClick={handleExportPdf} className="btn-secondary flex items-center gap-2"><Download size={16} />Exportar PDF</button>
           </div>
         </div>
 

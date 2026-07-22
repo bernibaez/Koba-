@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { ShoppingCart, FileText, RotateCcw, Plus, Search, Filter, Download, Eye, Edit2, Trash2, Printer } from 'lucide-react';
+import { exportTableToPdf, formatMoneyPdf } from '@/lib/exportPdf';
 
 interface Sale {
   id: number; code: string; customer: string; date: string; items: number;
@@ -53,6 +54,60 @@ export default function SalesPage() {
     s.code.toLowerCase().includes(search.toLowerCase()) ||
     s.customer.toLowerCase().includes(search.toLowerCase())
   );
+
+  const handleExportPdf = () => {
+    if (tab === 'sales') {
+      exportTableToPdf({
+        title: 'Listado de Ventas',
+        filename: 'ventas',
+        headers: ['Factura', 'Fecha', 'Cliente', 'Ítems', 'Subtotal', 'ITBIS', 'Total', 'Pago', 'Estado', 'Agente'],
+        rows: filteredSales.map((s) => [
+          s.code,
+          s.date,
+          s.customer,
+          s.items,
+          formatMoneyPdf(s.subtotal),
+          formatMoneyPdf(s.tax),
+          formatMoneyPdf(s.total),
+          s.payment,
+          saleStatusMap[s.status]?.label ?? s.status,
+          s.agent,
+        ]),
+        landscape: true,
+      });
+      return;
+    }
+    if (tab === 'quotes') {
+      exportTableToPdf({
+        title: 'Listado de Cotizaciones',
+        filename: 'cotizaciones',
+        headers: ['Código', 'Cliente', 'Fecha', 'Válida hasta', 'Total', 'Estado'],
+        rows: mockQuotes.map((q) => [
+          q.code,
+          q.customer,
+          q.date,
+          q.validUntil,
+          formatMoneyPdf(q.total),
+          saleStatusMap[q.status]?.label ?? q.status,
+        ]),
+      });
+      return;
+    }
+    exportTableToPdf({
+      title: 'Devoluciones de Venta',
+      filename: 'devoluciones-venta',
+      headers: ['Código', 'Factura', 'Cliente', 'Fecha', 'Total', 'Motivo', 'Estado'],
+      rows: mockReturns.map((r) => [
+        r.code,
+        r.saleCode,
+        r.customer,
+        r.date,
+        formatMoneyPdf(r.total),
+        r.reason,
+        saleStatusMap[r.status]?.label ?? r.status,
+      ]),
+    });
+  };
 
   if (showAddForm) {
     return (
@@ -193,7 +248,7 @@ export default function SalesPage() {
           </div>
           <div className="flex gap-2">
             <button className="btn-secondary flex items-center gap-2"><Filter size={16} />Filtrar</button>
-            <button className="btn-secondary flex items-center gap-2"><Download size={16} />Exportar</button>
+            <button type="button" onClick={handleExportPdf} className="btn-secondary flex items-center gap-2"><Download size={16} />Exportar PDF</button>
           </div>
         </div>
 

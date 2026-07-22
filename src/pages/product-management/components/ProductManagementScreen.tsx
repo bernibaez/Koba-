@@ -5,6 +5,7 @@ import ProductsTable from './ProductsTable';
 import ProductFormModal from './ProductFormModal';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 import { toast } from 'sonner';
+import { exportTableToPdf, formatMoneyPdf } from '@/lib/exportPdf';
 
 export interface Product {
   id: string;
@@ -153,10 +154,30 @@ export default function ProductManagementScreen() {
     toast.success(`Producto marcado como ${newStatus}`);
   };
 
+  const handleExportPdf = () => {
+    exportTableToPdf({
+      title: 'Catálogo de Productos',
+      filename: 'productos',
+      headers: ['SKU', 'Nombre', 'Categoría', 'Marca', 'Stock', 'Costo', 'Precio', 'Estado'],
+      rows: filtered.map((p) => [
+        p.sku,
+        p.name,
+        p.category,
+        p.brand,
+        p.currentStock,
+        formatMoneyPdf(p.costPrice),
+        formatMoneyPdf(p.salePrice),
+        p.status === 'active' ? 'Activo' : p.status === 'inactive' ? 'Inactivo' : 'Descontinuado',
+      ]),
+      landscape: true,
+    });
+  };
+
   return (
     <div className="space-y-4">
       <ProductsHeader
         onAdd={() => { setEditProduct(null); setAddModalOpen(true); }}
+        onExport={handleExportPdf}
         totalProducts={products.length}
         activeProducts={products.filter((p) => p.status === 'active').length}
         lowStockCount={products.filter((p) => p.stockStatus === 'low' || p.stockStatus === 'out').length}

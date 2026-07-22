@@ -1,14 +1,21 @@
 import React from 'react';
-import { Package, TrendingDown, CheckCircle } from 'lucide-react';
+import { Package, TrendingDown, CheckCircle, Download } from 'lucide-react';
 
 interface ProductsHeaderProps {
   onAdd: () => void;
+  onExport: () => void;
   totalProducts: number;
   activeProducts: number;
   lowStockCount: number;
 }
 
-export default function ProductsHeader({ onAdd, totalProducts, activeProducts, lowStockCount }: ProductsHeaderProps) {
+export default function ProductsHeader({
+  onAdd,
+  onExport,
+  totalProducts,
+  activeProducts,
+  lowStockCount,
+}: ProductsHeaderProps) {
   return (
     <div className="flex items-start justify-between gap-4 flex-wrap">
       <div>
@@ -37,13 +44,14 @@ export default function ProductsHeader({ onAdd, totalProducts, activeProducts, l
       </div>
 
       <div className="flex items-center gap-2">
-        <button className="btn-secondary flex items-center gap-2 text-sm">
+        <button type="button" className="btn-secondary flex items-center gap-2 text-sm">
           Importar
         </button>
-        <button className="btn-secondary flex items-center gap-2 text-sm">
-          Exportar
+        <button type="button" onClick={onExport} className="btn-secondary flex items-center gap-2 text-sm">
+          <Download size={14} />
+          Exportar PDF
         </button>
-        <button onClick={onAdd} className="btn-primary flex items-center gap-2 text-sm">
+        <button type="button" onClick={onAdd} className="btn-primary flex items-center gap-2 text-sm">
           + Nuevo Producto
         </button>
       </div>

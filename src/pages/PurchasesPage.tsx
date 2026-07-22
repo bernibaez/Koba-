@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { ShoppingBag, RotateCcw, Plus, Search, Filter, Download, Eye, Edit2, Trash2 } from 'lucide-react';
+import { exportTableToPdf, formatMoneyPdf } from '@/lib/exportPdf';
 
 interface Purchase {
   id: number; code: string; supplier: string; date: string; items: number;
@@ -42,6 +43,43 @@ export default function PurchasesPage() {
     p.code.toLowerCase().includes(search.toLowerCase()) ||
     p.supplier.toLowerCase().includes(search.toLowerCase())
   );
+
+  const handleExportPdf = () => {
+    if (tab === 'list') {
+      exportTableToPdf({
+        title: 'Órdenes de Compra',
+        filename: 'compras',
+        headers: ['Orden', 'Fecha', 'Proveedor', 'Ítems', 'Subtotal', 'ITBIS', 'Total', 'Pago', 'Estado'],
+        rows: filtered.map((p) => [
+          p.code,
+          p.date,
+          p.supplier,
+          p.items,
+          formatMoneyPdf(p.subtotal),
+          formatMoneyPdf(p.tax),
+          formatMoneyPdf(p.total),
+          p.payment,
+          statusMap[p.status]?.label ?? p.status,
+        ]),
+        landscape: true,
+      });
+      return;
+    }
+    exportTableToPdf({
+      title: 'Devoluciones de Compra',
+      filename: 'devoluciones-compra',
+      headers: ['Código', 'Orden', 'Proveedor', 'Fecha', 'Total', 'Motivo', 'Estado'],
+      rows: mockReturns.map((r) => [
+        r.code,
+        r.purchaseCode,
+        r.supplier,
+        r.date,
+        formatMoneyPdf(r.total),
+        r.reason,
+        statusMap[r.status]?.label ?? r.status,
+      ]),
+    });
+  };
 
   if (showAddForm) {
     return (
@@ -167,7 +205,7 @@ export default function PurchasesPage() {
           </div>
           <div className="flex gap-2">
             <button className="btn-secondary flex items-center gap-2"><Filter size={16} />Filtrar</button>
-            <button className="btn-secondary flex items-center gap-2"><Download size={16} />Exportar</button>
+            <button type="button" onClick={handleExportPdf} className="btn-secondary flex items-center gap-2"><Download size={16} />Exportar PDF</button>
           </div>
         </div>
 
