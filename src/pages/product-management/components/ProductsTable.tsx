@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { ArrowUpDown, ArrowUp, ArrowDown, Edit, Trash2, Eye, Printer, ToggleLeft, ToggleRight } from 'lucide-react';
 import type { Product } from './ProductManagementScreen';
 import StatusBadge from '@/components/ui/StatusBadge';
-import AppImage from '@/components/ui/AppImage';
+import ProductInitial from '@/components/ui/ProductInitial';
 
 interface ProductsTableProps {
   products: Product[];
@@ -157,17 +157,9 @@ export default function ProductsTable({
                     />
                   </td>
 
-                  {/* Image */}
+                  {/* Inicial */}
                   <td className="px-3 py-2">
-                    <div className="w-10 h-10 rounded-lg overflow-hidden bg-secondary flex-shrink-0">
-                      <AppImage
-                        src={product.image}
-                        alt={`Fotografía del producto ${product.name}`}
-                        width={40}
-                        height={40}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
+                    <ProductInitial name={product.name} size="sm" />
                   </td>
 
                   {/* Name */}

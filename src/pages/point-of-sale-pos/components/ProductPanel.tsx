@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Search, Barcode, Grid3x3, List, X } from 'lucide-react';
 import type { CartItem } from './POSTerminal';
-import AppImage from '@/components/ui/AppImage';
+import ProductInitial from '@/components/ui/ProductInitial';
 
 interface Product {
   id: string;
@@ -169,14 +169,8 @@ export default function ProductPanel({ onAddToCart }: ProductPanelProps) {
                   ${p.outOfStock ? 'opacity-50 cursor-not-allowed border-border' : 'border-border hover:border-primary/40 hover:shadow-card cursor-pointer'}
                 `}
               >
-                <div className="aspect-square w-full mb-2 rounded-lg overflow-hidden bg-secondary">
-                  <AppImage
-                    src={p.image}
-                    alt={`Fotografía de ${p.name} — producto de supermercado`}
-                    width={120}
-                    height={120}
-                    className="w-full h-full object-cover"
-                  />
+                <div className="aspect-square w-full mb-2">
+                  <ProductInitial name={p.name} size="lg" />
                 </div>
                 {p.lowStock && !p.outOfStock && (
                   <span className="absolute top-2 right-2 badge-warning text-xs py-0 px-1.5">Bajo</span>
@@ -209,15 +203,7 @@ export default function ProductPanel({ onAddToCart }: ProductPanelProps) {
                   ${p.outOfStock ? 'opacity-50 cursor-not-allowed border-border' : 'border-border hover:border-primary/40 hover:bg-primary/5 cursor-pointer'}
                 `}
               >
-                <div className="w-10 h-10 rounded-lg overflow-hidden bg-secondary flex-shrink-0">
-                  <AppImage
-                    src={p.image}
-                    alt={`Imagen de ${p.name}`}
-                    width={40}
-                    height={40}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
+                <ProductInitial name={p.name} size="sm" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-foreground truncate">{p.name}</p>
                   <p className="text-xs text-muted-foreground font-mono">{p.sku}</p>
