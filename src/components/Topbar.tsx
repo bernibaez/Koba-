@@ -1,7 +1,6 @@
-'use client';
 import React, { useState } from 'react';
 import { Menu, Search, Bell, Sun, Moon, ChevronDown, X, Settings, LogOut, User, HelpCircle } from 'lucide-react';
-import Link from 'next/link';
+import { Link } from 'react-router-dom';
 
 interface TopbarProps {
   onToggleSidebar: () => void;
@@ -169,7 +168,7 @@ export default function Topbar({
               ].map((item) => (
                 <Link
                   key={`profile-${item.label}`}
-                  href={item.href}
+                  to={item.href}
                   onClick={() => setProfileOpen(false)}
                   className="flex items-center gap-3 px-4 py-2.5 text-sm text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
                 >

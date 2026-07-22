@@ -19,6 +19,7 @@
   --input: #e2e8f0;
   --ring: #16a34a;
   --radius: 0.625rem;
+  --font-dm-sans: 'DM Sans', sans-serif;
   --font-sans: var(--font-dm-sans), sans-serif;
 
   --success: #16a34a;

@@ -1,4 +1,3 @@
-'use client';
 import React from 'react';
 import Modal from './Modal';
 import { AlertTriangle } from 'lucide-react';

@@ -1,4 +1,3 @@
-'use client';
 
 import React, { memo, useMemo } from 'react';
 import AppIcon from './AppIcon';
@@ -38,7 +37,6 @@ const AppLogo = memo(function AppLogo({
           height={size}
           className="flex-shrink-0"
           priority={true}
-          unoptimized={src.endsWith('.svg')}
         />
       ) : (
         <AppIcon name={iconName} size={size} className="flex-shrink-0" />

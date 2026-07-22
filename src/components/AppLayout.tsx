@@ -1,14 +1,14 @@
-'use client';
 import React, { useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Topbar from './Topbar';
 
 interface AppLayoutProps {
   children: React.ReactNode;
-  currentPath: string;
 }
 
-export default function AppLayout({ children, currentPath }: AppLayoutProps) {
+export default function AppLayout({ children }: AppLayoutProps) {
+  const { pathname } = useLocation();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
@@ -27,7 +27,6 @@ export default function AppLayout({ children, currentPath }: AppLayoutProps) {
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
-      {/* Mobile overlay */}
       {mobileSidebarOpen && (
         <div
           className="fixed inset-0 z-40 bg-foreground/40 lg:hidden fade-in"
@@ -35,15 +34,13 @@ export default function AppLayout({ children, currentPath }: AppLayoutProps) {
         />
       )}
 
-      {/* Sidebar */}
       <Sidebar
         collapsed={sidebarCollapsed}
         mobileOpen={mobileSidebarOpen}
         onMobileClose={() => setMobileSidebarOpen(false)}
-        currentPath={currentPath}
+        currentPath={pathname}
       />
 
-      {/* Main content area */}
       <div
         className="flex flex-col flex-1 overflow-hidden transition-all duration-300"
         style={{

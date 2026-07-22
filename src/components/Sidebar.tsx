@@ -1,6 +1,5 @@
-'use client';
 import React from 'react';
-import Link from 'next/link';
+import { Link } from 'react-router-dom';
 import AppLogo from './ui/AppLogo';
 import { LayoutDashboard, ShoppingCart, Package, Users, UserCheck, ShoppingBag, ArrowLeftRight, Sliders, BarChart2, Settings, ChevronRight, Store, FileText, DollarSign,  } from 'lucide-react';
 
@@ -79,7 +78,7 @@ export default function Sidebar({ collapsed, mobileOpen, onMobileClose, currentP
                 {groupItems.map((item) => (
                   <Link
                     key={item.id}
-                    href={item.href}
+                    to={item.href}
                     title={collapsed ? item.label : undefined}
                     className={`
                       flex items-center gap-3 mx-2 px-3 py-2.5 rounded-lg text-sm font-medium
@@ -167,7 +166,7 @@ export default function Sidebar({ collapsed, mobileOpen, onMobileClose, currentP
                 {groupItems.map((item) => (
                   <Link
                     key={`mobile-${item.id}`}
-                    href={item.href}
+                    to={item.href}
                     onClick={onMobileClose}
                     className={`
                       flex items-center gap-3 mx-2 px-3 py-2.5 rounded-lg text-sm font-medium

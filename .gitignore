@@ -1,13 +1,9 @@
-# Node modules
+# Dependencies
 node_modules/
-package-lock.json
 
-# Next.js build output
-.next/
-out/
-
-# Production build
-build/
+# Vite / build
+dist/
+.vite/
 
 # Logs
 npm-debug.log*
@@ -15,23 +11,21 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# OS-specific files
+# OS
 .DS_Store
 Thumbs.db
 
-# Vercel deployment
-.vercel/
-
-# Optional: if using TypeScript
+# TypeScript
 *.tsbuildinfo
 
-# Optional: if using testing tools
+# Testing
 coverage/
-jest-test-results.json
 
-# Optional: if using IDEs
+# IDE
 .vscode/
 .idea/
 
-# Optional: if using TurboRepo or monorepo
-turbo/
+# Env
+.env
+.env.local
+.env.*.local
