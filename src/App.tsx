@@ -1,4 +1,7 @@
 import { Routes, Route } from 'react-router-dom';
+import type { ReactNode } from 'react';
+import ProtectedRoute from './components/ProtectedRoute';
+import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import POSPage from './pages/point-of-sale-pos/POSPage';
 import SalesPage from './pages/SalesPage';
@@ -18,27 +21,32 @@ import UsersPage from './pages/UsersPage';
 import SettingsPage from './pages/SettingsPage';
 import NotFoundPage from './pages/NotFoundPage';
 
+function Guard({ children }: { children: ReactNode }) {
+  return <ProtectedRoute>{children}</ProtectedRoute>;
+}
+
 export default function App() {
   return (
     <Routes>
-      <Route path="/" element={<DashboardPage />} />
-      <Route path="/point-of-sale-pos" element={<POSPage />} />
-      <Route path="/sales" element={<SalesPage />} />
-      <Route path="/purchases" element={<PurchasesPage />} />
-      <Route path="/product-management" element={<ProductManagementPage />} />
-      <Route path="/stock-transfers" element={<StockTransfersPage />} />
-      <Route path="/stock-adjustments" element={<StockAdjustmentsPage />} />
-      <Route path="/scales" element={<ScalesPage />} />
-      <Route path="/returns-history" element={<ReturnsHistoryPage />} />
-      <Route path="/maleta" element={<MaletaPage />} />
-      <Route path="/contacts" element={<ContactsPage />} />
-      <Route path="/expenses" element={<ExpensesPage />} />
-      <Route path="/accounts-receivable" element={<AccountsReceivablePage />} />
-      <Route path="/accounts-payable" element={<AccountsPayablePage />} />
-      <Route path="/reports" element={<ReportsPage />} />
-      <Route path="/users" element={<UsersPage />} />
-      <Route path="/settings" element={<SettingsPage />} />
-      <Route path="*" element={<NotFoundPage />} />
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/" element={<Guard><DashboardPage /></Guard>} />
+      <Route path="/point-of-sale-pos" element={<Guard><POSPage /></Guard>} />
+      <Route path="/sales" element={<Guard><SalesPage /></Guard>} />
+      <Route path="/purchases" element={<Guard><PurchasesPage /></Guard>} />
+      <Route path="/product-management" element={<Guard><ProductManagementPage /></Guard>} />
+      <Route path="/stock-transfers" element={<Guard><StockTransfersPage /></Guard>} />
+      <Route path="/stock-adjustments" element={<Guard><StockAdjustmentsPage /></Guard>} />
+      <Route path="/scales" element={<Guard><ScalesPage /></Guard>} />
+      <Route path="/returns-history" element={<Guard><ReturnsHistoryPage /></Guard>} />
+      <Route path="/maleta" element={<Guard><MaletaPage /></Guard>} />
+      <Route path="/contacts" element={<Guard><ContactsPage /></Guard>} />
+      <Route path="/expenses" element={<Guard><ExpensesPage /></Guard>} />
+      <Route path="/accounts-receivable" element={<Guard><AccountsReceivablePage /></Guard>} />
+      <Route path="/accounts-payable" element={<Guard><AccountsPayablePage /></Guard>} />
+      <Route path="/reports" element={<Guard><ReportsPage /></Guard>} />
+      <Route path="/users" element={<Guard><UsersPage /></Guard>} />
+      <Route path="/settings" element={<Guard><SettingsPage /></Guard>} />
+      <Route path="*" element={<Guard><NotFoundPage /></Guard>} />
     </Routes>
   );
 }

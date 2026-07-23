@@ -1,0 +1,183 @@
+export type UserRole =
+  | 'Administrador'
+  | 'Cajero'
+  | 'Vendedor'
+  | 'Almacenista'
+  | 'Contador';
+
+export type AuthUser = {
+  id: number;
+  username: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  status: 'active' | 'inactive';
+  phone: string;
+  initials: string;
+};
+
+type AuthAccount = AuthUser & { password: string };
+
+/** Cuentas de demo — mismas personas que Gestión de Usuarios */
+export const AUTH_ACCOUNTS: AuthAccount[] = [
+  {
+    id: 1,
+    username: 'admin',
+    name: 'Admin General',
+    email: 'admin@marketerp.do',
+    password: 'admin123',
+    role: 'Administrador',
+    status: 'active',
+    phone: '809-555-0001',
+    initials: 'AG',
+  },
+  {
+    id: 2,
+    username: 'maria',
+    name: 'María García',
+    email: 'maria@marketerp.do',
+    password: 'maria123',
+    role: 'Cajero',
+    status: 'active',
+    phone: '809-555-0002',
+    initials: 'MG',
+  },
+  {
+    id: 3,
+    username: 'carlos',
+    name: 'Carlos López',
+    email: 'carlos@marketerp.do',
+    password: 'carlos123',
+    role: 'Vendedor',
+    status: 'active',
+    phone: '809-555-0003',
+    initials: 'CL',
+  },
+  {
+    id: 4,
+    username: 'ana',
+    name: 'Ana Martínez',
+    email: 'ana@marketerp.do',
+    password: 'ana123',
+    role: 'Almacenista',
+    status: 'inactive',
+    phone: '809-555-0004',
+    initials: 'AM',
+  },
+  {
+    id: 5,
+    username: 'pedro',
+    name: 'Pedro Sánchez',
+    email: 'pedro@marketerp.do',
+    password: 'pedro123',
+    role: 'Contador',
+    status: 'active',
+    phone: '809-555-0005',
+    initials: 'PS',
+  },
+];
+
+/** Código de acceso rápido (botón "Acceder con código") */
+export const ACCESS_CODES: Record<string, string> = {
+  '1001': 'admin',
+  '2002': 'maria',
+  '3003': 'carlos',
+  '4004': 'pedro',
+};
+
+const ALL_ROUTES = '*';
+
+/** Rutas permitidas por rol (`*` = todas) */
+export const ROLE_ROUTES: Record<UserRole, string[] | typeof ALL_ROUTES> = {
+  Administrador: ALL_ROUTES,
+  Cajero: ['/point-of-sale-pos', '/sales', '/returns-history', '/contacts', '/settings'],
+  Vendedor: ['/', '/sales', '/point-of-sale-pos', '/contacts', '/accounts-receivable', '/settings'],
+  Almacenista: [
+    '/',
+    '/product-management',
+    '/stock-transfers',
+    '/stock-adjustments',
+    '/scales',
+    '/purchases',
+    '/settings',
+  ],
+  Contador: [
+    '/',
+    '/reports',
+    '/expenses',
+    '/accounts-receivable',
+    '/accounts-payable',
+    '/sales',
+    '/purchases',
+    '/maleta',
+    '/settings',
+  ],
+};
+
+export const ROLE_HOME: Record<UserRole, string> = {
+  Administrador: '/',
+  Cajero: '/point-of-sale-pos',
+  Vendedor: '/sales',
+  Almacenista: '/product-management',
+  Contador: '/reports',
+};
+
+const STORAGE_KEY = 'marketerp_auth_user';
+
+function toPublicUser(account: AuthAccount): AuthUser {
+  const { password: _, ...user } = account;
+  return user;
+}
+
+export function getStoredUser(): AuthUser | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as AuthUser;
+  } catch {
+    return null;
+  }
+}
+
+export function storeUser(user: AuthUser | null) {
+  if (!user) {
+    localStorage.removeItem(STORAGE_KEY);
+    return;
+  }
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
+}
+
+export function authenticate(username: string, password: string):
+  | { ok: true; user: AuthUser }
+  | { ok: false; error: string } {
+  const account = AUTH_ACCOUNTS.find(
+    (a) => a.username.toLowerCase() === username.trim().toLowerCase()
+  );
+  if (!account) return { ok: false, error: 'Usuario o contraseña incorrectos' };
+  if (account.password !== password) return { ok: false, error: 'Usuario o contraseña incorrectos' };
+  if (account.status !== 'active') return { ok: false, error: 'Esta cuenta está desactivada' };
+  return { ok: true, user: toPublicUser(account) };
+}
+
+export function authenticateByCode(code: string):
+  | { ok: true; user: AuthUser }
+  | { ok: false; error: string } {
+  const username = ACCESS_CODES[code.trim()];
+  if (!username) return { ok: false, error: 'Código de acceso inválido' };
+  const account = AUTH_ACCOUNTS.find((a) => a.username === username);
+  if (!account || account.status !== 'active') {
+    return { ok: false, error: 'Código no disponible' };
+  }
+  return { ok: true, user: toPublicUser(account) };
+}
+
+export function canAccessRoute(role: UserRole, pathname: string): boolean {
+  const allowed = ROLE_ROUTES[role];
+  if (allowed === ALL_ROUTES) return true;
+  if (pathname === '/') return allowed.includes('/');
+  return allowed.some((route) => route !== '/' && pathname.startsWith(route));
+}
+
+export function canAccessNav(role: UserRole, href: string): boolean {
+  return canAccessRoute(role, href);
+}

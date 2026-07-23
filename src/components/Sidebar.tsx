@@ -6,6 +6,8 @@ import {
   BarChart2, Settings, ChevronRight, Store, FileText, DollarSign, HandCoins, Wallet, Scale,
   RotateCcw, Briefcase,
 } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
+import { canAccessNav } from '@/lib/auth';
 
 interface NavItem {
   id: string;
@@ -47,6 +49,10 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ collapsed, mobileOpen, onMobileClose, currentPath }: SidebarProps) {
+  const { user } = useAuth();
+  const role = user?.role ?? 'Cajero';
+  const visibleNav = navItems.filter((n) => canAccessNav(role, n.href));
+
   const isActive = (href: string) => {
     if (href === '/') return currentPath === '/';
     return currentPath.startsWith(href);
@@ -74,7 +80,7 @@ export default function Sidebar({ collapsed, mobileOpen, onMobileClose, currentP
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto scrollbar-thin py-3">
           {groups.map((group) => {
-            const groupItems = navItems.filter((n) => n.group === group);
+            const groupItems = visibleNav.filter((n) => n.group === group);
             if (groupItems.length === 0) return null;
             return (
               <div key={`group-${group}`} className="mb-1">
@@ -124,16 +130,16 @@ export default function Sidebar({ collapsed, mobileOpen, onMobileClose, currentP
         <div className={`border-t border-border p-3 flex-shrink-0 ${collapsed ? 'flex justify-center' : ''}`}>
           {collapsed ? (
             <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-sm">
-              A
+              {user?.initials?.charAt(0) ?? 'U'}
             </div>
           ) : (
             <div className="flex items-center gap-3 px-1">
               <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-sm flex-shrink-0">
-                A
+                {user?.initials?.charAt(0) ?? 'U'}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-foreground truncate">Admin General</p>
-                <p className="text-xs text-muted-foreground truncate">admin@marketerp.do</p>
+                <p className="text-sm font-semibold text-foreground truncate">{user?.name ?? 'Usuario'}</p>
+                <p className="text-xs text-muted-foreground truncate">{user?.role ?? ''}</p>
               </div>
               <Settings size={14} className="text-muted-foreground flex-shrink-0" />
             </div>
@@ -165,7 +171,7 @@ export default function Sidebar({ collapsed, mobileOpen, onMobileClose, currentP
 
         <nav className="flex-1 overflow-y-auto scrollbar-thin py-3">
           {groups.map((group) => {
-            const groupItems = navItems.filter((n) => n.group === group);
+            const groupItems = visibleNav.filter((n) => n.group === group);
             if (groupItems.length === 0) return null;
             return (
               <div key={`mobile-group-${group}`} className="mb-1">

@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
-import { Menu, Search, Bell, Sun, Moon, ChevronDown, X, Settings, LogOut, User, HelpCircle } from 'lucide-react';
+import { Menu, Search, Bell, Sun, Moon, ChevronDown, X, Settings, LogOut, User } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
+import { useAuth } from '@/context/AuthContext';
 
 interface TopbarProps {
   onToggleSidebar: () => void;
@@ -64,10 +66,17 @@ export default function Topbar({
   sidebarCollapsed,
 }: TopbarProps) {
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
   const [notifOpen, setNotifOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [searchValue, setSearchValue] = useState('');
   const [notifications, setNotifications] = useState<AppNotification[]>(INITIAL_NOTIFICATIONS);
+
+  const handleLogout = () => {
+    logout();
+    toast.success('Sesión cerrada');
+    navigate('/login', { replace: true });
+  };
 
   const unreadCount = notifications.length;
 
@@ -210,22 +219,24 @@ export default function Topbar({
             className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-secondary transition-colors"
           >
             <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-xs">
-              A
+              {user?.initials?.charAt(0) ?? 'U'}
             </div>
-            <span className="hidden sm:block text-sm font-medium text-foreground">Admin</span>
+            <span className="hidden sm:block text-sm font-medium text-foreground">
+              {user?.name?.split(' ')[0] ?? 'Usuario'}
+            </span>
             <ChevronDown size={14} className="text-muted-foreground" />
           </button>
 
           {profileOpen && (
-            <div className="absolute right-0 top-full mt-2 w-48 bg-card border border-border rounded-xl shadow-card-hover z-50 fade-in overflow-hidden">
+            <div className="absolute right-0 top-full mt-2 w-52 bg-card border border-border rounded-xl shadow-card-hover z-50 fade-in overflow-hidden">
               <div className="px-4 py-3 border-b border-border">
-                <p className="text-sm font-semibold text-foreground">Admin General</p>
-                <p className="text-xs text-muted-foreground truncate">admin@marketerp.do</p>
+                <p className="text-sm font-semibold text-foreground">{user?.name ?? 'Usuario'}</p>
+                <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
+                <p className="text-[11px] text-primary font-medium mt-0.5">{user?.role}</p>
               </div>
               {[
                 { icon: <User size={15} />, label: 'Mi Perfil', href: '/settings' },
                 { icon: <Settings size={15} />, label: 'Configuración', href: '/settings' },
-                { icon: <HelpCircle size={15} />, label: 'Ayuda', href: '/reports' },
               ].map((item) => (
                 <Link
                   key={`profile-${item.label}`}
@@ -238,7 +249,11 @@ export default function Topbar({
                 </Link>
               ))}
               <div className="border-t border-border">
-                <button className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-danger hover:bg-danger-bg transition-colors">
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-danger hover:bg-danger-bg transition-colors"
+                >
                   <LogOut size={15} />
                   Cerrar Sesión
                 </button>
