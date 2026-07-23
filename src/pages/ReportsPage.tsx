@@ -14,13 +14,19 @@ import {
   Printer,
   Filter,
   Wallet,
+  Truck,
+  ClipboardList,
+  Sliders,
 } from 'lucide-react';
 import ProfitLossReport from './reports/ProfitLossReport';
 import SalesReport from './reports/SalesReport';
 import PurchasesReport from './reports/PurchasesReport';
 import InventoryReport from './reports/InventoryReport';
+import StockDetailReport from './reports/StockDetailReport';
+import AdjustmentsReport from './reports/AdjustmentsReport';
 import ExpensesReport from './reports/ExpensesReport';
 import CustomersReport from './reports/CustomersReport';
+import SuppliersReport from './reports/SuppliersReport';
 import AgentsReport from './reports/AgentsReport';
 import FiscalDGIIReport from './reports/FiscalDGIIReport';
 import CashierReport from './reports/CashierReport';
@@ -31,8 +37,11 @@ type ReportId =
   | 'sales'
   | 'purchases'
   | 'stock'
+  | 'stock-detail'
+  | 'adjustments'
   | 'expenses'
   | 'customers'
+  | 'suppliers'
   | 'agents'
   | 'fiscal'
   | 'cashier';
@@ -42,8 +51,11 @@ const reportTypes: { id: ReportId; label: string; icon: React.ReactNode; color: 
   { id: 'sales', label: 'Ventas', icon: <ShoppingCart size={18} />, color: 'text-info' },
   { id: 'purchases', label: 'Compras', icon: <ShoppingBag size={18} />, color: 'text-warning' },
   { id: 'stock', label: 'Inventario', icon: <Package size={18} />, color: 'text-primary' },
+  { id: 'stock-detail', label: 'Informe Stock', icon: <ClipboardList size={18} />, color: 'text-primary' },
+  { id: 'adjustments', label: 'Informe Ajustes', icon: <Sliders size={18} />, color: 'text-warning' },
   { id: 'expenses', label: 'Gastos', icon: <DollarSign size={18} />, color: 'text-danger' },
   { id: 'customers', label: 'Clientes', icon: <Users size={18} />, color: 'text-info' },
+  { id: 'suppliers', label: 'Proveedores', icon: <Truck size={18} />, color: 'text-warning' },
   { id: 'agents', label: 'Agentes', icon: <UserCheck size={18} />, color: 'text-primary' },
   { id: 'fiscal', label: 'Informe Fiscal DGII', icon: <FileText size={18} />, color: 'text-warning' },
   { id: 'cashier', label: 'Informe de Caja', icon: <Wallet size={18} />, color: 'text-success' },
@@ -59,10 +71,16 @@ function renderReport(id: ReportId) {
       return <PurchasesReport />;
     case 'stock':
       return <InventoryReport />;
+    case 'stock-detail':
+      return <StockDetailReport />;
+    case 'adjustments':
+      return <AdjustmentsReport />;
     case 'expenses':
       return <ExpensesReport />;
     case 'customers':
       return <CustomersReport />;
+    case 'suppliers':
+      return <SuppliersReport />;
     case 'agents':
       return <AgentsReport />;
     case 'fiscal':

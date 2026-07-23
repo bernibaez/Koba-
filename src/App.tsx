@@ -6,6 +6,9 @@ import PurchasesPage from './pages/PurchasesPage';
 import ProductManagementPage from './pages/product-management/ProductManagementPage';
 import StockTransfersPage from './pages/StockTransfersPage';
 import StockAdjustmentsPage from './pages/StockAdjustmentsPage';
+import ScalesPage from './pages/ScalesPage';
+import ReturnsHistoryPage from './pages/ReturnsHistoryPage';
+import MaletaPage from './pages/MaletaPage';
 import ContactsPage from './pages/ContactsPage';
 import ExpensesPage from './pages/ExpensesPage';
 import AccountsReceivablePage from './pages/AccountsReceivablePage';
@@ -25,6 +28,9 @@ export default function App() {
       <Route path="/product-management" element={<ProductManagementPage />} />
       <Route path="/stock-transfers" element={<StockTransfersPage />} />
       <Route path="/stock-adjustments" element={<StockAdjustmentsPage />} />
+      <Route path="/scales" element={<ScalesPage />} />
+      <Route path="/returns-history" element={<ReturnsHistoryPage />} />
+      <Route path="/maleta" element={<MaletaPage />} />
       <Route path="/contacts" element={<ContactsPage />} />
       <Route path="/expenses" element={<ExpensesPage />} />
       <Route path="/accounts-receivable" element={<AccountsReceivablePage />} />

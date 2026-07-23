@@ -1,7 +1,9 @@
 import React, { useState, useRef } from 'react';
-import { Search, Barcode, Grid3x3, List, X } from 'lucide-react';
+import { Search, Barcode, Grid3x3, List, X, Scale } from 'lucide-react';
 import type { CartItem } from './POSTerminal';
 import ProductInitial from '@/components/ui/ProductInitial';
+import { DELETE_SKU } from '@/lib/posStore';
+import { toast } from 'sonner';
 
 interface Product {
   id: string;
@@ -48,19 +50,23 @@ const products: Product[] = [
   { id: 'prod-014', sku: 'CAF-BUS-250', barcode: '7891001400116', name: 'Café Bustelo 250g', category: 'Bebidas', price: 225, cost: 165, stock: 71, unit: 'Unidad', tax: 18, image: 'https://images.unsplash.com/photo-1447933601403-0c6688de566e?w=120&h=120&fit=crop', lowStock: false, outOfStock: false },
   { id: 'prod-015', sku: 'MAI-AME-UN', barcode: '7891001500117', name: 'Maíz Americano', category: 'Frutas', price: 35, cost: 22, stock: 185, unit: 'Unidad', tax: 0, image: 'https://images.unsplash.com/photo-1551754655-cd27e38d2076?w=120&h=120&fit=crop', lowStock: false, outOfStock: false },
   { id: 'prod-016', sku: 'CHI-LAY-42', barcode: '7891001600118', name: 'Chips Lay\'s 42g', category: 'Snacks', price: 75, cost: 52, stock: 92, unit: 'Unidad', tax: 18, image: 'https://images.unsplash.com/photo-1566478989037-eec170784d0b?w=120&h=120&fit=crop', lowStock: false, outOfStock: false },
+  { id: 'prod-del', sku: DELETE_SKU, barcode: '9999999999999', name: 'ELIMINAR (SKU escáner)', category: 'Sistema', price: 0, cost: 0, stock: 999, unit: 'Acción', tax: 0, image: '', lowStock: false, outOfStock: false },
 ];
 
 interface ProductPanelProps {
-  onAddToCart: (product: Omit<CartItem, 'qty' | 'discount'>) => void;
+  onAddToCart: (product: Omit<CartItem, 'qty' | 'discount'>, qty?: number) => void;
+  onOpenScale?: () => void;
+  awaitingDelete?: boolean;
 }
 
-export default function ProductPanel({ onAddToCart }: ProductPanelProps) {
+export default function ProductPanel({ onAddToCart, onOpenScale, awaitingDelete }: ProductPanelProps) {
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState('cat-all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const barcodeRef = useRef<HTMLInputElement>(null);
 
   const filtered = products.filter((p) => {
+    if (p.sku === DELETE_SKU) return false;
     const matchCat = activeCategory === 'cat-all' || categories.find((c) => c.id === activeCategory)?.label === p.category;
     const matchSearch =
       search === '' ||
@@ -71,7 +77,7 @@ export default function ProductPanel({ onAddToCart }: ProductPanelProps) {
   });
 
   const handleAdd = (p: Product) => {
-    if (p.outOfStock) return;
+    if (p.outOfStock && p.sku !== DELETE_SKU) return;
     onAddToCart({
       id: `cart-${p.id}-${Date.now()}`,
       productId: p.id,
@@ -85,6 +91,37 @@ export default function ProductPanel({ onAddToCart }: ProductPanelProps) {
     });
   };
 
+  const handleBarcodeKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== 'Enter') return;
+    const code = search.trim();
+    if (!code) return;
+    const upper = code.toUpperCase();
+    if (upper === DELETE_SKU || upper === 'ELIMINAR' || code === '9999999999999') {
+      onAddToCart({
+        id: `cart-del-${Date.now()}`,
+        productId: 'prod-del',
+        name: 'ELIMINAR',
+        sku: DELETE_SKU,
+        price: 0,
+        cost: 0,
+        tax: 0,
+        image: '',
+        unit: 'Acción',
+      });
+      setSearch('');
+      return;
+    }
+    const found = products.find(
+      (p) => p.barcode === code || p.sku.toLowerCase() === code.toLowerCase()
+    );
+    if (found) {
+      handleAdd(found);
+      setSearch('');
+    } else {
+      toast.error('Producto no encontrado');
+    }
+  };
+
   return (
     <div className="flex flex-col h-full">
       {/* Search bar */}
@@ -94,10 +131,11 @@ export default function ProductPanel({ onAddToCart }: ProductPanelProps) {
           <input
             ref={barcodeRef}
             type="text"
-            placeholder="Buscar por nombre, SKU o código de barras..."
+            placeholder={awaitingDelete ? 'Escanea el producto a ELIMINAR…' : 'Buscar por nombre, SKU o código de barras...'}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="input-field pl-8 h-8 text-sm"
+            onKeyDown={handleBarcodeKey}
+            className={`input-field pl-8 h-8 text-sm ${awaitingDelete ? 'border-danger' : ''}`}
           />
           {search && (
             <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
@@ -105,6 +143,15 @@ export default function ProductPanel({ onAddToCart }: ProductPanelProps) {
             </button>
           )}
         </div>
+        <button
+          type="button"
+          className="flex items-center gap-1.5 px-2.5 h-8 rounded-lg border border-border text-xs font-medium text-muted-foreground hover:bg-secondary transition-colors flex-shrink-0"
+          title="Producto pesado / balanza"
+          onClick={onOpenScale}
+        >
+          <Scale size={14} />
+          <span className="hidden sm:inline">Peso</span>
+        </button>
         <button
           className="flex items-center gap-1.5 px-2.5 h-8 rounded-lg border border-border text-xs font-medium text-muted-foreground hover:bg-secondary transition-colors flex-shrink-0"
           title="Escanear código de barras (F2)"

@@ -5,8 +5,11 @@ type ReportId =
   | 'sales'
   | 'purchases'
   | 'stock'
+  | 'stock-detail'
+  | 'adjustments'
   | 'expenses'
   | 'customers'
+  | 'suppliers'
   | 'agents'
   | 'fiscal'
   | 'cashier';
@@ -81,6 +84,38 @@ export function exportReportPdf(
         ],
       });
       break;
+    case 'stock-detail':
+      exportTableToPdf({
+        title: label,
+        subtitle,
+        filename: `informe-stock-${dateFrom}-${dateTo}`,
+        headers: ['SKU', 'Producto', 'Categoría', 'Stock', 'Mín.', 'Valor', 'Estado'],
+        rows: [
+          ['SKU-001', 'Arroz Selecto 5lb', 'Alimentos', '245', '50', formatMoneyPdf(44100), 'OK'],
+          ['SKU-014', 'Aceite Vegetal 1L', 'Alimentos', '18', '40', formatMoneyPdf(3960), 'Bajo'],
+          ['SKU-022', 'Leche Entera 1L', 'Lácteos', '8', '30', formatMoneyPdf(520), 'Bajo'],
+          ['SKU-045', 'Refresco Cola 2L', 'Bebidas', '5', '25', formatMoneyPdf(425), 'Bajo'],
+          ['SKU-058', 'Detergente 1kg', 'Limpieza', '0', '15', formatMoneyPdf(0), 'Agotado'],
+          ['SKU-072', 'Azúcar Blanca 2lb', 'Alimentos', '120', '40', formatMoneyPdf(11400), 'OK'],
+        ],
+      });
+      break;
+    case 'adjustments':
+      exportTableToPdf({
+        title: label,
+        subtitle,
+        filename: `informe-ajustes-${dateFrom}-${dateTo}`,
+        headers: ['Usuario', 'Fecha', 'Producto', 'Anterior', 'Nueva', 'Dif.', 'Motivo'],
+        rows: [
+          ['Admin General', '2024-01-15', 'Arroz Selecto 5lb', '200', '250', '+50', 'Inventario inicial'],
+          ['Carlos López', '2024-01-14', 'Aceite Vegetal 1L', '23', '18', '-5', 'Productos dañados'],
+          ['María García', '2024-01-13', 'Leche Entera 1L', '11', '8', '-3', 'Vencimiento'],
+          ['Admin General', '2024-01-12', 'Azúcar Blanca 2lb', '80', '180', '+100', 'Corrección'],
+          ['Pedro Sánchez', '2024-01-11', 'Detergente 1kg', '5', '0', '-5', 'Merma'],
+        ],
+        landscape: true,
+      });
+      break;
     case 'expenses':
       exportTableToPdf({
         title: label,
@@ -107,6 +142,21 @@ export function exportReportPdf(
           ['CLI-002', 'Empresa ABC S.R.L.', 'RNC', '131-45678-9', '12', formatMoneyPdf(142800), formatMoneyPdf(8500)],
           ['CLI-003', 'Rosa Jiménez', 'Cédula', '402-9876543-1', '9', formatMoneyPdf(15200), formatMoneyPdf(1003)],
           ['CLI-004', 'Distribuidora XYZ', 'RNC', '101-22334-5', '8', formatMoneyPdf(186400), formatMoneyPdf(0)],
+        ],
+        landscape: true,
+      });
+      break;
+    case 'suppliers':
+      exportTableToPdf({
+        title: label,
+        subtitle,
+        filename: `informe-proveedores-${dateFrom}-${dateTo}`,
+        headers: ['Código', 'Proveedor', 'Compras', 'Saldo', 'Facturas', 'Productos'],
+        rows: [
+          ['PROV-001', 'Distribuidora Norte', formatMoneyPdf(125400), formatMoneyPdf(38500), '3', '42'],
+          ['PROV-002', 'Importadora del Caribe', formatMoneyPdf(84200), formatMoneyPdf(21830), '1', '28'],
+          ['PROV-003', 'Bebidas y Más', formatMoneyPdf(61800), formatMoneyPdf(9160), '1', '35'],
+          ['PROV-004', 'Lácteos del Cibao', formatMoneyPdf(52000), formatMoneyPdf(9600), '2', '18'],
         ],
         landscape: true,
       });

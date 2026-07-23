@@ -1,7 +1,11 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import AppLogo from './ui/AppLogo';
-import { LayoutDashboard, ShoppingCart, Package, Users, UserCheck, ShoppingBag, ArrowLeftRight, Sliders, BarChart2, Settings, ChevronRight, Store, FileText, DollarSign, HandCoins, Wallet } from 'lucide-react';
+import {
+  LayoutDashboard, ShoppingCart, Package, Users, UserCheck, ShoppingBag, ArrowLeftRight, Sliders,
+  BarChart2, Settings, ChevronRight, Store, FileText, DollarSign, HandCoins, Wallet, Scale,
+  RotateCcw, Briefcase,
+} from 'lucide-react';
 
 interface NavItem {
   id: string;
@@ -17,13 +21,16 @@ const navItems: NavItem[] = [
   { id: 'nav-pos', label: 'Punto de Venta', icon: <Store size={18} />, href: '/point-of-sale-pos', group: 'Principal' },
   { id: 'nav-sales', label: 'Ventas', icon: <ShoppingCart size={18} />, href: '/sales', group: 'Operaciones' },
   { id: 'nav-purchases', label: 'Compras', icon: <ShoppingBag size={18} />, href: '/purchases', group: 'Operaciones' },
+  { id: 'nav-returns', label: 'Devoluciones', icon: <RotateCcw size={18} />, href: '/returns-history', group: 'Operaciones' },
   { id: 'nav-products', label: 'Productos', icon: <Package size={18} />, href: '/product-management', group: 'Inventario' },
   { id: 'nav-stock-transfer', label: 'Transferencias', icon: <ArrowLeftRight size={18} />, href: '/stock-transfers', group: 'Inventario' },
   { id: 'nav-stock-adjust', label: 'Ajustes Stock', icon: <Sliders size={18} />, href: '/stock-adjustments', group: 'Inventario' },
+  { id: 'nav-scales', label: 'Balanzas', icon: <Scale size={18} />, href: '/scales', group: 'Inventario' },
   { id: 'nav-contacts', label: 'Contactos', icon: <Users size={18} />, href: '/contacts', group: 'CRM' },
   { id: 'nav-expenses', label: 'Gastos', icon: <DollarSign size={18} />, href: '/expenses', group: 'Finanzas' },
   { id: 'nav-receivable', label: 'Cuentas por Cobrar', icon: <HandCoins size={18} />, href: '/accounts-receivable', group: 'Finanzas' },
   { id: 'nav-payable', label: 'Cuentas por Pagar', icon: <Wallet size={18} />, href: '/accounts-payable', group: 'Finanzas' },
+  { id: 'nav-maleta', label: 'Maleta', icon: <Briefcase size={18} />, href: '/maleta', group: 'Finanzas' },
   { id: 'nav-reports', label: 'Informes', icon: <BarChart2 size={18} />, href: '/reports', group: 'Análisis' },
   { id: 'nav-users', label: 'Usuarios', icon: <UserCheck size={18} />, href: '/users', group: 'Configuración' },
   { id: 'nav-settings', label: 'Configuración', icon: <Settings size={18} />, href: '/settings', group: 'Configuración' },

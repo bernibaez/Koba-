@@ -125,7 +125,8 @@ export default function ProductFormModal({ open, onClose, product, onSave }: Pro
   const onSubmit = (data: FormValues) => {
     const cost = Number(data.costPrice);
     const sale = Number(data.salePrice);
-    const stock = Number(data.currentStock);
+    // Ajuste administrativo: al editar no se altera la existencia (usar módulo Ajustes Stock)
+    const stock = isEdit && product ? product.currentStock : Number(data.currentStock);
     const minStk = Number(data.minStock);
 
     const stockStatus: Product['stockStatus'] =
@@ -359,18 +360,19 @@ export default function ProductFormModal({ open, onClose, product, onSave }: Pro
               label="Stock Actual"
               name="currentStock"
               error={errors.currentStock?.message}
-              required
-              hint="Cantidad actual en inventario"
+              required={!isEdit}
+              hint={isEdit ? 'No editable aquí — usa Ajustes de Stock para cambiar existencias' : 'Cantidad actual en inventario'}
             >
               <input
                 id="currentStock"
                 type="number"
                 min={0}
+                disabled={isEdit}
                 {...register('currentStock', {
-                  required: 'El stock actual es obligatorio',
+                  required: isEdit ? false : 'El stock actual es obligatorio',
                   min: { value: 0, message: 'No puede ser negativo' },
                 })}
-                className="input-field tabular-nums"
+                className={`input-field tabular-nums ${isEdit ? 'opacity-60 cursor-not-allowed' : ''}`}
                 placeholder="0"
               />
             </FormField>

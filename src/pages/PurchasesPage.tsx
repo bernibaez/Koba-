@@ -33,11 +33,17 @@ const statusMap = {
   approved: { label: 'Aprobado', cls: 'badge-success' },
 };
 
+function nextPurchaseInvoice() {
+  const seq = String(Date.now()).slice(-3);
+  return `FAC-COMP-${seq}`;
+}
+
 export default function PurchasesPage() {
   const [tab, setTab] = useState<Tab>('list');
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [invoiceNumber, setInvoiceNumber] = useState(() => nextPurchaseInvoice());
 
   const filtered = mockPurchases.filter(p =>
     p.code.toLowerCase().includes(search.toLowerCase()) ||
@@ -111,7 +117,12 @@ export default function PurchasesPage() {
                   </div>
                   <div>
                     <label className="text-xs font-medium text-muted-foreground mb-1 block">No. Factura Proveedor</label>
-                    <input className="input-field" placeholder="FAC-0001" />
+                    <input
+                      className="input-field font-mono"
+                      value={invoiceNumber}
+                      onChange={(e) => setInvoiceNumber(e.target.value)}
+                      placeholder="FAC-COMP-XXX"
+                    />
                   </div>
                 </div>
               </div>
@@ -176,7 +187,14 @@ export default function PurchasesPage() {
             <h1 className="text-2xl font-bold text-foreground">Compras</h1>
             <p className="text-sm text-muted-foreground mt-1">Gestiona órdenes de compra y devoluciones</p>
           </div>
-          <button onClick={() => setShowAddForm(true)} className="btn-primary flex items-center gap-2 w-fit">
+          <button
+            type="button"
+            onClick={() => {
+              setInvoiceNumber(nextPurchaseInvoice());
+              setShowAddForm(true);
+            }}
+            className="btn-primary flex items-center gap-2 w-fit"
+          >
             <Plus size={16} />Nueva Compra
           </button>
         </div>
