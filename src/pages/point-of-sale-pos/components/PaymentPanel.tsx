@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from 'react';
-import { CreditCard, Banknote, Smartphone, Split, Printer, CheckCircle, X, Plus } from 'lucide-react';
+import { CreditCard, Banknote, Smartphone, Split, Printer, CheckCircle, X, Plus, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import type { CartItem, Customer } from './POSTerminal';
 import type { PaymentSplit } from '@/lib/posStore';
+import { logAuditEvent } from '@/lib/auditStore';
 
 type PaymentMethod = 'cash' | 'card' | 'transfer' | 'credit' | 'split';
 
@@ -47,7 +48,7 @@ export default function PaymentPanel({
 
   const cashAmount = parseFloat(cashReceived) || 0;
   const change = method === 'cash' ? Math.max(0, cashAmount - total) : 0;
-  const insufficient = method === 'cash' && cashAmount > 0 && cashAmount < total;
+  const isCashInsufficient = method === 'cash' && cashAmount < total;
 
   const splitNums = useMemo(
     () => ({
@@ -75,7 +76,7 @@ export default function PaymentPanel({
     }
     if (method === 'cash') {
       if (cashAmount < total) {
-        toast.error('Monto recibido insuficiente para cubrir el total');
+        toast.error('Monto recibido insuficiente para cubrir el total de la factura');
         return null;
       }
       return { cash: total, card: 0, transfer: 0, credit: 0 };
@@ -105,7 +106,9 @@ export default function PaymentPanel({
     if (!payments) return;
 
     setProcessing(true);
-    setLastChange(method === 'cash' ? change : method === 'split' ? Math.max(0, splitNums.cash - (payments.cash || 0)) : 0);
+    const computedChange = method === 'cash' ? change : method === 'split' ? Math.max(0, splitNums.cash - (payments.cash || 0)) : 0;
+    setLastChange(computedChange);
+
     setTimeout(() => {
       setProcessing(false);
       const parts = [
@@ -114,6 +117,17 @@ export default function PaymentPanel({
         payments.transfer > 0 ? `Transferencia ${fmt(payments.transfer)}` : null,
         payments.credit > 0 ? `Crédito ${fmt(payments.credit)}` : null,
       ].filter(Boolean);
+
+      // Audit Log
+      logAuditEvent({
+        user: 'Admin General',
+        role: 'Administrador',
+        action: 'Venta',
+        module: 'POS',
+        details: `Venta procesada por ${fmt(total)} (${parts.join(' · ')})`,
+        after: { total, payments, change: computedChange, cartCount: cart.length },
+      });
+
       toast.success(`Venta procesada — ${fmt(total)}`, {
         description: parts.join(' · ') || undefined,
       });
@@ -121,7 +135,7 @@ export default function PaymentPanel({
         toast.info('Enviando recibo a impresora…');
       }
       onComplete(payments);
-    }, 800);
+    }, 600);
   };
 
   if (orderCompleted) {
@@ -132,18 +146,18 @@ export default function PaymentPanel({
         </div>
         <div className="text-center">
           <p className="text-lg font-bold text-foreground">¡Venta Completada!</p>
-          <p className="text-sm text-muted-foreground mt-1">{fmt(total)}</p>
+          <p className="text-sm text-muted-foreground mt-1">Total Factura: {fmt(total)}</p>
         </div>
         {lastChange > 0 && (
-          <div className="w-full bg-success-bg border border-success/20 rounded-xl p-4 text-center">
-            <p className="text-xs text-muted-foreground">Cambio a entregar</p>
-            <p className="text-2xl font-bold tabular-nums text-success mt-1">{fmt(lastChange)}</p>
+          <div className="w-full bg-success-bg border border-success/30 rounded-xl p-4 text-center">
+            <p className="text-xs font-medium text-success-foreground">Cambio a devolver</p>
+            <p className="text-3xl font-extrabold tabular-nums text-success mt-1">{fmt(lastChange)}</p>
           </div>
         )}
         <div className="flex gap-2 w-full mt-2">
-          <button type="button" className="flex-1 btn-secondary flex items-center justify-center gap-2 text-xs py-2.5">
+          <button type="button" onClick={() => window.print()} className="flex-1 btn-secondary flex items-center justify-center gap-2 text-xs py-2.5">
             <Printer size={14} />
-            Imprimir
+            Imprimir Recibo
           </button>
           <button type="button" onClick={onNewSale} className="flex-1 btn-primary text-xs py-2.5">
             Nueva Venta
@@ -165,10 +179,11 @@ export default function PaymentPanel({
       </div>
 
       <div className="flex-1 overflow-y-auto scrollbar-thin p-4 space-y-4">
-        <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 text-center">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Total a Cobrar</p>
-          <p className="text-3xl font-bold tabular-nums text-primary mt-1">{fmt(total)}</p>
-          {customer && <p className="text-xs text-muted-foreground mt-1">Cliente: {customer.name}</p>}
+        {/* Total Factura Header */}
+        <div className="bg-primary/10 border border-primary/30 rounded-xl p-4 text-center">
+          <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Total Factura</p>
+          <p className="text-3xl font-extrabold tabular-nums text-primary mt-1">{fmt(total)}</p>
+          {customer && <p className="text-xs text-muted-foreground mt-1 font-medium">Cliente: {customer.name}</p>}
         </div>
 
         <div>
@@ -181,7 +196,7 @@ export default function PaymentPanel({
                 onClick={() => setMethod(m.id)}
                 className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-all duration-150 active:scale-95
                   ${method === m.id
-                    ? 'bg-primary/10 border-primary/40 text-primary'
+                    ? 'bg-primary/10 border-primary/40 text-primary font-bold shadow-sm'
                     : 'bg-card border-border text-muted-foreground hover:bg-secondary hover:text-foreground'
                   }`}
               >
@@ -192,28 +207,40 @@ export default function PaymentPanel({
           </div>
         </div>
 
+        {/* Dynamic Cash Payment Calculations (Módulo 2 Requirement) */}
         {method === 'cash' && (
-          <div className="space-y-3">
+          <div className="space-y-3 bg-secondary/20 p-3.5 rounded-xl border border-border">
             <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Monto Recibido (RD$)</label>
+              <label className="block text-xs font-bold text-foreground mb-1.5">
+                Monto Recibido del Cliente (RD$) <span className="text-danger">*</span>
+              </label>
               <input
                 type="number"
+                step="0.01"
                 placeholder="0.00"
                 value={cashReceived}
                 onChange={(e) => setCashReceived(e.target.value)}
-                className={`input-field text-lg font-bold tabular-nums text-center ${insufficient ? 'border-danger focus:ring-danger' : ''}`}
+                className={`input-field text-xl font-black tabular-nums text-center ${
+                  isCashInsufficient && cashAmount > 0 ? 'border-danger text-danger focus:ring-danger' : ''
+                }`}
               />
-              {insufficient && <p className="text-xs text-danger mt-1">Faltan: {fmt(total - cashAmount)}</p>}
+              {isCashInsufficient && cashAmount > 0 && (
+                <p className="text-xs text-danger font-semibold mt-1 flex items-center justify-center gap-1">
+                  <AlertCircle size={14} /> Monto insuficiente — Faltan: {fmt(total - cashAmount)}
+                </p>
+              )}
             </div>
+
+            {/* Quick cash denomination buttons */}
             <div>
-              <p className="text-xs text-muted-foreground mb-1.5">Billetes comunes</p>
+              <p className="text-xs text-muted-foreground mb-1.5 font-medium">Billetes sugeridos</p>
               <div className="grid grid-cols-4 gap-1.5">
                 {quickCash.map((v) => (
                   <button
                     key={`quick-${v}`}
                     type="button"
                     onClick={() => setCashReceived(v.toString())}
-                    className="py-1.5 text-xs font-semibold bg-secondary hover:bg-border rounded-lg transition-colors active:scale-95 tabular-nums"
+                    className="py-1.5 text-xs font-bold bg-secondary hover:bg-border rounded-lg transition-colors active:scale-95 tabular-nums"
                   >
                     {v >= 1000 ? `${v / 1000}k` : v}
                   </button>
@@ -221,18 +248,34 @@ export default function PaymentPanel({
               </div>
               <button
                 type="button"
-                onClick={() => setCashReceived(String(Math.ceil(total / 100) * 100))}
-                className="w-full mt-1.5 py-1.5 text-xs font-semibold bg-primary/10 text-primary hover:bg-primary/20 rounded-lg transition-colors"
+                onClick={() => setCashReceived(String(total))}
+                className="w-full mt-1.5 py-1.5 text-xs font-bold bg-primary/10 text-primary hover:bg-primary/20 rounded-lg transition-colors"
               >
-                Exacto: {fmt(Math.ceil(total / 100) * 100)}
+                Monto Exacto: {fmt(total)}
               </button>
             </div>
-            {cashAmount >= total && cashAmount > 0 && (
-              <div className="bg-success-bg border border-success/20 rounded-xl p-3 text-center">
-                <p className="text-xs text-muted-foreground">Cambio a entregar</p>
-                <p className="text-2xl font-bold tabular-nums text-success">{fmt(change)}</p>
+
+            {/* Total Factura, Monto Recibido & Cambio a Devolver Breakdown */}
+            <div className="border-t border-border/80 pt-3 space-y-2 text-sm">
+              <div className="flex justify-between text-muted-foreground">
+                <span>Total Factura:</span>
+                <span className="font-bold text-foreground">{fmt(total)}</span>
               </div>
-            )}
+              <div className="flex justify-between text-muted-foreground">
+                <span>Monto Recibido:</span>
+                <span className="font-bold text-foreground">{fmt(cashAmount)}</span>
+              </div>
+              <div
+                className={`flex justify-between items-center p-3 rounded-xl font-bold border ${
+                  cashAmount >= total
+                    ? 'bg-success-bg border-success/30 text-success'
+                    : 'bg-secondary border-border text-muted-foreground'
+                }`}
+              >
+                <span className="text-sm">Cambio a Devolver:</span>
+                <span className="text-2xl font-black tabular-nums">{fmt(change)}</span>
+              </div>
+            </div>
           </div>
         )}
 
@@ -337,18 +380,18 @@ export default function PaymentPanel({
         <button
           type="button"
           onClick={handleProcess}
-          disabled={processing || cart.length === 0}
-          className="w-full btn-primary py-4 text-base font-bold flex items-center justify-center gap-2 disabled:opacity-50"
+          disabled={processing || cart.length === 0 || isCashInsufficient}
+          className="w-full btn-primary py-4 text-base font-bold flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {processing ? (
             <>
               <span className="w-5 h-5 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
-              Procesando...
+              Procesando Venta...
             </>
           ) : (
             <>
               <CheckCircle size={18} />
-              Cobrar {fmt(total)}
+              Finalizar Venta {fmt(total)}
             </>
           )}
         </button>

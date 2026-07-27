@@ -2,13 +2,17 @@ import React, { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import Modal from '@/components/ui/Modal';
 import type { Product } from './ProductManagementScreen';
-import { Package } from 'lucide-react';
+import { Package, Barcode, Printer, Sparkles } from 'lucide-react';
+import { generateUniqueBarcode } from '@/lib/barcodeUtils';
+import { logAuditEvent } from '@/lib/auditStore';
+import { toast } from 'sonner';
 
 interface ProductFormModalProps {
   open: boolean;
   onClose: () => void;
   product: Product | null;
   onSave: (p: Product) => void;
+  onPrintLabel?: (p: Product) => void;
 }
 
 type FormValues = Omit<Product, 'id' | 'stockStatus'>;
@@ -47,13 +51,15 @@ function FormField({
   );
 }
 
-export default function ProductFormModal({ open, onClose, product, onSave }: ProductFormModalProps) {
+export default function ProductFormModal({ open, onClose, product, onSave, onPrintLabel }: ProductFormModalProps) {
   const isEdit = !!product;
 
   const {
     register,
     handleSubmit,
     reset,
+    setValue,
+    getValues,
     formState: { errors, isSubmitting },
     watch,
   } = useForm<FormValues>({
@@ -122,10 +128,15 @@ export default function ProductFormModal({ open, onClose, product, onSave }: Pro
     }
   }, [product, reset, open]);
 
+  const handleGenerateBarcode = () => {
+    const code = generateUniqueBarcode();
+    setValue('barcode', code, { shouldValidate: true, shouldDirty: true });
+    toast.success(`Código de barras único generado: ${code}`);
+  };
+
   const onSubmit = (data: FormValues) => {
     const cost = Number(data.costPrice);
     const sale = Number(data.salePrice);
-    // Ajuste administrativo: al editar no se altera la existencia (usar módulo Ajustes Stock)
     const stock = isEdit && product ? product.currentStock : Number(data.currentStock);
     const minStk = Number(data.minStock);
 
@@ -143,7 +154,32 @@ export default function ProductFormModal({ open, onClose, product, onSave }: Pro
       currentStock: stock,
       stockStatus,
     };
-    // Backend integration point: POST /api/products or PUT /api/products/:id
+
+    // System Audit Event
+    if (isEdit && product) {
+      const priceChanged = product.salePrice !== sale;
+      logAuditEvent({
+        user: 'Admin General',
+        role: 'Administrador',
+        action: priceChanged ? 'Cambio de precio' : 'Edición de producto',
+        module: 'Gestión de Productos',
+        details: priceChanged
+          ? `Precio cambiado para "${saved.name}" de RD$ ${product.salePrice} a RD$ ${sale}`
+          : `Producto "${saved.name}" actualizado`,
+        before: { name: product.name, salePrice: product.salePrice, costPrice: product.costPrice },
+        after: { name: saved.name, salePrice: saved.salePrice, costPrice: saved.costPrice },
+      });
+    } else {
+      logAuditEvent({
+        user: 'Admin General',
+        role: 'Administrador',
+        action: 'Edición de producto',
+        module: 'Gestión de Productos',
+        details: `Nuevo producto creado: "${saved.name}" (SKU: ${saved.sku})`,
+        after: { name: saved.name, sku: saved.sku, salePrice: saved.salePrice },
+      });
+    }
+
     onSave(saved);
   };
 
@@ -162,9 +198,20 @@ export default function ProductFormModal({ open, onClose, product, onSave }: Pro
       size="2xl"
       footer={
         <div className="flex items-center justify-between gap-3">
-          <p className="text-xs text-muted-foreground">
-            Los campos con <span className="text-danger">*</span> son obligatorios
-          </p>
+          <div className="flex items-center gap-2">
+            {isEdit && product && onPrintLabel && (
+              <button
+                type="button"
+                onClick={() => onPrintLabel(product)}
+                className="btn-secondary text-xs flex items-center gap-1.5 py-1.5"
+              >
+                <Printer size={14} /> Imprimir Etiqueta
+              </button>
+            )}
+            <p className="text-xs text-muted-foreground">
+              Los campos con <span className="text-danger">*</span> son obligatorios
+            </p>
+          </div>
           <div className="flex gap-2">
             <button type="button" onClick={onClose} className="btn-secondary">
               Cancelar
@@ -189,7 +236,7 @@ export default function ProductFormModal({ open, onClose, product, onSave }: Pro
       }
     >
       <form id="product-form" onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-        {/* Section: Basic Info */}
+        {/* Basic Info */}
         <div>
           <div className="flex items-center gap-2 mb-4">
             <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -216,13 +263,23 @@ export default function ProductFormModal({ open, onClose, product, onSave }: Pro
               />
             </FormField>
 
-            <FormField label="Código de Barras" name="barcode" error={errors.barcode?.message} hint="EAN-13, UPC-A o código interno">
-              <input
-                id="barcode"
-                {...register('barcode')}
-                className="input-field font-mono"
-                placeholder="Ej: 7891000100103"
-              />
+            <FormField label="Código de Barras" name="barcode" error={errors.barcode?.message} hint="EAN-13, Code-128 o auto-generado">
+              <div className="flex gap-2">
+                <input
+                  id="barcode"
+                  {...register('barcode')}
+                  className="input-field font-mono flex-1"
+                  placeholder="Ej: 7891000100103"
+                />
+                <button
+                  type="button"
+                  onClick={handleGenerateBarcode}
+                  className="btn-secondary text-xs flex items-center gap-1 px-3 whitespace-nowrap"
+                  title="Generar código de barras único automáticamente"
+                >
+                  <Sparkles size={14} className="text-primary" /> Generar Código
+                </button>
+              </div>
             </FormField>
 
             <FormField label="Categoría" name="category" error={errors.category?.message} required>
@@ -269,7 +326,7 @@ export default function ProductFormModal({ open, onClose, product, onSave }: Pro
 
         <div className="border-t border-border" />
 
-        {/* Section: Pricing */}
+        {/* Pricing */}
         <div>
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
@@ -347,7 +404,7 @@ export default function ProductFormModal({ open, onClose, product, onSave }: Pro
 
         <div className="border-t border-border" />
 
-        {/* Section: Inventory */}
+        {/* Inventory */}
         <div>
           <div className="flex items-center gap-2 mb-4">
             <div className="w-7 h-7 rounded-lg bg-info-bg flex items-center justify-center">
@@ -425,32 +482,6 @@ export default function ProductFormModal({ open, onClose, product, onSave }: Pro
               />
             </FormField>
           </div>
-        </div>
-
-        <div className="border-t border-border" />
-
-        {/* Section: Media */}
-        <div>
-          <div className="flex items-center gap-2 mb-4">
-            <div className="w-7 h-7 rounded-lg bg-secondary flex items-center justify-center">
-              <span className="text-muted-foreground text-xs">IMG</span>
-            </div>
-            <h3 className="text-sm font-semibold text-foreground">Imagen del Producto</h3>
-          </div>
-          <FormField
-            label="URL de la Imagen"
-            name="image"
-            error={errors.image?.message}
-            hint="URL pública de la fotografía del producto"
-          >
-            <input
-              id="image"
-              type="url"
-              {...register('image')}
-              className="input-field"
-              placeholder="https://example.com/product-image.jpg"
-            />
-          </FormField>
         </div>
       </form>
     </Modal>

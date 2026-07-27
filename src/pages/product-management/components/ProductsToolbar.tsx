@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Filter, Trash2, Tag, X, ChevronDown } from 'lucide-react';
+import { Search, Filter, Trash2, Tag, X, ChevronDown, Printer } from 'lucide-react';
 
 interface ProductsToolbarProps {
   search: string;
@@ -12,6 +12,7 @@ interface ProductsToolbarProps {
   onFilterStock: (v: string) => void;
   selectedCount: number;
   onBulkDelete: () => void;
+  onPrintSelectedLabels?: () => void;
   onAdd: () => void;
   totalFiltered: number;
 }
@@ -33,7 +34,7 @@ const stockStatuses = [
 export default function ProductsToolbar({
   search, onSearch, filterCategory, onFilterCategory,
   filterStatus, onFilterStatus, filterStock, onFilterStock,
-  selectedCount, onBulkDelete, totalFiltered,
+  selectedCount, onBulkDelete, onPrintSelectedLabels, totalFiltered,
 }: ProductsToolbarProps) {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const activeFilters = [
@@ -159,8 +160,11 @@ export default function ProductsToolbar({
         <div className="flex items-center gap-3 px-3 py-2 bg-primary/5 border border-primary/20 rounded-lg slide-up">
           <span className="text-xs font-semibold text-primary">{selectedCount} seleccionado{selectedCount !== 1 ? 's' : ''}</span>
           <div className="flex items-center gap-2 ml-2">
-            <button className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded-lg hover:bg-secondary">
-              <Tag size={13} />
+            <button
+              onClick={onPrintSelectedLabels}
+              className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:bg-primary/10 transition-colors px-2.5 py-1 rounded-lg"
+            >
+              <Printer size={13} />
               Imprimir etiquetas
             </button>
             <button

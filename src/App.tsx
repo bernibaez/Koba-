@@ -12,6 +12,8 @@ import StockAdjustmentsPage from './pages/StockAdjustmentsPage';
 import ScalesPage from './pages/ScalesPage';
 import ReturnsHistoryPage from './pages/ReturnsHistoryPage';
 import MaletaPage from './pages/MaletaPage';
+import CashClosurePage from './pages/CashClosurePage';
+import AuditPage from './pages/AuditPage';
 import ContactsPage from './pages/ContactsPage';
 import ExpensesPage from './pages/ExpensesPage';
 import AccountsReceivablePage from './pages/AccountsReceivablePage';
@@ -39,6 +41,8 @@ export default function App() {
       <Route path="/scales" element={<Guard><ScalesPage /></Guard>} />
       <Route path="/returns-history" element={<Guard><ReturnsHistoryPage /></Guard>} />
       <Route path="/maleta" element={<Guard><MaletaPage /></Guard>} />
+      <Route path="/cash-closure" element={<Guard><CashClosurePage /></Guard>} />
+      <Route path="/audit" element={<Guard><AuditPage /></Guard>} />
       <Route path="/contacts" element={<Guard><ContactsPage /></Guard>} />
       <Route path="/expenses" element={<Guard><ExpensesPage /></Guard>} />
       <Route path="/accounts-receivable" element={<Guard><AccountsReceivablePage /></Guard>} />

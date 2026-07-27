@@ -4,7 +4,7 @@ import AppLogo from './ui/AppLogo';
 import {
   LayoutDashboard, ShoppingCart, Package, Users, UserCheck, ShoppingBag, ArrowLeftRight, Sliders,
   BarChart2, Settings, ChevronRight, Store, FileText, DollarSign, HandCoins, Wallet, Scale,
-  RotateCcw, Briefcase,
+  RotateCcw, Briefcase, Lock, ShieldCheck,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { canAccessNav } from '@/lib/auth';
@@ -29,11 +29,13 @@ const navItems: NavItem[] = [
   { id: 'nav-stock-adjust', label: 'Ajustes Stock', icon: <Sliders size={18} />, href: '/stock-adjustments', group: 'Inventario' },
   { id: 'nav-scales', label: 'Balanzas', icon: <Scale size={18} />, href: '/scales', group: 'Inventario' },
   { id: 'nav-contacts', label: 'Contactos', icon: <Users size={18} />, href: '/contacts', group: 'CRM' },
+  { id: 'nav-cash-closure', label: 'Cierre de Caja', icon: <Lock size={18} />, href: '/cash-closure', group: 'Finanzas' },
   { id: 'nav-expenses', label: 'Gastos', icon: <DollarSign size={18} />, href: '/expenses', group: 'Finanzas' },
   { id: 'nav-receivable', label: 'Cuentas por Cobrar', icon: <HandCoins size={18} />, href: '/accounts-receivable', group: 'Finanzas' },
   { id: 'nav-payable', label: 'Cuentas por Pagar', icon: <Wallet size={18} />, href: '/accounts-payable', group: 'Finanzas' },
   { id: 'nav-maleta', label: 'Maleta', icon: <Briefcase size={18} />, href: '/maleta', group: 'Finanzas' },
   { id: 'nav-reports', label: 'Informes', icon: <BarChart2 size={18} />, href: '/reports', group: 'Análisis' },
+  { id: 'nav-audit', label: 'Auditoría', icon: <ShieldCheck size={18} />, href: '/audit', group: 'Configuración' },
   { id: 'nav-users', label: 'Usuarios', icon: <UserCheck size={18} />, href: '/users', group: 'Configuración' },
   { id: 'nav-settings', label: 'Configuración', icon: <Settings size={18} />, href: '/settings', group: 'Configuración' },
   { id: 'nav-docs', label: 'Documentos', icon: <FileText size={18} />, href: '/documents', group: 'Configuración' },

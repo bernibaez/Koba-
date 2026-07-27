@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { ArrowUpDown, ArrowUp, ArrowDown, Edit, Trash2, Eye, Printer, ToggleLeft, ToggleRight } from 'lucide-react';
+import { ArrowUpDown, ArrowUp, ArrowDown, Edit, Trash2, Eye, Printer, ToggleLeft, ToggleRight, Sparkles } from 'lucide-react';
 import type { Product } from './ProductManagementScreen';
 import StatusBadge from '@/components/ui/StatusBadge';
 import ProductInitial from '@/components/ui/ProductInitial';
+import { generateUniqueBarcode } from '@/lib/barcodeUtils';
+import { toast } from 'sonner';
 
 interface ProductsTableProps {
   products: Product[];
@@ -15,6 +17,8 @@ interface ProductsTableProps {
   onEdit: (p: Product) => void;
   onDelete: (id: string) => void;
   onToggleStatus: (id: string) => void;
+  onPrintLabel?: (products: Product[]) => void;
+  onUpdateProduct?: (product: Product) => void;
 }
 
 const stockBadge = (status: Product['stockStatus'], stock: number) => {
@@ -51,9 +55,9 @@ const columns: { key: keyof Product; label: string; sortable?: boolean; align?: 
 export default function ProductsTable({
   products, selectedIds, onToggleSelect, onSelectAll,
   sortField, sortDir, onSort, onEdit, onDelete, onToggleStatus,
+  onPrintLabel, onUpdateProduct
 }: ProductsTableProps) {
   const [hoveredRow, setHoveredRow] = useState<string | null>(null);
-  const [actionMenuId, setActionMenuId] = useState<string | null>(null);
 
   const allSelected = products.length > 0 && selectedIds.size === products.length;
   const someSelected = selectedIds.size > 0 && selectedIds.size < products.length;
@@ -72,6 +76,15 @@ export default function ProductsTable({
     if (diffDays <= 7) return { text: `${formatted} (${diffDays}d)`, color: 'text-danger font-semibold' };
     if (diffDays <= 30) return { text: `${formatted} (${diffDays}d)`, color: 'text-warning font-medium' };
     return { text: formatted, color: 'text-muted-foreground' };
+  };
+
+  const handleGenerateBarcode = (product: Product) => {
+    const code = generateUniqueBarcode();
+    const updated = { ...product, barcode: code };
+    if (onUpdateProduct) {
+      onUpdateProduct(updated);
+    }
+    toast.success(`Código generado para "${product.name}": ${code}`);
   };
 
   if (products.length === 0) {
@@ -96,7 +109,6 @@ export default function ProductsTable({
         <table className="w-full text-sm min-w-[900px]">
           <thead>
             <tr className="border-b border-border bg-secondary/40">
-              {/* Checkbox */}
               <th className="px-4 py-3 w-10">
                 <input
                   type="checkbox"
@@ -107,7 +119,6 @@ export default function ProductsTable({
                   aria-label="Seleccionar todos los productos"
                 />
               </th>
-              {/* Image */}
               <th className="px-3 py-3 w-12" />
               {columns.map((col) => (
                 <th
@@ -124,7 +135,7 @@ export default function ProductsTable({
                   </div>
                 </th>
               ))}
-              <th className="px-4 py-3 w-24 text-xs font-semibold uppercase tracking-wide text-muted-foreground text-right">
+              <th className="px-4 py-3 w-28 text-xs font-semibold uppercase tracking-wide text-muted-foreground text-right">
                 Acciones
               </th>
             </tr>
@@ -172,7 +183,18 @@ export default function ProductsTable({
 
                   {/* Barcode */}
                   <td className="px-4 py-3">
-                    <span className="font-mono text-xs text-muted-foreground">{product.barcode}</span>
+                    {product.barcode ? (
+                      <span className="font-mono text-xs text-muted-foreground">{product.barcode}</span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleGenerateBarcode(product)}
+                        className="text-xs text-primary font-medium hover:underline flex items-center gap-1"
+                        title="Generar código de barras"
+                      >
+                        <Sparkles size={12} /> Generar
+                      </button>
+                    )}
                   </td>
 
                   {/* Category */}
@@ -214,11 +236,7 @@ export default function ProductsTable({
 
                   {/* Actions */}
                   <td className="px-4 py-3">
-                    <div
-                      className={`flex items-center gap-1 justify-end transition-opacity duration-150 ${
-                        hoveredRow === product.id || actionMenuId === product.id ? 'opacity-100' : 'opacity-0'
-                      }`}
-                    >
+                    <div className="flex items-center gap-1 justify-end">
                       <button
                         onClick={() => onEdit(product)}
                         className="p-1.5 rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
@@ -237,6 +255,7 @@ export default function ProductsTable({
                         }
                       </button>
                       <button
+                        onClick={() => onPrintLabel?.([product])}
                         className="p-1.5 rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
                         title="Imprimir etiqueta con código de barras"
                       >
@@ -245,7 +264,7 @@ export default function ProductsTable({
                       <button
                         onClick={() => onDelete(product.id)}
                         className="p-1.5 rounded-md text-muted-foreground hover:bg-danger-bg hover:text-danger transition-colors"
-                        title={`Eliminar ${product.name} — esta acción no se puede deshacer`}
+                        title={`Eliminar ${product.name}`}
                       >
                         <Trash2 size={14} />
                       </button>
@@ -256,35 +275,6 @@ export default function ProductsTable({
             })}
           </tbody>
         </table>
-      </div>
-
-      {/* Pagination */}
-      <div className="px-4 py-3 border-t border-border flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">Filas por página:</span>
-          <select className="input-field h-7 w-16 text-xs py-0">
-            {[10, 25, 50, 100].map((n) => (
-              <option key={`page-size-${n}`} value={n}>{n}</option>
-            ))}
-          </select>
-        </div>
-        <div className="flex items-center gap-1">
-          <span className="text-xs text-muted-foreground mr-2">
-            1–{Math.min(10, products.length)} de {products.length}
-          </span>
-          {[1, 2].map((p) => (
-            <button
-              key={`page-${p}`}
-              className={`w-7 h-7 rounded-md text-xs font-medium transition-colors ${
-                p === 1
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:bg-secondary'
-              }`}
-            >
-              {p}
-            </button>
-          ))}
-        </div>
       </div>
     </div>
   );

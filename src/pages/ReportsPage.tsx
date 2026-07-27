@@ -17,8 +17,10 @@ import {
   Truck,
   ClipboardList,
   Sliders,
+  Tag,
 } from 'lucide-react';
 import ProfitLossReport from './reports/ProfitLossReport';
+import ProductProfitReport from './reports/ProductProfitReport';
 import SalesReport from './reports/SalesReport';
 import PurchasesReport from './reports/PurchasesReport';
 import InventoryReport from './reports/InventoryReport';
@@ -34,6 +36,7 @@ import { exportReportPdf } from './reports/exportReportPdf';
 
 type ReportId =
   | 'profit-loss'
+  | 'product-profit'
   | 'sales'
   | 'purchases'
   | 'stock'
@@ -48,6 +51,7 @@ type ReportId =
 
 const reportTypes: { id: ReportId; label: string; icon: React.ReactNode; color: string }[] = [
   { id: 'profit-loss', label: 'Ganancias y Pérdidas', icon: <TrendingUp size={18} />, color: 'text-success' },
+  { id: 'product-profit', label: 'Ganancias por Producto', icon: <Tag size={18} />, color: 'text-primary' },
   { id: 'sales', label: 'Ventas', icon: <ShoppingCart size={18} />, color: 'text-info' },
   { id: 'purchases', label: 'Compras', icon: <ShoppingBag size={18} />, color: 'text-warning' },
   { id: 'stock', label: 'Inventario', icon: <Package size={18} />, color: 'text-primary' },
@@ -65,6 +69,8 @@ function renderReport(id: ReportId) {
   switch (id) {
     case 'profit-loss':
       return <ProfitLossReport />;
+    case 'product-profit':
+      return <ProductProfitReport />;
     case 'sales':
       return <SalesReport />;
     case 'purchases':
@@ -93,9 +99,9 @@ function renderReport(id: ReportId) {
 }
 
 export default function ReportsPage() {
-  const [activeReport, setActiveReport] = useState<ReportId>('sales');
-  const [dateFrom, setDateFrom] = useState('2024-01-01');
-  const [dateTo, setDateTo] = useState('2024-01-31');
+  const [activeReport, setActiveReport] = useState<ReportId>('profit-loss');
+  const [dateFrom, setDateFrom] = useState('2026-07-01');
+  const [dateTo, setDateTo] = useState('2026-07-26');
   const [branch, setBranch] = useState('all');
   const [generated, setGenerated] = useState(true);
 
@@ -120,7 +126,7 @@ export default function ReportsPage() {
               <Printer size={16} />
               Imprimir
             </button>
-            <button type="button" className="btn-primary flex items-center gap-2" onClick={() => exportReportPdf(activeReport, activeLabel, dateFrom, dateTo)}>
+            <button type="button" className="btn-primary flex items-center gap-2" onClick={() => exportReportPdf(activeReport as any, activeLabel, dateFrom, dateTo)}>
               <Download size={16} />
               Exportar PDF
             </button>

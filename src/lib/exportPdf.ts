@@ -98,6 +98,47 @@ export function exportTableToPdf({
   toast.success('PDF descargado');
 }
 
+export function exportTableToExcel({
+  title,
+  filename,
+  headers,
+  rows,
+}: Omit<ExportPdfOptions, 'landscape' | 'subtitle'>) {
+  if (!rows.length) {
+    toast.error('No hay datos para exportar');
+    return;
+  }
+
+  const csvRows: string[] = [];
+  csvRows.push(`"${title.replace(/"/g, '""')}"`);
+  csvRows.push(`"Generado el: ${new Date().toLocaleString('es-DO')}"`);
+  csvRows.push(''); // Empty line
+
+  // Header row
+  csvRows.push(headers.map((h) => `"${h.replace(/"/g, '""')}"`).join(','));
+
+  // Data rows
+  rows.forEach((row) => {
+    const formattedRow = row.map((cell) => {
+      const val = String(cell ?? '');
+      return `"${val.replace(/"/g, '""')}"`;
+    });
+    csvRows.push(formattedRow.join(','));
+  });
+
+  const csvString = '\uFEFF' + csvRows.join('\n'); // UTF-8 BOM
+  const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  const safeName = filename.endsWith('.csv') ? filename : `${slugify(filename)}.csv`;
+  link.setAttribute('download', safeName);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  toast.success('Excel (CSV) descargado');
+}
+
 export function formatMoneyPdf(value: number) {
   return `RD$ ${value.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }

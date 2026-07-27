@@ -88,10 +88,12 @@ export default function POSTerminal() {
     }
 
     setCart((prev) => {
-      const existing = prev.find((item) => item.productId === product.productId && !product.isWeighted);
-      if (existing && !product.isWeighted) {
+      const existing = prev.find((item) => item.productId === product.productId || item.sku === product.sku);
+      if (existing) {
         return prev.map((item) =>
-          item.productId === product.productId ? { ...item, qty: item.qty + qty } : item
+          (item.productId === product.productId || item.sku === product.sku)
+            ? { ...item, qty: Math.round((item.qty + qty) * 100) / 100 }
+            : item
         );
       }
       return [...prev, { ...product, qty, discount: 0 }];

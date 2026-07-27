@@ -3,6 +3,7 @@ import ProductsHeader from './ProductsHeader';
 import ProductsToolbar from './ProductsToolbar';
 import ProductsTable from './ProductsTable';
 import ProductFormModal from './ProductFormModal';
+import PriceLabelModal from './PriceLabelModal';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 import { toast } from 'sonner';
 import { exportTableToPdf, formatMoneyPdf } from '@/lib/exportPdf';
@@ -57,6 +58,7 @@ export default function ProductManagementScreen() {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [sortField, setSortField] = useState<keyof Product>('name');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [labelModalProducts, setLabelModalProducts] = useState<Product[] | null>(null);
 
   const filtered = products
     .filter((p) => {
@@ -123,7 +125,6 @@ export default function ProductManagementScreen() {
   const handleDelete = () => {
     if (!deleteId) return;
     setDeleteLoading(true);
-    // Backend integration point: DELETE /api/products/:id
     setTimeout(() => {
       const name = products.find((p) => p.id === deleteId)?.name;
       setProducts((prev) => prev.filter((p) => p.id !== deleteId));
@@ -194,6 +195,10 @@ export default function ProductManagementScreen() {
         onFilterStock={setFilterStock}
         selectedCount={selectedIds.size}
         onBulkDelete={handleBulkDelete}
+        onPrintSelectedLabels={() => {
+          const selected = products.filter((p) => selectedIds.has(p.id));
+          if (selected.length > 0) setLabelModalProducts(selected);
+        }}
         onAdd={() => { setEditProduct(null); setAddModalOpen(true); }}
         totalFiltered={filtered.length}
       />
@@ -209,6 +214,8 @@ export default function ProductManagementScreen() {
         onEdit={(p) => { setEditProduct(p); setAddModalOpen(true); }}
         onDelete={(id) => setDeleteId(id)}
         onToggleStatus={handleToggleStatus}
+        onPrintLabel={(prods) => setLabelModalProducts(prods)}
+        onUpdateProduct={(p) => setProducts((prev) => prev.map((item) => item.id === p.id ? p : item))}
       />
 
       <ProductFormModal
@@ -216,7 +223,15 @@ export default function ProductManagementScreen() {
         onClose={() => { setAddModalOpen(false); setEditProduct(null); }}
         product={editProduct}
         onSave={handleSaveProduct}
+        onPrintLabel={(p) => setLabelModalProducts([p])}
       />
+
+      {labelModalProducts && (
+        <PriceLabelModal
+          products={labelModalProducts}
+          onClose={() => setLabelModalProducts(null)}
+        />
+      )}
 
       <ConfirmModal
         open={!!deleteId}
