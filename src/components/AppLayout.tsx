@@ -13,6 +13,8 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
 
+  const isPosPage = pathname.includes('point-of-sale') || pathname.includes('pos');
+
   const toggleDark = () => {
     setDarkMode((prev) => {
       const next = !prev;
@@ -24,6 +26,15 @@ export default function AppLayout({ children }: AppLayoutProps) {
       return next;
     });
   };
+
+  // If on POS page, render full screen without Topbar and Sidebar
+  if (isPosPage) {
+    return (
+      <div className="h-screen w-screen overflow-hidden bg-slate-100 dark:bg-slate-950">
+        {children}
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">

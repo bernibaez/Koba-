@@ -1,12 +1,11 @@
-import React, { useState, useRef } from 'react';
-import { Search, Barcode, Grid3x3, List, X, Scale, Boxes, Sparkles } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Search, Scale, Boxes, Image as ImageIcon, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { CartItem } from './POSTerminal';
-import ProductInitial from '@/components/ui/ProductInitial';
 import { DELETE_SKU } from '@/lib/posStore';
 import { getCombos, checkComboStockAvailability, Combo } from '@/lib/comboStore';
 import ComboStockAlertModal from '@/pages/combos/components/ComboStockAlertModal';
 import { toast } from 'sonner';
-import { scaleProducts, parseScaleBarcode } from '../utils/scaleUtils';
+import { scaleProducts } from '../utils/scaleUtils';
 
 interface Product {
   id: string;
@@ -39,23 +38,20 @@ const categories = [
 ];
 
 const standardProducts: Product[] = [
-  { id: 'prod-001', sku: 'ARR-SEL-5LB', barcode: '7891000100103', name: 'Arroz Selecto 5lb', category: 'Granos', price: 285, cost: 210, stock: 124, unit: 'Unidad', tax: 0, image: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=120&h=120&fit=crop', lowStock: false, outOfStock: false },
-  { id: 'prod-002', sku: 'ACE-VEG-1L', barcode: '7891000200104', name: 'Aceite Vegetal 1L', category: 'Granos', price: 195, cost: 140, stock: 8, unit: 'Unidad', tax: 18, image: 'https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?w=120&h=120&fit=crop', lowStock: true, outOfStock: false },
-  { id: 'prod-003', sku: 'POL-ENT-LB', barcode: '7891000300105', name: 'Pollo Entero /lb', category: 'Carnes', price: 98, cost: 72, stock: 45, unit: 'Libra', tax: 0, image: 'https://images.unsplash.com/photo-1604503468506-a8da13d82791?w=120&h=120&fit=crop', lowStock: false, outOfStock: false, isWeighted: true },
-  { id: 'prod-004', sku: 'LEC-EVA-410', barcode: '7891000400106', name: 'Leche Evaporada 410g', category: 'Lácteos', price: 145, cost: 108, stock: 62, unit: 'Unidad', tax: 0, image: 'https://images.unsplash.com/photo-1550583724-b2692b85b150?w=120&h=120&fit=crop', lowStock: false, outOfStock: false },
-  { id: 'prod-005', sku: 'AZU-BLA-5LB', barcode: '7891000500107', name: 'Azúcar Blanca 5lb', category: 'Granos', price: 175, cost: 128, stock: 89, unit: 'Unidad', tax: 0, image: 'https://images.unsplash.com/photo-1571211905393-9b7e6e2e8b7e?w=120&h=120&fit=crop', lowStock: false, outOfStock: false },
-  { id: 'prod-006', sku: 'HUE-X12', barcode: '7891000600108', name: 'Huevos x12', category: 'Lácteos', price: 165, cost: 120, stock: 34, unit: 'Cartón', tax: 0, image: 'https://images.unsplash.com/photo-1582722872445-44dc5f7e3c8f?w=120&h=120&fit=crop', lowStock: false, outOfStock: false },
-  { id: 'prod-007', sku: 'PAN-AGU-UN', barcode: '7891000700109', name: 'Pan de Agua', category: 'Panadería', price: 12, cost: 7, stock: 210, unit: 'Unidad', tax: 0, image: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?w=120&h=120&fit=crop', lowStock: false, outOfStock: false },
-  { id: 'prod-008', sku: 'HAB-NEG-1LB', barcode: '7891000800110', name: 'Habichuelas Negras 1lb', category: 'Granos', price: 85, cost: 62, stock: 156, unit: 'Unidad', tax: 0, image: 'https://images.unsplash.com/photo-1585664811087-47f65abbad64?w=120&h=120&fit=crop', lowStock: false, outOfStock: false },
-  { id: 'prod-009', sku: 'LEC-PAS-1L', barcode: '7891000900111', name: 'Leche Pasteurizada 1L', category: 'Lácteos', price: 115, cost: 84, stock: 0, unit: 'Unidad', tax: 0, image: 'https://images.unsplash.com/photo-1563636619-e9143da7973b?w=120&h=120&fit=crop', lowStock: false, outOfStock: true },
-  { id: 'prod-010', sku: 'JUG-NAR-1L', barcode: '7891001000112', name: 'Jugo Naranja 1L', category: 'Bebidas', price: 145, cost: 105, stock: 28, unit: 'Unidad', tax: 18, image: 'https://images.unsplash.com/photo-1621506289937-a8e4df240d0b?w=120&h=120&fit=crop', lowStock: false, outOfStock: false },
-  { id: 'prod-011', sku: 'DET-LIQ-1.5', barcode: '7891001100113', name: 'Detergente Líq. 1.5L', category: 'Limpieza', price: 285, cost: 195, stock: 6, unit: 'Unidad', tax: 18, image: 'https://images.unsplash.com/photo-1585664811087-47f65abbad64?w=120&h=120&fit=crop', lowStock: true, outOfStock: false },
-  { id: 'prod-012', sku: 'YOG-GRI-500', barcode: '7891001200114', name: 'Yogur Griego 500g', category: 'Lácteos', price: 195, cost: 140, stock: 48, unit: 'Unidad', tax: 18, image: 'https://images.unsplash.com/photo-1488477181946-6428a0291777?w=120&h=120&fit=crop', lowStock: false, outOfStock: false },
-  { id: 'prod-013', sku: 'PAP-HIG-X4', barcode: '7891001300115', name: 'Papel Higiénico x4', category: 'Limpieza', price: 195, cost: 138, stock: 3, unit: 'Paquete', tax: 18, image: 'https://images.unsplash.com/photo-1584556812952-905ffd0c611a?w=120&h=120&fit=crop', lowStock: true, outOfStock: false },
-  { id: 'prod-014', sku: 'CAF-BUS-250', barcode: '7891001400116', name: 'Café Bustelo 250g', category: 'Bebidas', price: 225, cost: 165, stock: 71, unit: 'Unidad', tax: 18, image: 'https://images.unsplash.com/photo-1447933601403-0c6688de566e?w=120&h=120&fit=crop', lowStock: false, outOfStock: false },
-  { id: 'prod-015', sku: 'MAI-AME-UN', barcode: '7891001500117', name: 'Maíz Americano', category: 'Frutas', price: 35, cost: 22, stock: 185, unit: 'Unidad', tax: 0, image: 'https://images.unsplash.com/photo-1551754655-cd27e38d2076?w=120&h=120&fit=crop', lowStock: false, outOfStock: false },
-  { id: 'prod-016', sku: 'CHI-LAY-42', barcode: '7891001600118', name: 'Chips Lay\'s 42g', category: 'Snacks', price: 75, cost: 52, stock: 92, unit: 'Unidad', tax: 18, image: 'https://images.unsplash.com/photo-1566478989037-eec170784d0b?w=120&h=120&fit=crop', lowStock: false, outOfStock: false },
-  { id: 'prod-del', sku: DELETE_SKU, barcode: '9999999999999', name: 'ELIMINAR (SKU escáner)', category: 'Sistema', price: 0, cost: 0, stock: 999, unit: 'Acción', tax: 0, image: '', lowStock: false, outOfStock: false },
+  { id: 'prod-001', sku: '11772', barcode: '7891000100103', name: '3 Evaporada Famosa', category: 'Lácteos', price: 145, cost: 108, stock: 457.39, unit: 'Und', tax: 0, image: '', lowStock: false, outOfStock: false },
+  { id: 'prod-002', sku: '42', barcode: '7891000200104', name: 'Ace Detallado', category: 'Limpieza', price: 95, cost: 65, stock: 42, unit: 'Und', tax: 18, image: '', lowStock: false, outOfStock: false },
+  { id: 'prod-003', sku: '7462381341418', barcode: '7462381341418', name: 'Aceite Aurora Med.', category: 'Granos', price: 185, cost: 130, stock: 0, unit: 'Und', tax: 18, image: '', lowStock: false, outOfStock: true },
+  { id: 'prod-004', sku: '7460193700096', barcode: '7460193700096', name: 'Aceite Crisol 16oz', category: 'Granos', price: 115, cost: 85, stock: 57, unit: 'Und', tax: 18, image: '', lowStock: false, outOfStock: false },
+  { id: 'prod-005', sku: '7460193705718', barcode: '7460193705718', name: 'Aceite Crisol 34oz', category: 'Granos', price: 195, cost: 140, stock: 41, unit: 'Und', tax: 18, image: '', lowStock: false, outOfStock: false },
+  { id: 'prod-006', sku: '7460193703301', barcode: '7460193703301', name: 'Aceite Crisol 8oz', category: 'Granos', price: 65, cost: 45, stock: 146, unit: 'Und', tax: 18, image: '', lowStock: false, outOfStock: false },
+  { id: 'prod-007', sku: '7460193700133', barcode: '7460193700133', name: 'Aceite Crisol Galón', category: 'Granos', price: 785, cost: 580, stock: 25, unit: 'Und', tax: 18, image: '', lowStock: false, outOfStock: false },
+  { id: 'prod-008', sku: '7460193703981', barcode: '7460193703981', name: 'Aceite Crisol Mas...', category: 'Granos', price: 215, cost: 160, stock: 0, unit: 'Und', tax: 18, image: '', lowStock: false, outOfStock: true },
+  { id: 'prod-009', sku: '7460193700119', barcode: '7460193700119', name: 'Aceite Crisol Medi...', category: 'Granos', price: 145, cost: 105, stock: 116, unit: 'Und', tax: 18, image: '', lowStock: false, outOfStock: false },
+  { id: 'prod-010', sku: '7460193741891', barcode: '7460193741891', name: 'Aceite Crisol Sache...', category: 'Granos', price: 35, cost: 24, stock: 52, unit: 'Und', tax: 18, image: '', lowStock: false, outOfStock: false },
+  { id: 'prod-011', sku: '7460193704063', barcode: '7460193704063', name: 'Aceite Crisol Yumbo', category: 'Granos', price: 425, cost: 310, stock: 56, unit: 'Und', tax: 18, image: '', lowStock: false, outOfStock: false },
+  { id: 'prod-012', sku: '718912323215', barcode: '718912323215', name: 'Aceite De Coco...', category: 'Granos', price: 295, cost: 210, stock: 17, unit: 'Und', tax: 18, image: '', lowStock: false, outOfStock: false },
+  { id: 'prod-013', sku: 'ACE-OLV-20ML', barcode: '7891001300115', name: 'Aceite De Oliva 20ml', category: 'Granos', price: 45, cost: 28, stock: 88, unit: 'Und', tax: 18, image: '', lowStock: false, outOfStock: false },
+  { id: 'prod-014', sku: 'POL-ENT-LB', barcode: '7891000300105', name: 'Pollo Entero /lb', category: 'Carnes', price: 98, cost: 72, stock: 45, unit: 'LB', tax: 0, image: '', lowStock: false, outOfStock: false, isWeighted: true },
 ];
 
 const products: Product[] = [
@@ -86,16 +82,20 @@ interface ProductPanelProps {
   awaitingDelete?: boolean;
 }
 
-export default function ProductPanel({ onAddToCart, onOpenScale, awaitingDelete }: ProductPanelProps) {
+export default function ProductPanel({ onAddToCart, onOpenScale }: ProductPanelProps) {
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState('cat-all');
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const barcodeRef = useRef<HTMLInputElement>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 6;
 
-  // Stock alert dialog state
   const [alertOpen, setAlertOpen] = useState(false);
   const [alertComboName, setAlertComboName] = useState('');
   const [missingItems, setMissingItems] = useState<{ productId: string; sku: string; name: string; required: number; available: number }[]>([]);
+
+  // Reset pagination on category/search change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeCategory, search]);
 
   const allCombos = getCombos().filter((c) => c.active && c.visibleInPos);
 
@@ -122,10 +122,21 @@ export default function ProductPanel({ onAddToCart, onOpenScale, awaitingDelete 
       })
     : [];
 
+  // Combine items for pagination of 6
+  const allDisplayItems = [
+    ...filteredCombos.map((c) => ({ type: 'combo' as const, data: c })),
+    ...filteredProducts.map((p) => ({ type: 'product' as const, data: p })),
+  ];
+
+  const totalItems = allDisplayItems.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / ITEMS_PER_PAGE));
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const currentDisplayItems = allDisplayItems.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+
   const handleProductClick = (p: Product) => {
     if (p.outOfStock && p.sku !== DELETE_SKU) return;
 
-    if ((p.isWeighted || p.unit.toLowerCase() === 'libra' || p.unit.toLowerCase() === 'kg') && onOpenScale) {
+    if ((p.isWeighted || p.unit.toLowerCase() === 'libra' || p.unit.toLowerCase() === 'lb' || p.unit.toLowerCase() === 'kg') && onOpenScale) {
       onOpenScale(p.id, 1.000);
       return;
     }
@@ -144,7 +155,6 @@ export default function ProductPanel({ onAddToCart, onOpenScale, awaitingDelete 
   };
 
   const handleComboClick = (combo: Combo) => {
-    // Check stock for component items
     const stockCheck = checkComboStockAvailability(combo, 1);
     if (!stockCheck.available) {
       setAlertComboName(combo.name);
@@ -161,7 +171,7 @@ export default function ProductPanel({ onAddToCart, onOpenScale, awaitingDelete 
       price: combo.price,
       cost: Math.round(combo.normalPrice * 0.7),
       tax: combo.applyTax ? 18 : 0,
-      image: combo.image || 'https://images.unsplash.com/photo-1533089860892-a7c6f0a88666?w=120&h=120&fit=crop',
+      image: combo.image || '',
       unit: 'Combo',
       isCombo: true,
       comboId: combo.id,
@@ -170,354 +180,135 @@ export default function ProductPanel({ onAddToCart, onOpenScale, awaitingDelete 
     toast.success(`Combo agregado: ${combo.name}`);
   };
 
-  const handleBarcodeKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key !== 'Enter') return;
-    const code = search.trim();
-    if (!code) return;
-    const upper = code.toUpperCase();
-
-    // Check if code matches a Combo
-    const comboFound = allCombos.find(
-      (c) => c.barcode === code || c.code.toLowerCase() === code.toLowerCase()
-    );
-    if (comboFound) {
-      handleComboClick(comboFound);
-      setSearch('');
-      return;
-    }
-
-    if (
-      upper === 'PESO' ||
-      upper === 'PESADOS' ||
-      upper === 'BALANZA' ||
-      upper === 'SCALE' ||
-      upper === '200' ||
-      upper === '2001'
-    ) {
-      if (onOpenScale) {
-        onOpenScale();
-        setSearch('');
-        toast.info('Abriendo balanza de productos pesados');
-        return;
-      }
-    }
-
-    if (upper === DELETE_SKU || upper === 'ELIMINAR' || code === '9999999999999') {
-      onAddToCart({
-        id: `cart-del-${Date.now()}`,
-        productId: 'prod-del',
-        name: 'ELIMINAR',
-        sku: DELETE_SKU,
-        price: 0,
-        cost: 0,
-        tax: 0,
-        image: '',
-        unit: 'Acción',
-      });
-      setSearch('');
-      return;
-    }
-
-    const scaleParsed = parseScaleBarcode(code);
-    if (scaleParsed) {
-      if (scaleParsed.isFromEan13) {
-        onAddToCart(
-          {
-            id: `cart-scale-${Date.now()}`,
-            productId: scaleParsed.product.productId,
-            name: scaleParsed.product.name,
-            sku: scaleParsed.product.sku,
-            price: scaleParsed.product.price,
-            cost: scaleParsed.product.cost,
-            tax: scaleParsed.product.tax,
-            image: scaleParsed.product.image || '',
-            unit: scaleParsed.product.unit,
-            isWeighted: true,
-          },
-          scaleParsed.weight
-        );
-        setSearch('');
-        toast.success(`Escaneado: ${scaleParsed.weight.toFixed(3)} ${scaleParsed.product.unit} de ${scaleParsed.product.name}`);
-        return;
-      } else if (onOpenScale) {
-        onOpenScale(scaleParsed.product.productId, 1.000);
-        setSearch('');
-        toast.info(`Producto pesado escaneado: ${scaleParsed.product.name}`);
-        return;
-      }
-    }
-
-    const found = products.find(
-      (p) => p.barcode === code || p.sku.toLowerCase() === code.toLowerCase()
-    );
-    if (found) {
-      handleProductClick(found);
-      setSearch('');
-    } else {
-      toast.error('Producto o Combo no encontrado');
-    }
-  };
-
-  const totalDisplayItems = filteredProducts.length + filteredCombos.length;
-
   return (
-    <div className="flex flex-col h-full">
-      {/* Search bar */}
-      <div className="px-4 py-3.5 border-b border-border flex flex-wrap sm:flex-nowrap items-center gap-3 flex-shrink-0 bg-card/60">
-        <div className="relative flex-1 min-w-[240px]">
-          <Search size={20} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-primary pointer-events-none z-10" />
-          <input
-            ref={barcodeRef}
-            type="text"
-            placeholder={awaitingDelete ? 'Escanea el producto a ELIMINAR…' : 'Buscar por nombre, combo, SKU o código de barras...'}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={handleBarcodeKey}
-            className={`input-field !pl-11 ${search ? '!pr-10' : '!pr-36'} h-12 text-base font-medium shadow-sm truncate ${awaitingDelete ? 'border-danger' : ''}`}
-          />
-          {!search && (
-            <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-mono font-bold bg-primary/10 text-primary px-2.5 py-1 rounded-lg border border-primary/20 pointer-events-none hidden md:inline z-10">
-              SKU / Combo Escáner
-            </span>
-          )}
-          {search && (
-            <button onClick={() => setSearch('')} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1 z-10">
-              <X size={18} />
-            </button>
-          )}
-        </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <button
-            type="button"
-            className="flex items-center gap-2 px-3.5 h-12 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-sm font-bold hover:bg-emerald-500/20 transition-all shadow-sm"
-            title="Producto pesado / balanza (SKU: 200)"
-            onClick={() => onOpenScale && onOpenScale()}
-          >
-            <Scale size={20} />
-            <span className="hidden sm:inline">Pesados (SKU: 200)</span>
-          </button>
-          <button
-            className="flex items-center gap-2 px-3.5 h-12 rounded-xl border border-border bg-card text-sm font-bold text-foreground/80 hover:bg-secondary transition-all shadow-sm"
-            title="Escanear código de barras (F2)"
-            onClick={() => barcodeRef.current?.focus()}
-          >
-            <Barcode size={20} className="text-primary" />
-            <span className="hidden sm:inline">F2</span>
-          </button>
-          <div className="flex border border-border rounded-xl p-1 bg-secondary/50 gap-1">
-            <button
-              onClick={() => setViewMode('grid')}
-              className={`p-2 rounded-lg transition-colors ${viewMode === 'grid' ? 'bg-card text-primary shadow-xs' : 'text-muted-foreground hover:text-foreground'}`}
-              title="Vista cuadrícula"
-            >
-              <Grid3x3 size={18} />
-            </button>
-            <button
-              onClick={() => setViewMode('list')}
-              className={`p-2 rounded-lg transition-colors ${viewMode === 'list' ? 'bg-card text-primary shadow-xs' : 'text-muted-foreground hover:text-foreground'}`}
-              title="Vista lista"
-            >
-              <List size={18} />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Category Pills */}
-      <div className="px-4 py-2 border-b border-border flex items-center gap-1.5 overflow-x-auto scrollbar-thin flex-shrink-0 bg-card/40">
+    <div className="flex flex-col h-full bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-3 overflow-hidden">
+      {/* Category Pills Bar */}
+      <div className="flex items-center gap-1 overflow-x-auto pb-2 mb-2 scrollbar-thin border-b border-slate-100 dark:border-slate-800 flex-shrink-0">
         {categories.map((cat) => (
           <button
             key={cat.id}
             onClick={() => setActiveCategory(cat.id)}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+            className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
               activeCategory === cat.id
-                ? 'bg-primary text-primary-foreground shadow-xs scale-[1.02]'
-                : cat.id === 'cat-combos'
-                ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 hover:bg-purple-500/20'
-                : 'bg-secondary/80 text-foreground/80 hover:bg-secondary hover:text-foreground'
+                ? 'bg-indigo-600 text-white shadow-2xs font-bold'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
             }`}
           >
-            {cat.id === 'cat-combos' && <Boxes size={14} />}
             {cat.label}
           </button>
         ))}
       </div>
 
-      {/* Products & Combos Grid */}
-      <div className="flex-1 overflow-y-auto scrollbar-thin p-4">
-        {totalDisplayItems === 0 ? (
-          <div className="flex flex-col items-center justify-center h-48 gap-3">
-            <Search size={40} className="text-muted-foreground/30" />
-            <p className="text-base font-semibold text-muted-foreground">No se encontraron productos o combos</p>
-            <button onClick={() => { setSearch(''); setActiveCategory('cat-all'); }} className="text-sm font-bold text-primary hover:underline">
-              Limpiar filtros
-            </button>
-          </div>
-        ) : viewMode === 'grid' ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
-            {/* COMBOS CARDS */}
-            {filteredCombos.map((c) => (
-              <button
-                key={`combo-${c.id}`}
-                onClick={() => handleComboClick(c)}
-                className="pos-product-card relative flex flex-col bg-gradient-to-b from-purple-500/5 to-card border border-purple-500/30 hover:border-purple-500 rounded-2xl p-3 sm:p-3.5 text-left transition-all shadow-card hover:shadow-card-hover cursor-pointer group"
-              >
-                <span className="absolute top-2.5 right-2.5 bg-purple-600 text-white text-[10px] font-black px-2 py-0.5 rounded-md flex items-center gap-1 shadow-xs z-10">
-                  <Sparkles size={10} /> COMBO
-                </span>
-
-                <div className="h-16 sm:h-20 w-full mb-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center overflow-hidden flex-shrink-0 relative">
-                  <img src={c.image || 'https://images.unsplash.com/photo-1533089860892-a7c6f0a88666?w=120&h=120&fit=crop'} alt={c.name} className="w-full h-full object-cover" />
-                </div>
-
-                <p className="text-xs sm:text-sm font-black text-foreground leading-snug line-clamp-2 min-h-[2.4rem]">
-                  {c.name}
-                </p>
-
-                <div className="flex items-center gap-1.5 mt-1">
-                  <span className="text-[10px] font-extrabold text-purple-600 dark:text-purple-400 bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20">
-                    {c.items.length} items
-                  </span>
-                  <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
-                    -{c.savingsPercent.toFixed(0)}% Ahorro
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between mt-2 pt-1 border-t border-border/40">
-                  <p className="text-sm sm:text-base font-black tabular-nums text-purple-600 dark:text-purple-400">
-                    RD$ {c.price.toLocaleString('es-DO')}
-                  </p>
-                  <span className="line-through text-[11px] text-muted-foreground font-semibold">
-                    RD$ {c.normalPrice}
-                  </span>
-                </div>
-                <p className="text-[10px] font-mono text-muted-foreground mt-0.5">Cod: {c.code}</p>
-              </button>
-            ))}
-
-            {/* STANDARD PRODUCTS CARDS */}
-            {filteredProducts.map((p) => (
-              <button
-                key={p.id}
-                onClick={() => handleProductClick(p)}
-                disabled={p.outOfStock}
-                className={`pos-product-card relative flex flex-col bg-card border rounded-2xl p-3 sm:p-3.5 text-left transition-all shadow-card hover:shadow-card-hover
-                  ${p.outOfStock ? 'opacity-50 cursor-not-allowed border-border' : 'border-border/80 hover:border-primary/50 cursor-pointer'}
-                `}
-              >
-                <div className="h-16 sm:h-20 w-full mb-2.5 rounded-xl bg-primary/5 border border-primary/10 flex items-center justify-center overflow-hidden flex-shrink-0 relative">
-                  <ProductInitial name={p.name} size="lg" />
-                  {p.isWeighted && (
-                    <span className="absolute bottom-1.5 right-1.5 bg-emerald-600 text-white p-1 rounded-md text-[10px] font-bold flex items-center gap-0.5 shadow-xs" title="Producto pesado (Balanza)">
-                      <Scale size={11} />
-                    </span>
-                  )}
-                </div>
-                {p.lowStock && !p.outOfStock && (
-                  <span className="absolute top-2.5 right-2.5 badge-warning text-[10px] font-bold px-2 py-0.5">Bajo</span>
-                )}
-                {p.outOfStock && (
-                  <span className="absolute top-2.5 right-2.5 badge-danger text-[10px] font-bold px-2 py-0.5">Agotado</span>
-                )}
-                <p className="text-xs sm:text-sm font-bold text-foreground leading-snug line-clamp-2 min-h-[2.4rem]">{p.name}</p>
-                <div className="flex items-center gap-1.5 mt-1">
-                  <p className="text-xs font-semibold text-muted-foreground">{p.unit}</p>
-                  {p.isWeighted && (
-                    <span className="text-[10px] font-extrabold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
-                      Balanza
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center justify-between mt-2 pt-1 border-t border-border/40">
-                  <p className="text-sm sm:text-base font-extrabold tabular-nums text-primary">
-                    RD$ {p.price.toLocaleString('es-DO')}
-                  </p>
-                  {p.tax > 0 && (
-                    <span className="text-[10px] font-bold text-muted-foreground/80">+ITBIS</span>
-                  )}
-                </div>
-                <p className="text-[11px] font-medium text-muted-foreground mt-0.5">Stock: {p.stock}</p>
-              </button>
-            ))}
+      {/* Product Grid: 6 Items per page */}
+      <div className="flex-1 overflow-y-auto scrollbar-thin pr-1 flex flex-col justify-between">
+        {totalItems === 0 ? (
+          <div className="flex flex-col items-center justify-center h-48 gap-2">
+            <Search size={30} className="text-slate-300" />
+            <p className="text-xs font-medium text-slate-500">No se encontraron productos</p>
           </div>
         ) : (
-          <div className="space-y-1">
-            {/* LIST VISTA FOR COMBOS */}
-            {filteredCombos.map((c) => (
-              <button
-                key={`combo-list-${c.id}`}
-                onClick={() => handleComboClick(c)}
-                className="w-full flex items-center gap-3 p-2.5 rounded-xl border border-purple-500/30 bg-purple-500/5 hover:border-purple-500 text-left transition-all cursor-pointer"
-              >
-                <div className="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center text-purple-600 font-bold">
-                  <Boxes size={20} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-black text-foreground truncate">{c.name}</p>
-                    <span className="text-[10px] font-black bg-purple-600 text-white px-1.5 py-0.5 rounded">COMBO</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground font-mono">{c.code} • {c.items.length} componentes</p>
-                </div>
-                <div className="flex-shrink-0 text-right">
-                  <p className="text-sm font-black tabular-nums text-purple-600 dark:text-purple-400">RD$ {c.price.toLocaleString('es-DO')}</p>
-                  <p className="text-xs line-through text-muted-foreground">RD$ {c.normalPrice}</p>
-                </div>
-              </button>
-            ))}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+            {currentDisplayItems.map((item) => {
+              if (item.type === 'combo') {
+                const c = item.data;
+                return (
+                  <button
+                    key={`combo-${c.id}`}
+                    onClick={() => handleComboClick(c)}
+                    className="group relative flex flex-col items-center text-center bg-purple-50/40 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800/40 rounded-xl p-2.5 transition-all hover:shadow-md hover:border-purple-500 cursor-pointer"
+                  >
+                    <span className="absolute top-1 right-1 bg-purple-600 text-white text-[8px] font-bold px-1.5 py-0.5 rounded shadow-2xs">
+                      COMBO
+                    </span>
+                    <div className="w-full h-16 rounded-lg bg-purple-100 dark:bg-purple-900/40 border border-purple-200 dark:border-purple-800 flex items-center justify-center mb-1.5">
+                      <Boxes size={22} className="text-purple-600 dark:text-purple-400" />
+                    </div>
+                    <p className="text-xs font-bold text-slate-800 dark:text-slate-100 leading-tight line-clamp-2 min-h-[2rem]">
+                      {c.name} ({c.code})
+                    </p>
+                    <p className="text-xs font-extrabold text-purple-600 dark:text-purple-400 mt-1">
+                      RD$ {c.price.toLocaleString('es-DO')}
+                    </p>
+                  </button>
+                );
+              }
 
-            {/* LIST VISTA FOR PRODUCTS */}
-            {filteredProducts.map((p) => (
-              <button
-                key={p.id}
-                onClick={() => handleProductClick(p)}
-                disabled={p.outOfStock}
-                className={`w-full flex items-center gap-3 p-2.5 rounded-xl border text-left transition-all
-                  ${p.outOfStock ? 'opacity-50 cursor-not-allowed border-border' : 'border-border hover:border-primary/40 hover:bg-primary/5 cursor-pointer'}
-                `}
-              >
-                <ProductInitial name={p.name} size="sm" />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-semibold text-foreground truncate">{p.name}</p>
+              const p = item.data;
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => handleProductClick(p)}
+                  disabled={p.outOfStock}
+                  className={`group relative flex flex-col items-center text-center bg-white dark:bg-slate-800/90 border rounded-xl p-2.5 transition-all hover:shadow-md
+                    ${p.outOfStock ? 'opacity-40 border-slate-200 cursor-not-allowed' : 'border-slate-200 dark:border-slate-700/80 hover:border-indigo-500 cursor-pointer'}
+                  `}
+                >
+                  {/* Image Box */}
+                  <div className="w-full h-16 rounded-lg bg-slate-50 dark:bg-slate-700/50 border border-slate-200/60 dark:border-slate-600/40 flex items-center justify-center mb-1.5 relative">
+                    {p.image ? (
+                      <img src={p.image} alt={p.name} className="w-full h-full object-cover rounded-lg" />
+                    ) : (
+                      <ImageIcon size={20} className="text-slate-300 dark:text-slate-500" />
+                    )}
                     {p.isWeighted && (
-                      <span className="text-[10px] font-extrabold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20 flex-shrink-0">
-                        Balanza
+                      <span className="absolute bottom-1 right-1 bg-emerald-600 text-white p-0.5 rounded text-[8px] font-bold" title="Balanza">
+                        <Scale size={10} />
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-muted-foreground font-mono">{p.sku}</p>
-                </div>
-                <div className="flex-shrink-0 text-right">
-                  <p className="text-sm font-bold tabular-nums text-primary">RD$ {p.price.toLocaleString('es-DO')}</p>
-                  <p className="text-xs text-muted-foreground">Stock: {p.stock}</p>
-                </div>
-                {p.lowStock && <span className="badge-warning flex-shrink-0">Bajo</span>}
-                {p.outOfStock && <span className="badge-danger flex-shrink-0">Agotado</span>}
-              </button>
-            ))}
+
+                  {/* Title */}
+                  <p className="text-xs font-bold text-slate-800 dark:text-slate-100 leading-tight line-clamp-2 min-h-[2rem]">
+                    {p.name} {p.sku ? `(${p.sku})` : ''}
+                  </p>
+
+                  {/* Price & Stock */}
+                  <div className="mt-1 flex flex-col items-center">
+                    <p className="text-xs font-black text-slate-900 dark:text-white tabular-nums">
+                      RD$ {p.price.toLocaleString('es-DO')}
+                    </p>
+                    <p className="text-[10px] font-semibold text-slate-400 dark:text-slate-400 tabular-nums">
+                      {p.outOfStock ? 'Agotado' : `${p.stock} ${p.unit || 'Und'} en stock`}
+                    </p>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         )}
       </div>
 
-      {/* Footer shortcuts */}
-      <div className="px-3 py-2 border-t border-border bg-secondary/30 flex items-center gap-3 flex-shrink-0">
-        {[
-          { key: 'F1', label: 'Ayuda' },
-          { key: 'F2', label: 'Barcode' },
-          { key: 'F3', label: 'Cliente' },
-          { key: 'F9', label: 'Pago' },
-          { key: 'F10', label: 'Limpiar' },
-          { key: 'Esc', label: 'Cancelar' },
-        ].map((s) => (
-          <div key={`shortcut-${s.key}`} className="flex items-center gap-1">
-            <kbd className="px-1.5 py-0.5 bg-card border border-border rounded text-xs font-mono font-semibold text-foreground">{s.key}</kbd>
-            <span className="text-xs text-muted-foreground hidden sm:inline">{s.label}</span>
-          </div>
-        ))}
-      </div>
+      {/* Pagination Controls Bar (6 per page) */}
+      {totalPages >= 1 && (
+        <div className="flex items-center justify-between pt-2 mt-2 border-t border-slate-100 dark:border-slate-800 flex-shrink-0">
+          <button
+            type="button"
+            disabled={currentPage === 1}
+            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-xs font-bold text-slate-700 dark:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-2xs flex items-center gap-1"
+          >
+            <ChevronLeft size={15} />
+            <span>Anterior</span>
+          </button>
 
-      {/* Combo Stock Alert Modal */}
+          <div className="flex items-center gap-1 text-xs font-bold text-slate-600 dark:text-slate-300">
+            <span>Pág.</span>
+            <span className="bg-indigo-600 text-white px-2 py-0.5 rounded-lg text-xs font-black tabular-nums">{currentPage}</span>
+            <span>de {totalPages}</span>
+          </div>
+
+          <button
+            type="button"
+            disabled={currentPage === totalPages}
+            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+            className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-xs font-bold text-slate-700 dark:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-2xs flex items-center gap-1"
+          >
+            <span>Siguiente</span>
+            <ChevronRight size={15} />
+          </button>
+        </div>
+      )}
+
       <ComboStockAlertModal
         isOpen={alertOpen}
         onClose={() => setAlertOpen(false)}

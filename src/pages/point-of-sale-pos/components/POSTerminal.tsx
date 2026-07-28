@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, Banknote, CreditCard, XCircle, Pause, CheckCircle, FileText, ShoppingBag } from 'lucide-react';
 import POSHeader from './POSHeader';
 import ProductPanel from './ProductPanel';
 import CartPanel from './CartPanel';
@@ -60,6 +60,7 @@ export default function POSTerminal() {
   const [scaleOpen, setScaleOpen] = useState(false);
   const [scaleParams, setScaleParams] = useState<{ productId?: string; weight?: number } | null>(null);
   const [returnOpen, setReturnOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const handleOpenScale = (productId?: string, weight?: number) => {
     setScaleParams(productId || weight ? { productId, weight } : null);
@@ -200,13 +201,20 @@ export default function POSTerminal() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  const handleQuickCashSale = () => {
+    if (cart.length === 0) {
+      toast.error('El carrito está vacío — agrega productos primero');
+      return;
+    }
+    setPaymentOpen(true);
+  };
+
   const paymentProps = {
     total,
     cart,
     customer: selectedCustomer,
     orderCompleted,
     onComplete: (_payments: PaymentSplit) => {
-      // Deduct inventory for all combos sold in cart
       cart.forEach((cartItem) => {
         if (cartItem.isCombo && cartItem.comboId) {
           const combo = getCombos().find((c) => c.id === cartItem.comboId);
@@ -218,13 +226,13 @@ export default function POSTerminal() {
 
       setLastPayments(_payments);
       setOrderCompleted(true);
-      setPaymentOpen(false);
     },
     onNewSale: clearCart,
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-64px-48px)] -mx-4 lg:-mx-6 xl:-mx-8 2xl:-mx-10 -my-6">
+    <div className="flex flex-col h-screen w-full bg-slate-100 dark:bg-slate-950 p-2 sm:p-3 overflow-hidden">
+      {/* Top Header */}
       <POSHeader
         cartCount={cart.reduce((s, i) => s + i.qty, 0)}
         total={total}
@@ -242,16 +250,10 @@ export default function POSTerminal() {
         onSwitchCash={() => setCashSwitchOpen(true)}
       />
 
-      <div className="flex flex-1 overflow-hidden">
-        <div className="flex-1 min-w-0 border-r border-border overflow-hidden flex flex-col">
-          <ProductPanel
-            onAddToCart={addToCart}
-            onOpenScale={handleOpenScale}
-            awaitingDelete={awaitingDeleteScan}
-          />
-        </div>
-
-        <div className="w-80 xl:w-96 border-r border-border flex flex-col overflow-hidden flex-shrink-0">
+      {/* Main Grid: Left Panel (Cart) & Right Panel (Products Catalog) */}
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-3 overflow-hidden min-h-0">
+        {/* Left Column: Cart & Input Area (58% / 7 cols) */}
+        <div className="lg:col-span-7 flex flex-col overflow-hidden h-full">
           <CartPanel
             cart={cart}
             customer={selectedCustomer}
@@ -266,72 +268,110 @@ export default function POSTerminal() {
             globalDiscountAmount={globalDiscountAmount}
             total={total}
             onCheckout={() => setPaymentOpen(true)}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
           />
         </div>
 
-        <div className="hidden xl:flex w-72 2xl:w-80 flex-col overflow-hidden flex-shrink-0">
-          {isRemoteAdmin ? (
-            <div className="flex flex-col h-full bg-card">
-              <div className="p-3 border-b border-border flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-semibold text-muted-foreground uppercase">Actividad en vivo</p>
-                  <p className="text-sm font-bold text-foreground">{activeCash.label} · {activeCash.cashier}</p>
-                </div>
-                <button
-                  type="button"
-                  className="p-1.5 rounded-lg text-muted-foreground hover:bg-secondary"
-                  onClick={() => toast.success('Actividad actualizada')}
-                  title="Actualizar"
-                >
-                  <RefreshCw size={14} />
-                </button>
-              </div>
-              <div className="grid grid-cols-2 gap-2 p-3 border-b border-border text-xs">
-                <div className="bg-secondary/50 rounded-lg p-2">
-                  <p className="text-muted-foreground">Ventas hoy</p>
-                  <p className="font-bold">RD$ {activeCash.salesToday.toLocaleString('es-DO')}</p>
-                </div>
-                <div className="bg-secondary/50 rounded-lg p-2">
-                  <p className="text-muted-foreground">Tickets</p>
-                  <p className="font-bold">{activeCash.tickets}</p>
-                </div>
-                <div className="bg-secondary/50 rounded-lg p-2">
-                  <p className="text-muted-foreground">Carrito cajero</p>
-                  <p className="font-bold">{activeCash.cartItems} ítems</p>
-                </div>
-                <div className="bg-secondary/50 rounded-lg p-2">
-                  <p className="text-muted-foreground">Total carrito</p>
-                  <p className="font-bold text-primary">
-                    RD$ {activeCash.currentTotal.toLocaleString('es-DO')}
-                  </p>
-                </div>
-              </div>
-              <div className="flex-1 overflow-y-auto p-3 space-y-2">
-                {activeCash.movements.map((m, i) => (
-                  <div key={`${m.time}-${i}`} className="text-xs border-b border-border/60 pb-2">
-                    <div className="flex justify-between gap-2">
-                      <span className="font-medium text-foreground">{m.time} · {m.type}</span>
-                      <span className={`tabular-nums font-semibold ${m.amount < 0 ? 'text-danger' : 'text-foreground'}`}>
-                        {m.amount === 0 ? '—' : `RD$ ${m.amount.toLocaleString('es-DO')}`}
-                      </span>
-                    </div>
-                    <p className="text-muted-foreground mt-0.5">{m.detail}</p>
-                  </div>
-                ))}
-              </div>
-              <div className="p-3 border-t border-border text-xs text-muted-foreground">
-                Cobro con F9 o el botón Cobrar del carrito
-              </div>
-            </div>
-          ) : (
-            <PaymentPanel {...paymentProps} />
-          )}
+        {/* Right Column: Products Catalog (42% / 5 cols) */}
+        <div className="lg:col-span-5 flex flex-col overflow-hidden h-full">
+          <ProductPanel
+            onAddToCart={addToCart}
+            onOpenScale={handleOpenScale}
+            awaitingDelete={awaitingDeleteScan}
+          />
         </div>
       </div>
 
+      {/* Bottom Bar: Supermarket Sticky Payment Bar */}
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-lg p-3 mt-3 flex-shrink-0 flex flex-wrap items-center justify-between gap-3">
+        {/* Left Action Shortcuts */}
+        <div className="flex items-center gap-2 overflow-x-auto py-0.5">
+          <button
+            type="button"
+            onClick={() => toast.info('Generando preventa...')}
+            className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 transition-colors"
+          >
+            <FileText size={15} className="text-sky-500" />
+            <span>Preventa</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => toast.info('Creando cotización...')}
+            className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 transition-colors"
+          >
+            <FileText size={15} className="text-amber-500" />
+            <span>Cotización</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setHoldOpen(true)}
+            className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 transition-colors"
+          >
+            <Pause size={15} className="text-purple-500" />
+            <span>Suspender</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => toast.info('Venta a crédito seleccionada')}
+            className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 transition-colors"
+          >
+            <CheckCircle size={15} className="text-indigo-500" />
+            <span>Venta a crédito</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setPaymentOpen(true)}
+            className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 transition-colors"
+          >
+            <CreditCard size={15} className="text-rose-500" />
+            <span>Tarjeta</span>
+          </button>
+        </div>
+
+        {/* Center Main Payment Buttons */}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setPaymentOpen(true)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 text-white font-black text-xs shadow-sm transition-all active:scale-95"
+          >
+            <ShoppingBag size={16} />
+            <span>Pago múltiple</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleQuickCashSale}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs shadow-md transition-all active:scale-95"
+          >
+            <Banknote size={18} />
+            <span>Efectivo (F9)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={clearCart}
+            className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-black text-xs shadow-sm transition-all active:scale-95"
+          >
+            <XCircle size={16} />
+            <span>Cancelar</span>
+          </button>
+        </div>
+
+        {/* Rightmost Total Payable */}
+        <div className="flex items-center gap-2 pl-2 border-l border-slate-200 dark:border-slate-800">
+          <span className="text-xs font-black uppercase text-slate-900 dark:text-white">Total Payable:</span>
+          <span className="text-2xl sm:text-3xl font-black tabular-nums text-slate-900 dark:text-white">
+            RD$ {total.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </span>
+        </div>
+      </div>
+
+      {/* Payment Drawer / Modal when clicking Efectivo or Pago Múltiple */}
       {paymentOpen && (
-        <div className="xl:hidden fixed inset-0 z-50 bg-foreground/40 flex items-end">
-          <div className="w-full bg-card rounded-t-2xl max-h-[80vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden max-h-[90vh]">
             <PaymentPanel {...paymentProps} onClose={() => setPaymentOpen(false)} />
           </div>
         </div>
