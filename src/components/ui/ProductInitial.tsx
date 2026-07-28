@@ -9,7 +9,8 @@ interface ProductInitialProps {
 const sizeClasses = {
   sm: 'w-10 h-10 text-sm',
   md: 'w-12 h-12 text-base',
-  lg: 'w-full aspect-square text-3xl',
+  lg: 'w-14 h-14 text-xl',
+  xl: 'w-16 h-16 text-2xl',
 };
 
 export function getProductInitial(name: string) {

@@ -50,10 +50,10 @@ export default function ConfirmModal({
       }
     >
       <div className="flex items-start gap-4">
-        <div className="w-10 h-10 rounded-full bg-danger-bg flex items-center justify-center flex-shrink-0">
-          <AlertTriangle size={20} className="text-danger" />
+        <div className="w-12 h-12 rounded-2xl bg-danger-bg border border-danger/30 flex items-center justify-center flex-shrink-0 shadow-sm">
+          <AlertTriangle size={24} className="text-danger" />
         </div>
-        <p className="text-sm text-muted-foreground leading-relaxed pt-1">{description}</p>
+        <p className="text-base font-medium text-foreground/80 leading-relaxed pt-0.5">{description}</p>
       </div>
     </Modal>
   );

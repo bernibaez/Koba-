@@ -4,6 +4,7 @@ import type { CartItem } from './POSTerminal';
 import ProductInitial from '@/components/ui/ProductInitial';
 import { DELETE_SKU } from '@/lib/posStore';
 import { toast } from 'sonner';
+import { scaleProducts, parseScaleBarcode } from '../utils/scaleUtils';
 
 interface Product {
   id: string;
@@ -19,6 +20,7 @@ interface Product {
   image: string;
   lowStock: boolean;
   outOfStock: boolean;
+  isWeighted?: boolean;
 }
 
 const categories = [
@@ -33,10 +35,10 @@ const categories = [
   { id: 'cat-snacks', label: 'Snacks' },
 ];
 
-const products: Product[] = [
+const standardProducts: Product[] = [
   { id: 'prod-001', sku: 'ARR-SEL-5LB', barcode: '7891000100103', name: 'Arroz Selecto 5lb', category: 'Granos', price: 285, cost: 210, stock: 124, unit: 'Unidad', tax: 0, image: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=120&h=120&fit=crop', lowStock: false, outOfStock: false },
   { id: 'prod-002', sku: 'ACE-VEG-1L', barcode: '7891000200104', name: 'Aceite Vegetal 1L', category: 'Granos', price: 195, cost: 140, stock: 8, unit: 'Unidad', tax: 18, image: 'https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?w=120&h=120&fit=crop', lowStock: true, outOfStock: false },
-  { id: 'prod-003', sku: 'POL-ENT-LB', barcode: '7891000300105', name: 'Pollo Entero /lb', category: 'Carnes', price: 98, cost: 72, stock: 45, unit: 'Libra', tax: 0, image: 'https://images.unsplash.com/photo-1604503468506-a8da13d82791?w=120&h=120&fit=crop', lowStock: false, outOfStock: false },
+  { id: 'prod-003', sku: 'POL-ENT-LB', barcode: '7891000300105', name: 'Pollo Entero /lb', category: 'Carnes', price: 98, cost: 72, stock: 45, unit: 'Libra', tax: 0, image: 'https://images.unsplash.com/photo-1604503468506-a8da13d82791?w=120&h=120&fit=crop', lowStock: false, outOfStock: false, isWeighted: true },
   { id: 'prod-004', sku: 'LEC-EVA-410', barcode: '7891000400106', name: 'Leche Evaporada 410g', category: 'Lácteos', price: 145, cost: 108, stock: 62, unit: 'Unidad', tax: 0, image: 'https://images.unsplash.com/photo-1550583724-b2692b85b150?w=120&h=120&fit=crop', lowStock: false, outOfStock: false },
   { id: 'prod-005', sku: 'AZU-BLA-5LB', barcode: '7891000500107', name: 'Azúcar Blanca 5lb', category: 'Granos', price: 175, cost: 128, stock: 89, unit: 'Unidad', tax: 0, image: 'https://images.unsplash.com/photo-1571211905393-9b7e6e2e8b7e?w=120&h=120&fit=crop', lowStock: false, outOfStock: false },
   { id: 'prod-006', sku: 'HUE-X12', barcode: '7891000600108', name: 'Huevos x12', category: 'Lácteos', price: 165, cost: 120, stock: 34, unit: 'Cartón', tax: 0, image: 'https://images.unsplash.com/photo-1582722872445-44dc5f7e3c8f?w=120&h=120&fit=crop', lowStock: false, outOfStock: false },
@@ -53,9 +55,32 @@ const products: Product[] = [
   { id: 'prod-del', sku: DELETE_SKU, barcode: '9999999999999', name: 'ELIMINAR (SKU escáner)', category: 'Sistema', price: 0, cost: 0, stock: 999, unit: 'Acción', tax: 0, image: '', lowStock: false, outOfStock: false },
 ];
 
+// Combine standard products with scale products so all heavy products are available in POS
+const products: Product[] = [
+  ...standardProducts,
+  ...scaleProducts
+    .filter((sp) => !standardProducts.some((p) => p.sku === sp.sku))
+    .map((sp) => ({
+      id: sp.productId,
+      sku: sp.sku,
+      barcode: sp.barcode,
+      name: sp.name,
+      category: sp.category || 'Carnes',
+      price: sp.price,
+      cost: sp.cost,
+      stock: 85,
+      unit: sp.unit,
+      tax: sp.tax,
+      image: sp.image || '',
+      lowStock: false,
+      outOfStock: false,
+      isWeighted: true,
+    })),
+];
+
 interface ProductPanelProps {
   onAddToCart: (product: Omit<CartItem, 'qty' | 'discount'>, qty?: number) => void;
-  onOpenScale?: () => void;
+  onOpenScale?: (productId?: string, weight?: number) => void;
   awaitingDelete?: boolean;
 }
 
@@ -76,8 +101,15 @@ export default function ProductPanel({ onAddToCart, onOpenScale, awaitingDelete 
     return matchCat && matchSearch;
   });
 
-  const handleAdd = (p: Product) => {
+  const handleProductClick = (p: Product) => {
     if (p.outOfStock && p.sku !== DELETE_SKU) return;
+
+    // Check if heavy / weighed product
+    if ((p.isWeighted || p.unit.toLowerCase() === 'libra' || p.unit.toLowerCase() === 'kg') && onOpenScale) {
+      onOpenScale(p.id, 1.000);
+      return;
+    }
+
     onAddToCart({
       id: `cart-${p.id}-${Date.now()}`,
       productId: p.id,
@@ -96,6 +128,24 @@ export default function ProductPanel({ onAddToCart, onOpenScale, awaitingDelete 
     const code = search.trim();
     if (!code) return;
     const upper = code.toUpperCase();
+
+    // Check weighed product SKU shortcut
+    if (
+      upper === 'PESO' ||
+      upper === 'PESADOS' ||
+      upper === 'BALANZA' ||
+      upper === 'SCALE' ||
+      upper === '200' ||
+      upper === '2001'
+    ) {
+      if (onOpenScale) {
+        onOpenScale();
+        setSearch('');
+        toast.info('Abriendo balanza de productos pesados');
+        return;
+      }
+    }
+
     if (upper === DELETE_SKU || upper === 'ELIMINAR' || code === '9999999999999') {
       onAddToCart({
         id: `cart-del-${Date.now()}`,
@@ -111,23 +161,56 @@ export default function ProductPanel({ onAddToCart, onOpenScale, awaitingDelete 
       setSearch('');
       return;
     }
+
+    // Check heavy product barcode scan (EAN-13 scale format or scale SKU)
+    const scaleParsed = parseScaleBarcode(code);
+    if (scaleParsed) {
+      if (scaleParsed.isFromEan13) {
+        // Automatically add scanned weighed item with scanned weight
+        onAddToCart(
+          {
+            id: `cart-scale-${Date.now()}`,
+            productId: scaleParsed.product.productId,
+            name: scaleParsed.product.name,
+            sku: scaleParsed.product.sku,
+            price: scaleParsed.product.price,
+            cost: scaleParsed.product.cost,
+            tax: scaleParsed.product.tax,
+            image: scaleParsed.product.image || '',
+            unit: scaleParsed.product.unit,
+            isWeighted: true,
+          },
+          scaleParsed.weight
+        );
+        setSearch('');
+        toast.success(`Escaneado: ${scaleParsed.weight.toFixed(3)} ${scaleParsed.product.unit} de ${scaleParsed.product.name}`);
+        return;
+      } else if (onOpenScale) {
+        // Direct scale barcode / SKU scan: open scale modal for that product
+        onOpenScale(scaleParsed.product.productId, 1.000);
+        setSearch('');
+        toast.info(`Producto pesado escaneado: ${scaleParsed.product.name}`);
+        return;
+      }
+    }
+
     const found = products.find(
       (p) => p.barcode === code || p.sku.toLowerCase() === code.toLowerCase()
     );
     if (found) {
-      handleAdd(found);
+      handleProductClick(found);
       setSearch('');
     } else {
-      toast.error('Producto no encontrado');
+      toast.error('Producto o SKU no encontrado');
     }
   };
 
   return (
     <div className="flex flex-col h-full">
       {/* Search bar */}
-      <div className="px-3 py-2.5 border-b border-border flex items-center gap-2 flex-shrink-0">
-        <div className="relative flex-1">
-          <Search size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+      <div className="px-4 py-3.5 border-b border-border flex flex-wrap sm:flex-nowrap items-center gap-3 flex-shrink-0 bg-card/60">
+        <div className="relative flex-1 min-w-[240px]">
+          <Search size={20} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-primary pointer-events-none z-10" />
           <input
             ref={barcodeRef}
             type="text"
@@ -135,59 +218,66 @@ export default function ProductPanel({ onAddToCart, onOpenScale, awaitingDelete 
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={handleBarcodeKey}
-            className={`input-field pl-8 h-8 text-sm ${awaitingDelete ? 'border-danger' : ''}`}
+            className={`input-field !pl-11 ${search ? '!pr-10' : '!pr-36'} h-12 text-base font-medium shadow-sm truncate ${awaitingDelete ? 'border-danger' : ''}`}
           />
+          {!search && (
+            <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-mono font-bold bg-primary/10 text-primary px-2.5 py-1 rounded-lg border border-primary/20 pointer-events-none hidden md:inline z-10">
+              SKU / Escáner
+            </span>
+          )}
           {search && (
-            <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-              <X size={14} />
+            <button onClick={() => setSearch('')} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1 z-10">
+              <X size={18} />
             </button>
           )}
         </div>
-        <button
-          type="button"
-          className="flex items-center gap-1.5 px-2.5 h-8 rounded-lg border border-border text-xs font-medium text-muted-foreground hover:bg-secondary transition-colors flex-shrink-0"
-          title="Producto pesado / balanza"
-          onClick={onOpenScale}
-        >
-          <Scale size={14} />
-          <span className="hidden sm:inline">Peso</span>
-        </button>
-        <button
-          className="flex items-center gap-1.5 px-2.5 h-8 rounded-lg border border-border text-xs font-medium text-muted-foreground hover:bg-secondary transition-colors flex-shrink-0"
-          title="Escanear código de barras (F2)"
-          onClick={() => barcodeRef.current?.focus()}
-        >
-          <Barcode size={14} />
-          <span className="hidden sm:inline">F2</span>
-        </button>
-        <div className="flex border border-border rounded-lg overflow-hidden flex-shrink-0">
+        <div className="flex items-center gap-2 flex-shrink-0">
           <button
-            onClick={() => setViewMode('grid')}
-            className={`p-1.5 transition-colors ${viewMode === 'grid' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-secondary'}`}
-            title="Vista cuadrícula"
+            type="button"
+            className="flex items-center gap-2 px-3.5 h-12 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-sm font-bold hover:bg-emerald-500/20 transition-all shadow-sm"
+            title="Producto pesado / balanza (SKU: 200)"
+            onClick={() => onOpenScale && onOpenScale()}
           >
-            <Grid3x3 size={14} />
+            <Scale size={20} />
+            <span className="hidden sm:inline">Pesados (SKU: 200)</span>
           </button>
           <button
-            onClick={() => setViewMode('list')}
-            className={`p-1.5 transition-colors ${viewMode === 'list' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-secondary'}`}
-            title="Vista lista"
+            className="flex items-center gap-2 px-3.5 h-12 rounded-xl border border-border bg-card text-sm font-bold text-foreground/80 hover:bg-secondary transition-all shadow-sm"
+            title="Escanear código de barras (F2)"
+            onClick={() => barcodeRef.current?.focus()}
           >
-            <List size={14} />
+            <Barcode size={20} className="text-primary" />
+            <span className="hidden sm:inline">F2</span>
           </button>
+          <div className="flex border border-border rounded-xl overflow-hidden flex-shrink-0 shadow-sm">
+            <button
+              onClick={() => setViewMode('grid')}
+              className={`p-3 transition-colors ${viewMode === 'grid' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-secondary'}`}
+              title="Vista cuadrícula"
+            >
+              <Grid3x3 size={18} />
+            </button>
+            <button
+              onClick={() => setViewMode('list')}
+              className={`p-3 transition-colors ${viewMode === 'list' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-secondary'}`}
+              title="Vista lista"
+            >
+              <List size={18} />
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Category tabs */}
-      <div className="flex gap-1 px-3 py-2 border-b border-border overflow-x-auto scrollbar-thin flex-shrink-0">
+      <div className="flex gap-2 px-4 py-3 border-b border-border overflow-x-auto scrollbar-thin flex-shrink-0 bg-card/30">
         {categories.map((cat) => (
           <button
             key={cat.id}
             onClick={() => setActiveCategory(cat.id)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all duration-150 flex-shrink-0 ${
+            className={`px-4 py-2 rounded-xl text-sm font-bold whitespace-nowrap transition-all duration-150 flex-shrink-0 shadow-sm ${
               activeCategory === cat.id
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-secondary text-secondary-foreground hover:bg-border'
+                ? 'bg-primary text-primary-foreground shadow-sm'
+                : 'bg-secondary/80 text-foreground/80 hover:bg-secondary hover:text-foreground'
             }`}
           >
             {cat.label}
@@ -195,47 +285,60 @@ export default function ProductPanel({ onAddToCart, onOpenScale, awaitingDelete 
         ))}
       </div>
 
-      {/* Products */}
-      <div className="flex-1 overflow-y-auto scrollbar-thin p-3">
+      {/* Products Grid / List */}
+      <div className="flex-1 overflow-y-auto scrollbar-thin p-4">
         {filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-40 gap-2">
-            <Search size={32} className="text-muted-foreground/40" />
-            <p className="text-sm text-muted-foreground">No se encontraron productos</p>
-            <button onClick={() => { setSearch(''); setActiveCategory('cat-all'); }} className="text-xs text-primary hover:underline">
+          <div className="flex flex-col items-center justify-center h-48 gap-3">
+            <Search size={40} className="text-muted-foreground/30" />
+            <p className="text-base font-semibold text-muted-foreground">No se encontraron productos</p>
+            <button onClick={() => { setSearch(''); setActiveCategory('cat-all'); }} className="text-sm font-bold text-primary hover:underline">
               Limpiar filtros
             </button>
           </div>
         ) : viewMode === 'grid' ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
             {filtered.map((p) => (
               <button
                 key={p.id}
-                onClick={() => handleAdd(p)}
+                onClick={() => handleProductClick(p)}
                 disabled={p.outOfStock}
-                className={`pos-product-card relative flex flex-col bg-card border rounded-xl p-3 text-left transition-all
-                  ${p.outOfStock ? 'opacity-50 cursor-not-allowed border-border' : 'border-border hover:border-primary/40 hover:shadow-card cursor-pointer'}
+                className={`pos-product-card relative flex flex-col bg-card border rounded-2xl p-3 sm:p-3.5 text-left transition-all shadow-card hover:shadow-card-hover
+                  ${p.outOfStock ? 'opacity-50 cursor-not-allowed border-border' : 'border-border/80 hover:border-primary/50 cursor-pointer'}
                 `}
               >
-                <div className="aspect-square w-full mb-2">
+                {/* Smaller, compact product icon */}
+                <div className="h-16 sm:h-20 w-full mb-2.5 rounded-xl bg-primary/5 border border-primary/10 flex items-center justify-center overflow-hidden flex-shrink-0 relative">
                   <ProductInitial name={p.name} size="lg" />
+                  {p.isWeighted && (
+                    <span className="absolute bottom-1.5 right-1.5 bg-emerald-600 text-white p-1 rounded-md text-[10px] font-bold flex items-center gap-0.5 shadow-xs" title="Producto pesado (Balanza)">
+                      <Scale size={11} />
+                    </span>
+                  )}
                 </div>
                 {p.lowStock && !p.outOfStock && (
-                  <span className="absolute top-2 right-2 badge-warning text-xs py-0 px-1.5">Bajo</span>
+                  <span className="absolute top-2.5 right-2.5 badge-warning text-[10px] font-bold px-2 py-0.5">Bajo</span>
                 )}
                 {p.outOfStock && (
-                  <span className="absolute top-2 right-2 badge-danger text-xs py-0 px-1.5">Agotado</span>
+                  <span className="absolute top-2.5 right-2.5 badge-danger text-[10px] font-bold px-2 py-0.5">Agotado</span>
                 )}
-                <p className="text-xs font-semibold text-foreground leading-tight line-clamp-2">{p.name}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">{p.unit}</p>
-                <div className="flex items-center justify-between mt-1.5">
-                  <p className="text-sm font-bold tabular-nums text-primary">
+                <p className="text-xs sm:text-sm font-bold text-foreground leading-snug line-clamp-2 min-h-[2.4rem]">{p.name}</p>
+                <div className="flex items-center gap-1.5 mt-1">
+                  <p className="text-xs font-semibold text-muted-foreground">{p.unit}</p>
+                  {p.isWeighted && (
+                    <span className="text-[10px] font-extrabold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                      Balanza
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center justify-between mt-2 pt-1 border-t border-border/40">
+                  <p className="text-sm sm:text-base font-extrabold tabular-nums text-primary">
                     RD$ {p.price.toLocaleString('es-DO')}
                   </p>
                   {p.tax > 0 && (
-                    <span className="text-xs text-muted-foreground">+ITBIS</span>
+                    <span className="text-[10px] font-bold text-muted-foreground/80">+ITBIS</span>
                   )}
                 </div>
-                <p className="text-xs text-muted-foreground mt-0.5">Stock: {p.stock}</p>
+                <p className="text-[11px] font-medium text-muted-foreground mt-0.5">Stock: {p.stock}</p>
               </button>
             ))}
           </div>
@@ -244,7 +347,7 @@ export default function ProductPanel({ onAddToCart, onOpenScale, awaitingDelete 
             {filtered.map((p) => (
               <button
                 key={p.id}
-                onClick={() => handleAdd(p)}
+                onClick={() => handleProductClick(p)}
                 disabled={p.outOfStock}
                 className={`w-full flex items-center gap-3 p-2.5 rounded-xl border text-left transition-all
                   ${p.outOfStock ? 'opacity-50 cursor-not-allowed border-border' : 'border-border hover:border-primary/40 hover:bg-primary/5 cursor-pointer'}
@@ -252,7 +355,14 @@ export default function ProductPanel({ onAddToCart, onOpenScale, awaitingDelete 
               >
                 <ProductInitial name={p.name} size="sm" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-foreground truncate">{p.name}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-semibold text-foreground truncate">{p.name}</p>
+                    {p.isWeighted && (
+                      <span className="text-[10px] font-extrabold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20 flex-shrink-0">
+                        Balanza
+                      </span>
+                    )}
+                  </div>
                   <p className="text-xs text-muted-foreground font-mono">{p.sku}</p>
                 </div>
                 <div className="flex-shrink-0 text-right">

@@ -1,9 +1,10 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
-import { Search, Download, RotateCcw, Plus, FileSpreadsheet, Eye, Printer, X } from 'lucide-react';
-import { getPosReturns, type PosReturn } from '@/lib/posStore';
+import { Search, Download, RotateCcw, FileSpreadsheet, Eye, Printer, X, Check, XCircle, Clock, Shield, CheckCircle, BellRing } from 'lucide-react';
+import { getPosReturns, updatePosReturnStatus, type PosReturn, type PosReturnStatus } from '@/lib/posStore';
 import { exportTableToPdf, exportTableToExcel, formatMoneyPdf } from '@/lib/exportPdf';
-import PosReturnModal from './point-of-sale-pos/components/PosReturnModal';
+import { logAuditEvent } from '@/lib/auditStore';
+import { toast } from 'sonner';
 
 const methodLabel: Record<PosReturn['method'], string> = {
   cash: 'Efectivo',
@@ -19,8 +20,13 @@ const typeLabel: Record<PosReturn['type'], string> = {
 
 export default function ReturnsHistoryPage() {
   const [returns, setReturns] = useState<PosReturn[]>(() => getPosReturns());
-  const [showReturnModal, setShowReturnModal] = useState(false);
   const [selectedReturn, setSelectedReturn] = useState<PosReturn | null>(null);
+  const [statusTab, setStatusTab] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
+  const [autoModalDismissed, setAutoModalDismissed] = useState(false);
+
+  // Rejection modal state
+  const [rejectingReturn, setRejectingReturn] = useState<PosReturn | null>(null);
+  const [rejectReasonInput, setRejectReasonInput] = useState('No cumple con las políticas de devolución de tienda');
 
   // Filters
   const [date, setDate] = useState('');
@@ -31,9 +37,22 @@ export default function ReturnsHistoryPage() {
 
   const refreshReturns = () => setReturns(getPosReturns());
 
+  const pendingReturns = useMemo(() => returns.filter((r) => r.status === 'pending'), [returns]);
+  const pendingCount = pendingReturns.length;
+  const approvedCount = returns.filter((r) => r.status === 'approved').length;
+  const rejectedCount = returns.filter((r) => r.status === 'rejected').length;
+
+  // Auto-open modal for pending returns upon entering screen
+  useEffect(() => {
+    if (pendingReturns.length > 0 && !selectedReturn && !autoModalDismissed) {
+      setSelectedReturn(pendingReturns[0]);
+    }
+  }, [pendingReturns, selectedReturn, autoModalDismissed]);
+
   const filtered = useMemo(() => {
     const q = product.toLowerCase().trim();
     return returns.filter((r) => {
+      if (statusTab !== 'all' && (r.status || 'approved') !== statusTab) return false;
       if (date && r.date !== date) return false;
       if (user && !r.user.toLowerCase().includes(user.toLowerCase())) return false;
       if (customer && !r.customer.toLowerCase().includes(customer.toLowerCase())) return false;
@@ -46,16 +65,89 @@ export default function ReturnsHistoryPage() {
       }
       return true;
     });
-  }, [returns, date, user, customer, cashier, product]);
+  }, [returns, statusTab, date, user, customer, cashier, product]);
 
   const totalAmount = filtered.reduce((s, r) => s + r.total, 0);
+
+  const handleApproveReturn = (r: PosReturn) => {
+    updatePosReturnStatus(r.id, 'approved', 'Admin General');
+    logAuditEvent({
+      user: 'Admin General',
+      role: 'Administrador',
+      action: 'Devolución',
+      module: 'Devoluciones',
+      details: `Devolución ${r.code} (Factura: ${r.saleCode}) por RD$ ${r.total.toLocaleString()} APROBADA por Administrador`,
+      before: { id: r.id, status: r.status },
+      after: { id: r.id, status: 'approved', reviewedBy: 'Admin General' },
+    });
+    toast.success(`Devolución ${r.code} APROBADA exitosamente`);
+    refreshReturns();
+    if (selectedReturn?.id === r.id) {
+      setSelectedReturn((prev) => (prev ? { ...prev, status: 'approved', reviewedBy: 'Admin General' } : null));
+    }
+  };
+
+  const handleOpenRejectModal = (r: PosReturn) => {
+    setRejectingReturn(r);
+    setRejectReasonInput('No cumple con las políticas de devolución de tienda');
+  };
+
+  const handleConfirmRejection = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!rejectingReturn) return;
+
+    const reasonText = rejectReasonInput.trim() || 'Rechazada por administración';
+
+    updatePosReturnStatus(rejectingReturn.id, 'rejected', 'Admin General', reasonText);
+    logAuditEvent({
+      user: 'Admin General',
+      role: 'Administrador',
+      action: 'Devolución',
+      module: 'Devoluciones',
+      details: `Devolución ${rejectingReturn.code} (Factura: ${rejectingReturn.saleCode}) por RD$ ${rejectingReturn.total.toLocaleString()} RECHAZADA. Motivo: ${reasonText}`,
+      before: { id: rejectingReturn.id, status: rejectingReturn.status },
+      after: { id: rejectingReturn.id, status: 'rejected', reviewedBy: 'Admin General', rejectionReason: reasonText },
+    });
+    toast.error(`Devolución ${rejectingReturn.code} RECHAZADA`);
+    refreshReturns();
+    if (selectedReturn?.id === rejectingReturn.id) {
+      setSelectedReturn((prev) => (prev ? { ...prev, status: 'rejected', reviewedBy: 'Admin General', rejectionReason: reasonText } : null));
+    }
+    setRejectingReturn(null);
+  };
+
+  const renderStatusBadge = (status?: PosReturnStatus) => {
+    const currentStatus = status || 'approved';
+    if (currentStatus === 'pending') {
+      return (
+        <span className="badge-warning inline-flex items-center gap-1 font-bold text-xs">
+          <Clock size={12} />
+          Pendiente
+        </span>
+      );
+    }
+    if (currentStatus === 'approved') {
+      return (
+        <span className="badge-success inline-flex items-center gap-1 font-bold text-xs">
+          <CheckCircle size={12} />
+          Aprobada
+        </span>
+      );
+    }
+    return (
+      <span className="badge-danger inline-flex items-center gap-1 font-bold text-xs">
+        <XCircle size={12} />
+        Rechazada
+      </span>
+    );
+  };
 
   const handleExportPdf = () => {
     exportTableToPdf({
       title: 'Historial de Devoluciones de Mercancía',
       filename: 'historial-devoluciones',
       headers: [
-        'Código', 'Venta Ref.', 'Cliente', 'Fecha', 'Hora', 'Usuario', 'Productos', 'Total', 'Motivo', 'Método', 'Tipo',
+        'Código', 'Venta Ref.', 'Cliente', 'Fecha', 'Hora', 'Usuario', 'Estado', 'Total', 'Motivo', 'Método', 'Tipo',
       ],
       rows: filtered.map((r) => [
         r.code,
@@ -64,7 +156,7 @@ export default function ReturnsHistoryPage() {
         r.date,
         r.time,
         r.user,
-        r.products.map((p) => `${p.name} x${p.qty}`).join(', '),
+        r.status || 'approved',
         formatMoneyPdf(r.total),
         r.reason,
         methodLabel[r.method],
@@ -79,7 +171,7 @@ export default function ReturnsHistoryPage() {
       title: 'Historial de Devoluciones de Mercancía',
       filename: 'historial-devoluciones',
       headers: [
-        'Código', 'Factura Original', 'Cliente', 'Fecha', 'Hora', 'Usuario', 'Cajero', 'Productos Devueltos', 'Total Reembolso', 'Motivo', 'Método Reembolso', 'Tipo Devolución'
+        'Código', 'Factura Original', 'Cliente', 'Fecha', 'Hora', 'Usuario', 'Estado', 'Productos Devueltos', 'Total Reembolso', 'Motivo', 'Método Reembolso', 'Tipo Devolución'
       ],
       rows: filtered.map((r) => [
         r.code,
@@ -88,7 +180,7 @@ export default function ReturnsHistoryPage() {
         r.date,
         r.time,
         r.user,
-        r.cashier,
+        r.status || 'approved',
         r.products.map((p) => `${p.name} (Cant: ${p.qty})`).join('; '),
         r.total,
         r.reason,
@@ -106,19 +198,13 @@ export default function ReturnsHistoryPage() {
           <div>
             <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
               <RotateCcw className="text-danger" size={24} />
-              Historial de Devoluciones
+              Gestión y Aprobación de Devoluciones
             </h1>
-            <p className="text-sm text-muted-foreground mt-1">Consulta y registra devoluciones parciales o totales de mercancía</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Revisa, aprueba o rechaza solicitudes de devolución enviadas por cajeros
+            </p>
           </div>
           <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setShowReturnModal(true)}
-              className="btn-primary flex items-center gap-2"
-            >
-              <Plus size={16} />
-              Nueva Devolución
-            </button>
             <button type="button" onClick={handleExportPdf} className="btn-secondary flex items-center gap-1.5">
               <Download size={16} /> PDF
             </button>
@@ -128,22 +214,80 @@ export default function ReturnsHistoryPage() {
           </div>
         </div>
 
+        {/* Pending Banner Alert if there are pending returns */}
+        {pendingCount > 0 && (
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center text-amber-600 dark:text-amber-400 flex-shrink-0">
+                <Clock size={22} />
+              </div>
+              <div>
+                <p className="font-extrabold text-foreground text-sm">
+                  {pendingCount} Solicitud(es) de Devolución Pendiente(s) de Aprobación
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Cajeros han solicitado devoluciones que requieren tu revisión como Administrador.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setStatusTab('pending')}
+              className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs transition-all flex items-center gap-1.5 shadow-sm"
+            >
+              <Shield size={14} />
+              Ver Pendientes ({pendingCount})
+            </button>
+          </div>
+        )}
+
         {/* Stats */}
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="card p-4">
-            <p className="text-xs text-muted-foreground">Devoluciones Filtradas</p>
+            <p className="text-xs text-muted-foreground font-semibold">Devoluciones Filtradas</p>
             <p className="text-2xl font-bold text-foreground mt-1">{filtered.length}</p>
           </div>
+          <div className="card p-4 border-amber-500/20 bg-amber-500/5">
+            <p className="text-xs text-muted-foreground font-semibold">Pendientes de Admin</p>
+            <p className="text-2xl font-black text-amber-600 dark:text-amber-400 mt-1">{pendingCount}</p>
+          </div>
           <div className="card p-4">
-            <p className="text-xs text-muted-foreground">Monto Total Reembolsado</p>
+            <p className="text-xs text-muted-foreground font-semibold">Monto Filtrado Reembolsado</p>
             <p className="text-2xl font-bold text-danger mt-1">
               RD$ {totalAmount.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
             </p>
           </div>
           <div className="card p-4">
-            <p className="text-xs text-muted-foreground">Total Histórico</p>
+            <p className="text-xs text-muted-foreground font-semibold">Total Histórico</p>
             <p className="text-2xl font-bold text-info mt-1">{returns.length} registros</p>
           </div>
+        </div>
+
+        {/* Status Filter Tabs */}
+        <div className="flex gap-2 border-b border-border pb-3 overflow-x-auto">
+          {[
+            { id: 'all', label: 'Todas', count: returns.length },
+            { id: 'pending', label: 'Pendientes por Aprobar', count: pendingCount, highlight: true },
+            { id: 'approved', label: 'Aprobadas', count: approvedCount },
+            { id: 'rejected', label: 'Rechazadas', count: rejectedCount },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setStatusTab(tab.id as typeof statusTab)}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
+                statusTab === tab.id
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'bg-card border border-border text-foreground hover:bg-secondary'
+              }`}
+            >
+              {tab.label}
+              <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-extrabold ${
+                tab.highlight && tab.count > 0 ? 'bg-amber-500 text-white' : 'bg-secondary text-muted-foreground'
+              }`}>
+                {tab.count}
+              </span>
+            </button>
+          ))}
         </div>
 
         {/* Filters */}
@@ -168,9 +312,9 @@ export default function ReturnsHistoryPage() {
             <div>
               <label className="text-xs font-medium text-muted-foreground mb-1 block">Producto</label>
               <div className="relative">
-                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground z-10" />
                 <input
-                  className="input-field pl-9"
+                  className="input-field !pl-9"
                   placeholder="Buscar producto..."
                   value={product}
                   onChange={(e) => setProduct(e.target.value)}
@@ -191,17 +335,16 @@ export default function ReturnsHistoryPage() {
                   <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Cliente</th>
                   <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden md:table-cell">Fecha/Hora</th>
                   <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden lg:table-cell">Usuario</th>
-                  <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden xl:table-cell">Productos</th>
+                  <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Estado</th>
                   <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Total</th>
                   <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden md:table-cell">Motivo</th>
-                  <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Tipo</th>
-                  <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Acciones</th>
+                  <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Acciones Admin</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="px-4 py-12 text-center text-muted-foreground">
+                    <td colSpan={9} className="px-4 py-12 text-center text-muted-foreground">
                       <RotateCcw size={28} className="mx-auto mb-2 opacity-40" />
                       No hay devoluciones registradas con estos filtros
                     </td>
@@ -210,7 +353,10 @@ export default function ReturnsHistoryPage() {
                   filtered.map((r, i) => (
                     <tr
                       key={r.id}
-                      className={`border-b border-border hover:bg-secondary/30 transition-colors ${i % 2 === 0 ? '' : 'bg-secondary/10'}`}
+                      onClick={() => setSelectedReturn(r)}
+                      className={`border-b border-border hover:bg-secondary/30 transition-colors cursor-pointer ${i % 2 === 0 ? '' : 'bg-secondary/10'} ${
+                        r.status === 'pending' ? 'bg-amber-500/5' : ''
+                      }`}
                     >
                       <td className="px-4 py-3 font-mono text-danger font-bold">{r.code}</td>
                       <td className="px-4 py-3 font-mono text-primary font-semibold">{r.saleCode}</td>
@@ -219,27 +365,43 @@ export default function ReturnsHistoryPage() {
                         {r.date} {r.time}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell text-xs">{r.user}</td>
-                      <td className="px-4 py-3 text-muted-foreground hidden xl:table-cell max-w-[200px] truncate text-xs">
-                        {r.products.map((p) => `${p.name} x${p.qty}`).join(', ')}
-                      </td>
+                      <td className="px-4 py-3">{renderStatusBadge(r.status)}</td>
                       <td className="px-4 py-3 text-right font-bold text-foreground">
                         RD$ {r.total.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground hidden md:table-cell text-xs">{r.reason}</td>
-                      <td className="px-4 py-3">
-                        <span className={r.type === 'full' ? 'badge-warning' : 'badge-success'}>
-                          {typeLabel[r.type]}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <button
-                          type="button"
-                          onClick={() => setSelectedReturn(r)}
-                          className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
-                          title="Ver comprobante de devolución"
-                        >
-                          <Eye size={16} />
-                        </button>
+                      <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-1.5">
+                          {r.status === 'pending' ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleApproveReturn(r)}
+                                className="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20 text-xs font-bold flex items-center gap-1 transition-all shadow-xs"
+                                title="Aprobar Devolución"
+                              >
+                                <Check size={14} /> Aprobar
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenRejectModal(r)}
+                                className="px-2.5 py-1 rounded-lg bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/30 hover:bg-rose-500/20 text-xs font-bold flex items-center gap-1 transition-all shadow-xs"
+                                title="Rechazar Devolución"
+                              >
+                                <XCircle size={14} /> Rechazar
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setSelectedReturn(r)}
+                              className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+                              title="Ver detalles y comprobante"
+                            >
+                              <Eye size={16} />
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -249,62 +411,212 @@ export default function ReturnsHistoryPage() {
           </div>
         </div>
 
-        {/* Modal: New Return */}
-        {showReturnModal && (
-          <PosReturnModal
-            onClose={() => {
-              setShowReturnModal(false);
-              refreshReturns();
-            }}
-          />
-        )}
-
-        {/* Modal: Viewing Detail / Receipt */}
+        {/* Modal: Viewing Detail / Receipt & Admin Approval Dialog */}
         {selectedReturn && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/40" onClick={() => setSelectedReturn(null)}>
-            <div className="card w-full max-w-lg p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/40 backdrop-blur-xs animate-in fade-in"
+            onClick={() => {
+              setSelectedReturn(null);
+              setAutoModalDismissed(true);
+            }}
+          >
+            <div className="card w-full max-w-lg p-6 space-y-4 shadow-2xl border-amber-500/30" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between border-b border-border pb-3">
-                <h3 className="font-bold text-foreground text-lg">Comprobante Devolución {selectedReturn.code}</h3>
-                <button type="button" onClick={() => setSelectedReturn(null)} className="p-1 text-muted-foreground hover:text-foreground">
+                <div className="flex items-center gap-2">
+                  {selectedReturn.status === 'pending' ? (
+                    <BellRing size={22} className="text-amber-500" />
+                  ) : (
+                    <RotateCcw size={20} className="text-danger" />
+                  )}
+                  <h3 className="font-extrabold text-foreground text-lg">
+                    {selectedReturn.status === 'pending' ? '¡Nueva Solicitud de Devolución!' : `Comprobante Devolución ${selectedReturn.code}`}
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedReturn(null);
+                    setAutoModalDismissed(true);
+                  }}
+                  className="p-1 text-muted-foreground hover:text-foreground"
+                >
                   <X size={18} />
                 </button>
               </div>
 
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between"><span className="text-muted-foreground">Factura Ref:</span><span className="font-bold text-primary">{selectedReturn.saleCode}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Cliente:</span><span className="font-semibold">{selectedReturn.customer}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Fecha/Hora:</span><span>{selectedReturn.date} {selectedReturn.time}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Usuario:</span><span>{selectedReturn.user}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Motivo:</span><span>{selectedReturn.reason}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Método:</span><span className="badge-info">{methodLabel[selectedReturn.method]}</span></div>
-                
-                <div className="pt-2">
-                  <p className="text-xs font-bold text-muted-foreground uppercase mb-1">Productos Devueltos</p>
-                  <div className="bg-secondary/40 rounded-xl p-3 space-y-1.5 text-xs">
+              {/* Status Alert Banner */}
+              {selectedReturn.status === 'pending' ? (
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3.5 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-extrabold text-xs">
+                      <Shield size={16} />
+                      <span>Solicitud de Devolución por Cajero</span>
+                    </div>
+                    {renderStatusBadge(selectedReturn.status)}
+                  </div>
+                  <p className="text-xs text-foreground/90 font-medium leading-relaxed">
+                    El cajero <strong>{selectedReturn.user}</strong> (<i>{selectedReturn.cashier}</i>) solicita tu aprobación como Administrador para procesar una devolución por <strong className="text-danger">RD$ {selectedReturn.total.toLocaleString()}</strong> sobre la factura <strong>{selectedReturn.saleCode}</strong>.
+                  </p>
+                </div>
+              ) : (
+                <div className="flex justify-between items-center bg-secondary/30 rounded-xl p-3 text-xs">
+                  <span className="text-muted-foreground font-semibold">Estado de la Solicitud:</span>
+                  {renderStatusBadge(selectedReturn.status)}
+                </div>
+              )}
+
+              <div className="space-y-2.5 text-sm">
+                {selectedReturn.reviewedBy && (
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-muted-foreground">Revisado por Admin:</span>
+                    <span className="font-bold text-foreground">{selectedReturn.reviewedBy}</span>
+                  </div>
+                )}
+
+                {selectedReturn.rejectionReason && (
+                  <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-3 text-xs text-rose-600 dark:text-rose-400">
+                    <strong>Motivo del Rechazo:</strong> {selectedReturn.rejectionReason}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-2 text-xs bg-secondary/20 rounded-xl p-3">
+                  <div><span className="text-muted-foreground block">Factura Ref:</span><span className="font-bold text-primary font-mono">{selectedReturn.saleCode}</span></div>
+                  <div><span className="text-muted-foreground block">Cliente:</span><span className="font-semibold">{selectedReturn.customer}</span></div>
+                  <div><span className="text-muted-foreground block">Fecha / Hora:</span><span>{selectedReturn.date} {selectedReturn.time}</span></div>
+                  <div><span className="text-muted-foreground block">Cajero Solicitante:</span><span>{selectedReturn.user} ({selectedReturn.cashier})</span></div>
+                  <div><span className="text-muted-foreground block">Motivo Declarado:</span><span>{selectedReturn.reason}</span></div>
+                  <div><span className="text-muted-foreground block">Método Reembolso:</span><span className="font-semibold">{methodLabel[selectedReturn.method]}</span></div>
+                </div>
+
+                <div className="pt-1">
+                  <p className="text-xs font-bold text-muted-foreground uppercase mb-1">Productos a Devolver</p>
+                  <div className="bg-secondary/40 rounded-xl p-3 space-y-1.5 text-xs max-h-36 overflow-y-auto">
                     {selectedReturn.products.map((p, idx) => (
-                      <div key={idx} className="flex justify-between">
-                        <span>{p.name} (x{p.qty})</span>
-                        <span className="font-semibold">RD$ {(p.qty * p.price).toLocaleString()}</span>
+                      <div key={idx} className="flex justify-between items-center border-b border-border/40 pb-1 last:border-none">
+                        <div>
+                          <span className="font-semibold">{p.name}</span>
+                          <span className="text-muted-foreground font-mono block text-[11px]">{p.sku} · Cantidad: {p.qty}</span>
+                        </div>
+                        <span className="font-bold">RD$ {(p.qty * p.price).toLocaleString()}</span>
                       </div>
                     ))}
                   </div>
                 </div>
 
                 <div className="flex justify-between border-t border-border pt-2 font-bold text-base">
-                  <span>Total Reembolsado:</span>
-                  <span className="text-danger">RD$ {selectedReturn.total.toLocaleString('es-DO', { minimumFractionDigits: 2 })}</span>
+                  <span>Total Reembolso:</span>
+                  <span className="text-danger font-mono text-lg">RD$ {selectedReturn.total.toLocaleString('es-DO', { minimumFractionDigits: 2 })}</span>
+                </div>
+              </div>
+
+              {/* Modal Actions */}
+              <div className="pt-3 border-t border-border">
+                {selectedReturn.status === 'pending' ? (
+                  <div className="flex gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => handleOpenRejectModal(selectedReturn)}
+                      className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm"
+                    >
+                      <XCircle size={16} /> Rechazar Devolución
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleApproveReturn(selectedReturn)}
+                      className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm"
+                    >
+                      <CheckCircle size={16} /> Aprobar Devolución
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex justify-end gap-2">
+                    <button type="button" onClick={() => window.print()} className="btn-secondary flex items-center gap-1.5 text-xs py-2">
+                      <Printer size={14} /> Imprimir Comprobante
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedReturn(null);
+                        setAutoModalDismissed(true);
+                      }}
+                      className="btn-primary text-xs py-2"
+                    >
+                      Cerrar
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal: Rejection Reason Custom Dialog */}
+        {rejectingReturn && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/50 backdrop-blur-xs animate-in fade-in" onClick={() => setRejectingReturn(null)}>
+            <form onSubmit={handleConfirmRejection} className="card w-full max-w-md p-6 space-y-4 shadow-2xl border-rose-500/30" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between border-b border-border pb-3">
+                <div className="flex items-center gap-2 text-rose-600 dark:text-rose-400">
+                  <XCircle size={24} />
+                  <h3 className="font-extrabold text-foreground text-lg">Rechazar Solicitud de Devolución</h3>
+                </div>
+                <button type="button" onClick={() => setRejectingReturn(null)} className="p-1 text-muted-foreground hover:text-foreground">
+                  <X size={18} />
+                </button>
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                Por favor especifica o selecciona el motivo por el cual estás rechazando la devolución <strong className="font-mono text-foreground">{rejectingReturn.code}</strong> (<strong className="text-danger">RD$ {rejectingReturn.total.toLocaleString()}</strong>).
+              </p>
+
+              <div>
+                <label className="text-xs font-bold text-muted-foreground mb-1.5 block">Motivo del Rechazo</label>
+                <textarea
+                  rows={3}
+                  required
+                  autoFocus
+                  className="input-field text-xs py-2 w-full focus:ring-rose-500"
+                  placeholder="Escribe el motivo del rechazo..."
+                  value={rejectReasonInput}
+                  onChange={(e) => setRejectReasonInput(e.target.value)}
+                />
+              </div>
+
+              {/* Quick Option Pills */}
+              <div>
+                <span className="text-[11px] font-semibold text-muted-foreground block mb-1.5">Opciones rápidas de motivo:</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    'No cumple políticas de tienda',
+                    'Producto deteriorado o usado',
+                    'Fuera del plazo permitido (30 días)',
+                    'Falta comprobante fiscal original',
+                    'Error en la solicitud del cajero',
+                  ].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setRejectReasonInput(preset)}
+                      className={`text-[11px] px-2.5 py-1 rounded-lg border transition-all ${
+                        rejectReasonInput === preset
+                          ? 'bg-rose-600 text-white border-rose-700 font-bold shadow-xs'
+                          : 'bg-secondary/50 text-foreground border-border hover:bg-secondary'
+                      }`}
+                    >
+                      {preset}
+                    </button>
+                  ))}
                 </div>
               </div>
 
               <div className="flex justify-end gap-2 pt-3 border-t border-border">
-                <button type="button" onClick={() => window.print()} className="btn-secondary flex items-center gap-1.5 text-xs">
-                  <Printer size={14} /> Imprimir Comprobante
+                <button type="button" className="btn-secondary text-xs py-2" onClick={() => setRejectingReturn(null)}>
+                  Cancelar
                 </button>
-                <button type="button" onClick={() => setSelectedReturn(null)} className="btn-primary text-xs">
-                  Cerrar
+                <button type="submit" className="btn-primary text-xs py-2 bg-rose-600 hover:bg-rose-700 text-white flex items-center gap-1.5 font-bold">
+                  <XCircle size={15} /> Confirmar Rechazo
                 </button>
               </div>
-            </div>
+            </form>
           </div>
         )}
       </div>

@@ -33,28 +33,28 @@ export default function DashboardHeader() {
   };
 
   return (
-    <div className="flex items-start justify-between mb-6 flex-wrap gap-3">
+    <div className="flex items-center justify-between mb-8 flex-wrap gap-4">
       <div>
-        <h1 className="text-2xl font-bold text-foreground tracking-tight">Panel de Control</h1>
-        <div className="flex items-center gap-2 mt-1">
-          <Calendar size={14} className="text-muted-foreground" />
-          <span className="text-sm text-muted-foreground capitalize">{dateStr}</span>
+        <h1 className="text-3xl sm:text-4xl font-extrabold text-foreground tracking-tight">Panel de Control</h1>
+        <div className="flex items-center gap-2.5 mt-2">
+          <Calendar size={18} className="text-primary" />
+          <span className="text-base font-semibold text-foreground/80 capitalize">{dateStr}</span>
           {timeStr && (
-            <span className="text-sm font-mono tabular-nums text-muted-foreground">· {timeStr}</span>
+            <span className="text-base font-mono font-bold tabular-nums text-muted-foreground">· {timeStr}</span>
           )}
         </div>
       </div>
       <div className="flex items-center gap-3">
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-success-bg border border-success/20 rounded-lg">
-          <span className="w-2 h-2 rounded-full bg-success animate-pulse" />
-          <span className="text-xs font-medium text-success">Caja Abierta</span>
+        <div className="flex items-center gap-2.5 px-4 py-2 bg-success-bg border border-success/30 rounded-xl shadow-sm">
+          <span className="w-3 h-3 rounded-full bg-success animate-pulse" />
+          <span className="text-sm font-bold text-success">Caja Abierta</span>
         </div>
         <button
           onClick={handleRefresh}
-          className="flex items-center gap-2 btn-secondary text-xs"
+          className="flex items-center gap-2.5 btn-secondary text-base"
         >
-          <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
-          Actualizar
+          <RefreshCw size={18} className={refreshing ? 'animate-spin text-primary' : 'text-primary'} />
+          <span>Actualizar</span>
         </button>
       </div>
     </div>

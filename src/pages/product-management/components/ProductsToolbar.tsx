@@ -48,16 +48,16 @@ export default function ProductsToolbar({
       <div className="flex items-center gap-2 flex-wrap">
         {/* Search */}
         <div className="relative flex-1 min-w-52">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none z-10" />
           <input
             type="text"
             placeholder="Buscar por nombre, SKU, código de barras..."
             value={search}
             onChange={(e) => onSearch(e.target.value)}
-            className="input-field pl-9 h-9 text-sm"
+            className="input-field !pl-9 !pr-8 h-9 text-sm truncate"
           />
           {search && (
-            <button onClick={() => onSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+            <button onClick={() => onSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground z-10">
               <X size={14} />
             </button>
           )}

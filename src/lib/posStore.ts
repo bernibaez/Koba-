@@ -16,6 +16,8 @@ export type HeldSale = {
   savedAt: string;
 };
 
+export type PosReturnStatus = 'pending' | 'approved' | 'rejected';
+
 export type PosReturn = {
   id: string;
   code: string;
@@ -30,6 +32,11 @@ export type PosReturn = {
   reason: string;
   method: 'cash' | 'card' | 'credit_note' | 'exchange';
   type: 'partial' | 'full';
+  status: PosReturnStatus;
+  authorizedBy?: string;
+  reviewedBy?: string;
+  reviewDate?: string;
+  rejectionReason?: string;
 };
 
 export type CashExpense = {
@@ -112,12 +119,67 @@ export function removeHeldSale(id: string) {
   );
 }
 
+const DEFAULT_RETURNS: PosReturn[] = [
+  {
+    id: 'ret-101',
+    code: 'DEV-001',
+    saleCode: 'FAC-001',
+    customer: 'Juan Pérez',
+    date: new Date().toISOString().slice(0, 10),
+    time: '14:20',
+    user: 'Cajero POS',
+    cashier: 'Caja #1',
+    products: [{ sku: 'ARR-SEL-5LB', name: 'Arroz Selecto 5lb', qty: 1, price: 285 }],
+    total: 285,
+    reason: 'Producto defectuoso',
+    method: 'cash',
+    type: 'partial',
+    status: 'pending',
+  },
+  {
+    id: 'ret-102',
+    code: 'DEV-002',
+    saleCode: 'FAC-002',
+    customer: 'Empresa ABC S.R.L.',
+    date: new Date().toISOString().slice(0, 10),
+    time: '11:05',
+    user: 'Cajero POS',
+    cashier: 'Caja #2',
+    products: [{ sku: 'AZU-BLA-2LB', name: 'Azúcar Blanca 2lb', qty: 2, price: 110 }],
+    total: 220,
+    reason: 'Error de cobro',
+    method: 'credit_note',
+    type: 'partial',
+    status: 'approved',
+    authorizedBy: 'Admin General',
+    reviewedBy: 'Admin General',
+    reviewDate: new Date().toISOString().slice(0, 10),
+  },
+];
+
 export function getPosReturns(): PosReturn[] {
-  return read(KEYS.returns, []);
+  return read(KEYS.returns, DEFAULT_RETURNS);
 }
 
 export function addPosReturn(item: PosReturn) {
   write(KEYS.returns, [item, ...getPosReturns()]);
+}
+
+export function updatePosReturnStatus(id: string, status: PosReturnStatus, reviewerName: string, rejectionReason?: string) {
+  const list = getPosReturns().map((r) => {
+    if (r.id === id) {
+      return {
+        ...r,
+        status,
+        reviewedBy: reviewerName,
+        authorizedBy: status === 'approved' ? reviewerName : r.authorizedBy,
+        reviewDate: new Date().toISOString().slice(0, 10),
+        rejectionReason: rejectionReason || r.rejectionReason,
+      };
+    }
+    return r;
+  });
+  write(KEYS.returns, list);
 }
 
 export function getCashExpenses(): CashExpense[] {

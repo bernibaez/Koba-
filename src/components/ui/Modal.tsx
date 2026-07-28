@@ -32,36 +32,36 @@ export default function Modal({ open, onClose, title, subtitle, children, size =
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/40 fade-in"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-foreground/50 backdrop-blur-xs fade-in"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       role="dialog"
       aria-modal="true"
       aria-label={title}
     >
-      <div className={`w-full ${sizeClasses[size]} bg-card border border-border rounded-2xl shadow-pos-panel slide-up max-h-[90vh] flex flex-col`}>
+      <div className={`w-full ${sizeClasses[size]} bg-card border border-border/80 rounded-2xl shadow-floating slide-up max-h-[90vh] flex flex-col`}>
         {/* Header */}
-        <div className="flex items-start justify-between px-6 py-4 border-b border-border flex-shrink-0">
+        <div className="flex items-start justify-between px-6 py-5 border-b border-border/80 flex-shrink-0 bg-secondary/20">
           <div>
-            <h2 className="text-lg font-semibold text-foreground">{title}</h2>
-            {subtitle && <p className="text-sm text-muted-foreground mt-0.5">{subtitle}</p>}
+            <h2 className="text-xl font-extrabold text-foreground tracking-tight">{title}</h2>
+            {subtitle && <p className="text-sm font-medium text-muted-foreground mt-1">{subtitle}</p>}
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors ml-4 flex-shrink-0"
+            className="p-2 rounded-xl text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors ml-4 flex-shrink-0"
             aria-label="Cerrar modal"
           >
-            <X size={18} />
+            <X size={20} />
           </button>
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto scrollbar-thin px-6 py-5">
+        <div className="flex-1 overflow-y-auto scrollbar-thin px-6 py-6">
           {children}
         </div>
 
         {/* Footer */}
         {footer && (
-          <div className="px-6 py-4 border-t border-border flex-shrink-0">
+          <div className="px-6 py-4 border-t border-border/80 flex-shrink-0 bg-secondary/20">
             {footer}
           </div>
         )}

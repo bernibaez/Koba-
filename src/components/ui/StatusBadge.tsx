@@ -26,9 +26,9 @@ export default function StatusBadge({ variant, label, dot = true }: StatusBadgeP
   };
 
   return (
-    <span className={classes[variant]}>
-      {dot && <span className={`w-1.5 h-1.5 rounded-full ${dotColors[variant]}`} />}
-      {label}
+    <span className={`${classes[variant]} shadow-sm`}>
+      {dot && <span className={`w-2 h-2 rounded-full ${dotColors[variant]} flex-shrink-0 animate-pulse`} />}
+      <span className="font-bold">{label}</span>
     </span>
   );
 }

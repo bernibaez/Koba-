@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Printer, Search, RotateCcw, CheckCircle } from 'lucide-react';
+import { X, Printer, Search, RotateCcw, Clock, Shield, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { addPosReturn, getPosReturns, nextCode } from '@/lib/posStore';
 import { logAuditEvent } from '@/lib/auditStore';
@@ -68,7 +68,6 @@ export default function PosReturnModal({ onClose }: { onClose: () => void }) {
       setQty({});
       toast.success(`Factura ${found.code} cargada`);
     } else {
-      // Default fallback sale lines for arbitrary invoice numbers
       const fallback: SaleLookup = {
         code: codeKey || 'FAC-DEV',
         customer: customer || 'Cliente General',
@@ -100,6 +99,7 @@ export default function PosReturnModal({ onClose }: { onClose: () => void }) {
       toast.error('Selecciona al menos un producto e indica la cantidad a devolver');
       return;
     }
+
     const now = new Date();
     const code = nextCode('DEV', getPosReturns().length);
 
@@ -110,44 +110,58 @@ export default function PosReturnModal({ onClose }: { onClose: () => void }) {
       customer,
       date: now.toISOString().slice(0, 10),
       time: now.toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit' }),
-      user: 'Admin General',
+      user: 'Cajero POS',
       cashier: 'Caja #1',
       products: selectedItems.map((l) => ({ sku: l.sku, name: l.name, qty: l.qty, price: l.price })),
       total: totalReturnAmount,
       reason,
       method,
       type: isFullReturn ? 'full' : 'partial',
+      status: 'pending',
     });
 
     // System Audit Event
     logAuditEvent({
-      user: 'Admin General',
-      role: 'Administrador',
+      user: 'Cajero POS',
+      role: 'Cajero',
       action: 'Devolución',
       module: 'Devoluciones',
-      details: `Devolución ${code} (${isFullReturn ? 'Total' : 'Parcial'}) sobre ${loadedSale?.code} por RD$ ${totalReturnAmount.toLocaleString()}`,
+      details: `Solicitud de devolución ${code} (Pendiente de Aprobación Admin) por RD$ ${totalReturnAmount.toLocaleString()} sobre factura ${loadedSale?.code}`,
       before: { invoice: loadedSale?.code, customer },
-      after: { returnCode: code, type: isFullReturn ? 'full' : 'partial', total: totalReturnAmount, items: selectedItems },
+      after: { returnCode: code, status: 'pending', total: totalReturnAmount, items: selectedItems },
     });
 
-    toast.success(`Devolución ${isFullReturn ? 'total' : 'parcial'} ${code} registrada`);
     setRegisteredReturnCode(code);
+    toast.info(`Solicitud ${code} enviada al módulo de Devoluciones para aprobación del administrador`);
   };
 
   if (registeredReturnCode) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/40" onClick={onClose}>
-        <div className="card w-full max-w-md p-6 space-y-4 text-center" onClick={(e) => e.stopPropagation()}>
-          <div className="w-16 h-16 rounded-full bg-success-bg flex items-center justify-center mx-auto">
-            <CheckCircle size={32} className="text-success" />
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/40 backdrop-blur-xs" onClick={onClose}>
+        <div className="card w-full max-w-md p-6 space-y-4 text-center shadow-2xl border-amber-500/30" onClick={(e) => e.stopPropagation()}>
+          <div className="w-16 h-16 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mx-auto text-amber-600 dark:text-amber-400">
+            <Clock size={36} />
           </div>
-          <h3 className="text-xl font-bold text-foreground">Comprobante de Devolución</h3>
+          <h3 className="text-xl font-bold text-foreground">Solicitud de Devolución Enviada</h3>
           <p className="text-sm font-mono text-primary font-bold">{registeredReturnCode}</p>
+          
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 text-xs font-bold">
+            <Clock size={14} />
+            <span>Pendiente de Aprobación por Administrador</span>
+          </div>
+
+          <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-3.5 text-xs text-muted-foreground flex items-start gap-2.5 text-left">
+            <AlertCircle size={18} className="text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+            <p>
+              La solicitud fue registrada. Se ha enviado a la pantalla de <strong>Devoluciones</strong> donde un administrador podrá revisarla, aceptarla o rechazarla.
+            </p>
+          </div>
+
           <div className="bg-secondary/40 rounded-xl p-4 text-left text-xs space-y-1.5">
             <div className="flex justify-between"><span className="text-muted-foreground">Factura Original:</span><span className="font-semibold">{loadedSale?.code}</span></div>
             <div className="flex justify-between"><span className="text-muted-foreground">Cliente:</span><span className="font-semibold">{customer}</span></div>
             <div className="flex justify-between"><span className="text-muted-foreground">Motivo:</span><span className="font-semibold">{reason}</span></div>
-            <div className="flex justify-between border-t border-border pt-1 font-bold text-sm"><span>Total Reembolsado:</span><span className="text-danger">RD$ {totalReturnAmount.toLocaleString('es-DO', { minimumFractionDigits: 2 })}</span></div>
+            <div className="flex justify-between border-t border-border pt-1 font-bold text-sm"><span>Total Solicitado:</span><span className="text-danger">RD$ {totalReturnAmount.toLocaleString('es-DO', { minimumFractionDigits: 2 })}</span></div>
           </div>
 
           <div className="flex gap-2 pt-2">
@@ -164,16 +178,22 @@ export default function PosReturnModal({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/40" onClick={onClose}>
-      <div className="card w-full max-w-xl p-5 space-y-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/40 backdrop-blur-xs" onClick={onClose}>
+      <div className="card w-full max-w-xl p-5 space-y-4 max-h-[90vh] overflow-y-auto shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-border pb-3">
           <div className="flex items-center gap-2">
             <RotateCcw size={20} className="text-danger" />
             <h3 className="font-bold text-foreground text-lg">Devolución de Mercancía</h3>
           </div>
-          <button type="button" onClick={onClose} className="p-1 text-muted-foreground hover:text-foreground">
-            <X size={18} />
-          </button>
+          <div className="flex items-center gap-2">
+            <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20">
+              <Shield size={13} />
+              Revisión por Admin
+            </span>
+            <button type="button" onClick={onClose} className="p-1 text-muted-foreground hover:text-foreground">
+              <X size={18} />
+            </button>
+          </div>
         </div>
 
         {/* Invoice Lookup */}
@@ -182,12 +202,12 @@ export default function PosReturnModal({ onClose }: { onClose: () => void }) {
             <label className="text-xs font-semibold text-muted-foreground mb-1 block">Buscar Factura Original</label>
             <div className="relative">
               <input
-                className="input-field font-mono uppercase pl-9"
+                className="input-field font-mono uppercase !pl-9"
                 placeholder="Ej: FAC-001"
                 value={searchCode}
                 onChange={(e) => setSearchCode(e.target.value)}
               />
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground z-10" />
             </div>
           </div>
           <button type="button" onClick={handleLookup} className="btn-secondary self-end py-2">
@@ -283,9 +303,9 @@ export default function PosReturnModal({ onClose }: { onClose: () => void }) {
           <button type="button" className="btn-secondary" onClick={onClose}>
             Cancelar
           </button>
-          <button type="button" className="btn-primary flex items-center gap-2" onClick={handleProcessReturn}>
+          <button type="button" className="btn-primary flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white" onClick={handleProcessReturn}>
             <RotateCcw size={16} />
-            Procesar Devolución
+            Solicitar Devolución
           </button>
         </div>
       </div>

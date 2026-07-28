@@ -109,7 +109,6 @@ export const ROLE_ROUTES: Record<UserRole, string[] | typeof ALL_ROUTES> = {
     '/accounts-payable',
     '/sales',
     '/purchases',
-    '/maleta',
     '/cash-closure',
     '/audit',
     '/settings',

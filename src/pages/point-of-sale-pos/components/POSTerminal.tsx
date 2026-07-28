@@ -54,7 +54,13 @@ export default function POSTerminal() {
   const [expenseOpen, setExpenseOpen] = useState(false);
   const [holdOpen, setHoldOpen] = useState(false);
   const [scaleOpen, setScaleOpen] = useState(false);
+  const [scaleParams, setScaleParams] = useState<{ productId?: string; weight?: number } | null>(null);
   const [returnOpen, setReturnOpen] = useState(false);
+
+  const handleOpenScale = (productId?: string, weight?: number) => {
+    setScaleParams(productId || weight ? { productId, weight } : null);
+    setScaleOpen(true);
+  };
   const [heldSales, setHeldSales] = useState<HeldSale[]>(() => getHeldSales());
   const [awaitingDeleteScan, setAwaitingDeleteScan] = useState(false);
   const [activeCashId, setActiveCashId] = useState<CashRegisterId>(ADMIN_OWN_CASH);
@@ -216,7 +222,7 @@ export default function POSTerminal() {
         onClear={clearCart}
         onHold={() => setHoldOpen(true)}
         onExpense={() => setExpenseOpen(true)}
-        onScale={() => setScaleOpen(true)}
+        onScale={() => handleOpenScale()}
         onReturn={() => setReturnOpen(true)}
         onCancelDelete={() => setAwaitingDeleteScan(false)}
         onSwitchCash={() => setCashSwitchOpen(true)}
@@ -226,7 +232,7 @@ export default function POSTerminal() {
         <div className="flex-1 min-w-0 border-r border-border overflow-hidden flex flex-col">
           <ProductPanel
             onAddToCart={addToCart}
-            onOpenScale={() => setScaleOpen(true)}
+            onOpenScale={handleOpenScale}
             awaitingDelete={awaitingDeleteScan}
           />
         </div>
@@ -334,6 +340,8 @@ export default function POSTerminal() {
       )}
       {scaleOpen && (
         <PosScaleModal
+          initialProductId={scaleParams?.productId}
+          initialWeight={scaleParams?.weight}
           onClose={() => setScaleOpen(false)}
           onConfirm={(item, qty) => {
             addToCart(item, qty);

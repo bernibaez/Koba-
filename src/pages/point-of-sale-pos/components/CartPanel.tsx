@@ -165,58 +165,58 @@ export default function CartPanel({
       <div className="flex-1 overflow-y-auto scrollbar-thin">
         {cart.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-3 py-12 px-4">
-            <div className="w-14 h-14 rounded-full bg-secondary flex items-center justify-center">
-              <Tag size={24} className="text-muted-foreground/50" />
+            <div className="w-16 h-16 rounded-2xl bg-secondary flex items-center justify-center border border-border/60">
+              <Tag size={28} className="text-muted-foreground/60" />
             </div>
-            <p className="text-sm text-muted-foreground text-center">
+            <p className="text-base font-bold text-foreground text-center">
               El carrito está vacío
             </p>
-            <p className="text-xs text-muted-foreground text-center">
+            <p className="text-xs font-medium text-muted-foreground text-center max-w-xs">
               Selecciona productos del panel izquierdo o escanea un código de barras
             </p>
           </div>
         ) : (
-          <div className="divide-y divide-border/50">
+          <div className="divide-y divide-border/60">
             {cart.map((item) => (
-              <div key={item.id} className="px-3 py-2.5 hover:bg-muted/30 transition-colors group">
-                <div className="flex items-start gap-2">
+              <div key={item.id} className="px-4 py-3 hover:bg-muted/40 transition-colors group">
+                <div className="flex items-start gap-3">
                   <ProductInitial name={item.name} size="sm" />
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-1">
-                      <p className="text-xs font-semibold text-foreground leading-tight line-clamp-2 flex-1">{item.name}</p>
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-sm sm:text-base font-bold text-foreground leading-snug line-clamp-2 flex-1">{item.name}</p>
                       <button
                         onClick={() => onRemove(item.id)}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 text-muted-foreground hover:text-danger flex-shrink-0"
+                        className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-muted-foreground hover:text-danger hover:bg-danger-bg rounded-lg flex-shrink-0"
                         title="Quitar del carrito"
                       >
-                        <Trash2 size={12} />
+                        <Trash2 size={16} />
                       </button>
                     </div>
-                    <p className="text-xs text-muted-foreground font-mono">{item.sku}</p>
+                    <p className="text-xs font-mono font-medium text-muted-foreground mt-0.5">{item.sku}</p>
 
-                    <div className="flex items-center justify-between mt-1.5 gap-2">
+                    <div className="flex items-center justify-between mt-2 gap-2">
                       {/* Qty controls */}
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1.5">
                         <button
                           onClick={() => onUpdateQty(item.id, item.qty - 1)}
-                          className="w-6 h-6 rounded-md bg-secondary hover:bg-border flex items-center justify-center transition-colors active:scale-95"
+                          className="w-7 h-7 rounded-lg bg-secondary hover:bg-border flex items-center justify-center transition-colors active:scale-95 text-foreground font-bold"
                           title="Reducir cantidad"
                         >
-                          <Minus size={11} />
+                          <Minus size={14} />
                         </button>
                         <input
                           type="number"
                           min={0}
                           value={item.qty}
                           onChange={(e) => onUpdateQty(item.id, Number(e.target.value))}
-                          className="w-10 h-6 text-center text-xs font-semibold border border-border rounded-md bg-background tabular-nums focus:outline-none focus:ring-1 focus:ring-ring"
+                          className="w-12 h-7 text-center text-sm font-bold border border-border rounded-lg bg-background tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/30"
                         />
                         <button
                           onClick={() => onUpdateQty(item.id, item.qty + 1)}
-                          className="w-6 h-6 rounded-md bg-secondary hover:bg-border flex items-center justify-center transition-colors active:scale-95"
+                          className="w-7 h-7 rounded-lg bg-secondary hover:bg-border flex items-center justify-center transition-colors active:scale-95 text-foreground font-bold"
                           title="Aumentar cantidad"
                         >
-                          <Plus size={11} />
+                          <Plus size={14} />
                         </button>
                       </div>
 
@@ -232,16 +232,16 @@ export default function CartPanel({
                               onChange={(e) => onUpdateDiscount(item.id, Number(e.target.value))}
                               onBlur={() => setEditingDiscountId(null)}
                               autoFocus
-                              className="w-12 h-6 text-center text-xs border border-warning rounded-md bg-background focus:outline-none"
+                              className="w-14 h-7 text-center text-xs font-bold border border-warning rounded-lg bg-background focus:outline-none"
                             />
-                            <span className="text-xs text-muted-foreground">%</span>
+                            <span className="text-xs font-bold text-muted-foreground">%</span>
                           </div>
                         ) : (
                           <button
                             onClick={() => setEditingDiscountId(item.id)}
-                            className={`text-xs px-1.5 py-0.5 rounded transition-colors ${
+                            className={`text-xs font-bold px-2 py-1 rounded-lg transition-colors ${
                               item.discount > 0
-                                ? 'bg-warning-bg text-warning font-medium' :'text-muted-foreground hover:bg-secondary'
+                                ? 'bg-warning-bg text-warning border border-warning/30' :'text-muted-foreground hover:bg-secondary border border-transparent'
                             }`}
                             title="Editar descuento de línea"
                           >
@@ -251,12 +251,12 @@ export default function CartPanel({
                       </div>
 
                       {/* Line total */}
-                      <p className="text-sm font-bold tabular-nums text-foreground ml-auto">
+                      <p className="text-base sm:text-lg font-extrabold tabular-nums text-foreground ml-auto">
                         {fmt(item.price * item.qty * (1 - item.discount / 100))}
                       </p>
                     </div>
                     {item.tax > 0 && (
-                      <p className="text-xs text-muted-foreground mt-0.5">
+                      <p className="text-xs font-medium text-muted-foreground mt-1">
                         ITBIS {item.tax}%: {fmt(item.price * item.qty * (1 - item.discount / 100) * (item.tax / 100))}
                       </p>
                     )}
@@ -270,30 +270,30 @@ export default function CartPanel({
 
       {/* Totals */}
       {cart.length > 0 && (
-        <div className="border-t border-border px-3 py-3 space-y-1.5 flex-shrink-0 bg-secondary/20">
-          <div className="flex justify-between text-xs text-muted-foreground">
+        <div className="border-t border-border/80 px-4 py-4 space-y-2 flex-shrink-0 bg-secondary/30">
+          <div className="flex justify-between text-sm font-medium text-muted-foreground">
             <span>Subtotal</span>
-            <span className="tabular-nums font-medium text-foreground">{fmt(subtotal)}</span>
+            <span className="tabular-nums font-bold text-foreground">{fmt(subtotal)}</span>
           </div>
           {globalDiscountAmount > 0 && (
-            <div className="flex justify-between text-xs text-warning">
+            <div className="flex justify-between text-sm font-bold text-warning">
               <span>Descuento global ({globalDiscount}%)</span>
-              <span className="tabular-nums font-medium">-{fmt(globalDiscountAmount)}</span>
+              <span className="tabular-nums">-{fmt(globalDiscountAmount)}</span>
             </div>
           )}
           {taxTotal > 0 && (
-            <div className="flex justify-between text-xs text-muted-foreground">
+            <div className="flex justify-between text-sm font-medium text-muted-foreground">
               <span>ITBIS (18%)</span>
-              <span className="tabular-nums font-medium text-foreground">{fmt(taxTotal)}</span>
+              <span className="tabular-nums font-bold text-foreground">{fmt(taxTotal)}</span>
             </div>
           )}
-          <div className="flex justify-between items-center pt-2 border-t border-border">
-            <span className="text-base font-bold text-foreground">TOTAL</span>
-            <span className="text-xl font-bold tabular-nums text-primary">{fmt(total)}</span>
+          <div className="flex justify-between items-center pt-3 border-t border-border/80">
+            <span className="text-lg font-extrabold text-foreground">TOTAL</span>
+            <span className="text-2xl sm:text-3xl font-black tabular-nums text-primary">{fmt(total)}</span>
           </div>
           <button
             onClick={onCheckout}
-            className="w-full btn-primary py-3 text-base mt-2 xl:hidden"
+            className="w-full btn-primary py-3.5 text-lg font-bold mt-2 xl:hidden shadow-md shadow-primary/20"
           >
             Proceder al Pago →
           </button>
