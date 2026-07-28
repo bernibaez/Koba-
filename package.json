@@ -9,8 +9,7 @@
     "preview": "vite preview --port 4028",
     "lint": "eslint src --ext .ts,.tsx",
     "format": "prettier --write \"src/**/*.{ts,tsx,css,md,json}\"",
-    "type-check": "tsc --noEmit",
-    "deploy": "npm run build && gh-pages -d dist"
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",
