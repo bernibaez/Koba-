@@ -4,7 +4,7 @@ import AppLogo from './ui/AppLogo';
 import {
   LayoutDashboard, ShoppingCart, Package, Users, UserCheck, ShoppingBag, ArrowLeftRight, Sliders,
   BarChart2, Settings, ChevronRight, ChevronDown, Store, FileText, DollarSign, HandCoins, Wallet, Scale,
-  RotateCcw, Briefcase, Lock, ShieldCheck, Filter
+  RotateCcw, Briefcase, Lock, ShieldCheck, Filter, Boxes
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { canAccessNav } from '@/lib/auth';
@@ -25,6 +25,7 @@ const navItems: NavItem[] = [
   { id: 'nav-purchases', label: 'Compras', icon: <ShoppingBag size={20} />, href: '/purchases', group: 'Operaciones' },
   { id: 'nav-returns', label: 'Devoluciones', icon: <RotateCcw size={20} />, href: '/returns-history', group: 'Operaciones' },
   { id: 'nav-products', label: 'Productos', icon: <Package size={20} />, href: '/product-management', group: 'Inventario' },
+  { id: 'nav-combos', label: 'Combos', icon: <Boxes size={20} />, href: '/combos', group: 'Inventario' },
   { id: 'nav-stock-transfer', label: 'Transferencias', icon: <ArrowLeftRight size={20} />, href: '/stock-transfers', group: 'Inventario' },
   { id: 'nav-stock-adjust', label: 'Ajustes Stock', icon: <Sliders size={20} />, href: '/stock-adjustments', group: 'Inventario' },
   { id: 'nav-scales', label: 'Balanzas', icon: <Scale size={20} />, href: '/scales', group: 'Inventario' },
@@ -55,7 +56,6 @@ export default function Sidebar({ collapsed, mobileOpen, onMobileClose, currentP
   const visibleNav = navItems.filter((n) => canAccessNav(role, n.href));
 
   const navRef = useRef<HTMLElement | null>(null);
-  const [activeCategoryFilter, setActiveCategoryFilter] = useState<string | null>(null);
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
 
   const handleNavScroll = (e: React.UIEvent<HTMLElement>) => {
@@ -81,9 +81,7 @@ export default function Sidebar({ collapsed, mobileOpen, onMobileClose, currentP
     }));
   };
 
-  const displayGroups = activeCategoryFilter
-    ? groups.filter((g) => g === activeCategoryFilter)
-    : groups;
+  const displayGroups = groups;
 
   return (
     <>
@@ -103,37 +101,6 @@ export default function Sidebar({ collapsed, mobileOpen, onMobileClose, currentP
             </span>
           )}
         </div>
-
-        {/* Quick Category Filter Pills when expanded */}
-        {!collapsed && (
-          <div className="px-3 pt-3 pb-1 flex gap-1 overflow-x-auto scrollbar-thin border-b border-border/40">
-            <button
-              type="button"
-              onClick={() => setActiveCategoryFilter(null)}
-              className={`text-[10px] px-2 py-0.5 rounded-lg font-extrabold transition-all whitespace-nowrap ${
-                activeCategoryFilter === null
-                  ? 'bg-primary text-primary-foreground shadow-xs'
-                  : 'bg-secondary/60 text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              Todos
-            </button>
-            {groups.map((g) => (
-              <button
-                key={`pill-${g}`}
-                type="button"
-                onClick={() => setActiveCategoryFilter(activeCategoryFilter === g ? null : g)}
-                className={`text-[10px] px-2 py-0.5 rounded-lg font-extrabold transition-all whitespace-nowrap ${
-                  activeCategoryFilter === g
-                    ? 'bg-primary text-primary-foreground shadow-xs'
-                    : 'bg-secondary/60 text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {g}
-              </button>
-            ))}
-          </div>
-        )}
 
         {/* Nav */}
         <nav ref={navRef} onScroll={handleNavScroll} className="flex-1 overflow-y-auto scrollbar-thin py-3 px-2 space-y-3">
@@ -250,35 +217,6 @@ export default function Sidebar({ collapsed, mobileOpen, onMobileClose, currentP
           >
             ✕
           </button>
-        </div>
-
-        {/* Mobile Filter Pills */}
-        <div className="px-3 pt-3 pb-1 flex gap-1 overflow-x-auto scrollbar-thin border-b border-border/40">
-          <button
-            type="button"
-            onClick={() => setActiveCategoryFilter(null)}
-            className={`text-[10px] px-2 py-0.5 rounded-lg font-extrabold transition-all whitespace-nowrap ${
-              activeCategoryFilter === null
-                ? 'bg-primary text-primary-foreground shadow-xs'
-                : 'bg-secondary/60 text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            Todos
-          </button>
-          {groups.map((g) => (
-            <button
-              key={`mobile-pill-${g}`}
-              type="button"
-              onClick={() => setActiveCategoryFilter(activeCategoryFilter === g ? null : g)}
-              className={`text-[10px] px-2 py-0.5 rounded-lg font-extrabold transition-all whitespace-nowrap ${
-                activeCategoryFilter === g
-                  ? 'bg-primary text-primary-foreground shadow-xs'
-                  : 'bg-secondary/60 text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {g}
-            </button>
-          ))}
         </div>
 
         <nav className="flex-1 overflow-y-auto scrollbar-thin py-4 px-3 space-y-3">

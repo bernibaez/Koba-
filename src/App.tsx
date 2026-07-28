@@ -7,6 +7,7 @@ import POSPage from './pages/point-of-sale-pos/POSPage';
 import SalesPage from './pages/SalesPage';
 import PurchasesPage from './pages/PurchasesPage';
 import ProductManagementPage from './pages/product-management/ProductManagementPage';
+import CombosPage from './pages/combos/CombosPage';
 import StockTransfersPage from './pages/StockTransfersPage';
 import StockAdjustmentsPage from './pages/StockAdjustmentsPage';
 import ScalesPage from './pages/ScalesPage';
@@ -35,6 +36,7 @@ export default function App() {
       <Route path="/sales" element={<Guard><SalesPage /></Guard>} />
       <Route path="/purchases" element={<Guard><PurchasesPage /></Guard>} />
       <Route path="/product-management" element={<Guard><ProductManagementPage /></Guard>} />
+      <Route path="/combos" element={<Guard><CombosPage /></Guard>} />
       <Route path="/stock-transfers" element={<Guard><StockTransfersPage /></Guard>} />
       <Route path="/stock-adjustments" element={<Guard><StockAdjustmentsPage /></Guard>} />
       <Route path="/scales" element={<Guard><ScalesPage /></Guard>} />

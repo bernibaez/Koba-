@@ -19,6 +19,7 @@ import {
   type HeldSale,
   type PaymentSplit,
 } from '@/lib/posStore';
+import { getCombos, recordComboSale } from '@/lib/comboStore';
 
 const ADMIN_OWN_CASH: CashRegisterId = '1';
 
@@ -35,6 +36,9 @@ export interface CartItem {
   image: string;
   unit: string;
   isWeighted?: boolean;
+  isCombo?: boolean;
+  comboId?: string;
+  comboItems?: any[];
 }
 
 export interface Customer {
@@ -202,6 +206,16 @@ export default function POSTerminal() {
     customer: selectedCustomer,
     orderCompleted,
     onComplete: (_payments: PaymentSplit) => {
+      // Deduct inventory for all combos sold in cart
+      cart.forEach((cartItem) => {
+        if (cartItem.isCombo && cartItem.comboId) {
+          const combo = getCombos().find((c) => c.id === cartItem.comboId);
+          if (combo) {
+            recordComboSale(combo, cartItem.qty, activeCash.label);
+          }
+        }
+      });
+
       setLastPayments(_payments);
       setOrderCompleted(true);
       setPaymentOpen(false);

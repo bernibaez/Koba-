@@ -32,11 +32,14 @@ import SuppliersReport from './reports/SuppliersReport';
 import AgentsReport from './reports/AgentsReport';
 import FiscalDGIIReport from './reports/FiscalDGIIReport';
 import CashierReport from './reports/CashierReport';
+import CombosReport from './reports/CombosReport';
 import { exportReportPdf } from './reports/exportReportPdf';
+import { Boxes } from 'lucide-react';
 
 type ReportId =
   | 'profit-loss'
   | 'product-profit'
+  | 'combos'
   | 'sales'
   | 'purchases'
   | 'stock'
@@ -52,6 +55,7 @@ type ReportId =
 const reportTypes: { id: ReportId; label: string; icon: React.ReactNode; color: string }[] = [
   { id: 'profit-loss', label: 'Ganancias y Pérdidas', icon: <TrendingUp size={18} />, color: 'text-success' },
   { id: 'product-profit', label: 'Ganancias por Producto', icon: <Tag size={18} />, color: 'text-primary' },
+  { id: 'combos', label: 'Informe de Combos', icon: <Boxes size={18} />, color: 'text-purple-600' },
   { id: 'sales', label: 'Ventas', icon: <ShoppingCart size={18} />, color: 'text-info' },
   { id: 'purchases', label: 'Compras', icon: <ShoppingBag size={18} />, color: 'text-warning' },
   { id: 'stock', label: 'Inventario', icon: <Package size={18} />, color: 'text-primary' },
@@ -71,6 +75,8 @@ function renderReport(id: ReportId) {
       return <ProfitLossReport />;
     case 'product-profit':
       return <ProductProfitReport />;
+    case 'combos':
+      return <CombosReport />;
     case 'sales':
       return <SalesReport />;
     case 'purchases':

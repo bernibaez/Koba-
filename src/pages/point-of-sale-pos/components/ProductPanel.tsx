@@ -1,8 +1,10 @@
 import React, { useState, useRef } from 'react';
-import { Search, Barcode, Grid3x3, List, X, Scale } from 'lucide-react';
+import { Search, Barcode, Grid3x3, List, X, Scale, Boxes, Sparkles } from 'lucide-react';
 import type { CartItem } from './POSTerminal';
 import ProductInitial from '@/components/ui/ProductInitial';
 import { DELETE_SKU } from '@/lib/posStore';
+import { getCombos, checkComboStockAvailability, Combo } from '@/lib/comboStore';
+import ComboStockAlertModal from '@/pages/combos/components/ComboStockAlertModal';
 import { toast } from 'sonner';
 import { scaleProducts, parseScaleBarcode } from '../utils/scaleUtils';
 
@@ -25,6 +27,7 @@ interface Product {
 
 const categories = [
   { id: 'cat-all', label: 'Todos' },
+  { id: 'cat-combos', label: 'Combos & Ofertas' },
   { id: 'cat-lacteos', label: 'Lácteos' },
   { id: 'cat-carnes', label: 'Carnes' },
   { id: 'cat-granos', label: 'Granos' },
@@ -55,7 +58,6 @@ const standardProducts: Product[] = [
   { id: 'prod-del', sku: DELETE_SKU, barcode: '9999999999999', name: 'ELIMINAR (SKU escáner)', category: 'Sistema', price: 0, cost: 0, stock: 999, unit: 'Acción', tax: 0, image: '', lowStock: false, outOfStock: false },
 ];
 
-// Combine standard products with scale products so all heavy products are available in POS
 const products: Product[] = [
   ...standardProducts,
   ...scaleProducts
@@ -90,7 +92,14 @@ export default function ProductPanel({ onAddToCart, onOpenScale, awaitingDelete 
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const barcodeRef = useRef<HTMLInputElement>(null);
 
-  const filtered = products.filter((p) => {
+  // Stock alert dialog state
+  const [alertOpen, setAlertOpen] = useState(false);
+  const [alertComboName, setAlertComboName] = useState('');
+  const [missingItems, setMissingItems] = useState<{ productId: string; sku: string; name: string; required: number; available: number }[]>([]);
+
+  const allCombos = getCombos().filter((c) => c.active && c.visibleInPos);
+
+  const filteredProducts = activeCategory === 'cat-combos' ? [] : products.filter((p) => {
     if (p.sku === DELETE_SKU) return false;
     const matchCat = activeCategory === 'cat-all' || categories.find((c) => c.id === activeCategory)?.label === p.category;
     const matchSearch =
@@ -101,10 +110,21 @@ export default function ProductPanel({ onAddToCart, onOpenScale, awaitingDelete 
     return matchCat && matchSearch;
   });
 
+  const filteredCombos = (activeCategory === 'cat-all' || activeCategory === 'cat-combos')
+    ? allCombos.filter((c) => {
+        const matchSearch =
+          search === '' ||
+          c.name.toLowerCase().includes(search.toLowerCase()) ||
+          c.code.toLowerCase().includes(search.toLowerCase()) ||
+          c.barcode.includes(search) ||
+          c.category.toLowerCase().includes(search.toLowerCase());
+        return matchSearch;
+      })
+    : [];
+
   const handleProductClick = (p: Product) => {
     if (p.outOfStock && p.sku !== DELETE_SKU) return;
 
-    // Check if heavy / weighed product
     if ((p.isWeighted || p.unit.toLowerCase() === 'libra' || p.unit.toLowerCase() === 'kg') && onOpenScale) {
       onOpenScale(p.id, 1.000);
       return;
@@ -123,13 +143,49 @@ export default function ProductPanel({ onAddToCart, onOpenScale, awaitingDelete 
     });
   };
 
+  const handleComboClick = (combo: Combo) => {
+    // Check stock for component items
+    const stockCheck = checkComboStockAvailability(combo, 1);
+    if (!stockCheck.available) {
+      setAlertComboName(combo.name);
+      setMissingItems(stockCheck.missingItems);
+      setAlertOpen(true);
+      return;
+    }
+
+    onAddToCart({
+      id: `cart-combo-${combo.id}-${Date.now()}`,
+      productId: combo.id,
+      name: combo.name,
+      sku: combo.code,
+      price: combo.price,
+      cost: Math.round(combo.normalPrice * 0.7),
+      tax: combo.applyTax ? 18 : 0,
+      image: combo.image || 'https://images.unsplash.com/photo-1533089860892-a7c6f0a88666?w=120&h=120&fit=crop',
+      unit: 'Combo',
+      isCombo: true,
+      comboId: combo.id,
+      comboItems: combo.items,
+    });
+    toast.success(`Combo agregado: ${combo.name}`);
+  };
+
   const handleBarcodeKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key !== 'Enter') return;
     const code = search.trim();
     if (!code) return;
     const upper = code.toUpperCase();
 
-    // Check weighed product SKU shortcut
+    // Check if code matches a Combo
+    const comboFound = allCombos.find(
+      (c) => c.barcode === code || c.code.toLowerCase() === code.toLowerCase()
+    );
+    if (comboFound) {
+      handleComboClick(comboFound);
+      setSearch('');
+      return;
+    }
+
     if (
       upper === 'PESO' ||
       upper === 'PESADOS' ||
@@ -162,11 +218,9 @@ export default function ProductPanel({ onAddToCart, onOpenScale, awaitingDelete 
       return;
     }
 
-    // Check heavy product barcode scan (EAN-13 scale format or scale SKU)
     const scaleParsed = parseScaleBarcode(code);
     if (scaleParsed) {
       if (scaleParsed.isFromEan13) {
-        // Automatically add scanned weighed item with scanned weight
         onAddToCart(
           {
             id: `cart-scale-${Date.now()}`,
@@ -186,7 +240,6 @@ export default function ProductPanel({ onAddToCart, onOpenScale, awaitingDelete 
         toast.success(`Escaneado: ${scaleParsed.weight.toFixed(3)} ${scaleParsed.product.unit} de ${scaleParsed.product.name}`);
         return;
       } else if (onOpenScale) {
-        // Direct scale barcode / SKU scan: open scale modal for that product
         onOpenScale(scaleParsed.product.productId, 1.000);
         setSearch('');
         toast.info(`Producto pesado escaneado: ${scaleParsed.product.name}`);
@@ -201,9 +254,11 @@ export default function ProductPanel({ onAddToCart, onOpenScale, awaitingDelete 
       handleProductClick(found);
       setSearch('');
     } else {
-      toast.error('Producto o SKU no encontrado');
+      toast.error('Producto o Combo no encontrado');
     }
   };
+
+  const totalDisplayItems = filteredProducts.length + filteredCombos.length;
 
   return (
     <div className="flex flex-col h-full">
@@ -214,7 +269,7 @@ export default function ProductPanel({ onAddToCart, onOpenScale, awaitingDelete 
           <input
             ref={barcodeRef}
             type="text"
-            placeholder={awaitingDelete ? 'Escanea el producto a ELIMINAR…' : 'Buscar por nombre, SKU o código de barras...'}
+            placeholder={awaitingDelete ? 'Escanea el producto a ELIMINAR…' : 'Buscar por nombre, combo, SKU o código de barras...'}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={handleBarcodeKey}
@@ -222,7 +277,7 @@ export default function ProductPanel({ onAddToCart, onOpenScale, awaitingDelete 
           />
           {!search && (
             <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-mono font-bold bg-primary/10 text-primary px-2.5 py-1 rounded-lg border border-primary/20 pointer-events-none hidden md:inline z-10">
-              SKU / Escáner
+              SKU / Combo Escáner
             </span>
           )}
           {search && (
@@ -249,17 +304,17 @@ export default function ProductPanel({ onAddToCart, onOpenScale, awaitingDelete 
             <Barcode size={20} className="text-primary" />
             <span className="hidden sm:inline">F2</span>
           </button>
-          <div className="flex border border-border rounded-xl overflow-hidden flex-shrink-0 shadow-sm">
+          <div className="flex border border-border rounded-xl p-1 bg-secondary/50 gap-1">
             <button
               onClick={() => setViewMode('grid')}
-              className={`p-3 transition-colors ${viewMode === 'grid' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-secondary'}`}
+              className={`p-2 rounded-lg transition-colors ${viewMode === 'grid' ? 'bg-card text-primary shadow-xs' : 'text-muted-foreground hover:text-foreground'}`}
               title="Vista cuadrícula"
             >
               <Grid3x3 size={18} />
             </button>
             <button
               onClick={() => setViewMode('list')}
-              className={`p-3 transition-colors ${viewMode === 'list' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-secondary'}`}
+              className={`p-2 rounded-lg transition-colors ${viewMode === 'list' ? 'bg-card text-primary shadow-xs' : 'text-muted-foreground hover:text-foreground'}`}
               title="Vista lista"
             >
               <List size={18} />
@@ -268,36 +323,80 @@ export default function ProductPanel({ onAddToCart, onOpenScale, awaitingDelete 
         </div>
       </div>
 
-      {/* Category tabs */}
-      <div className="flex gap-2 px-4 py-3 border-b border-border overflow-x-auto scrollbar-thin flex-shrink-0 bg-card/30">
+      {/* Category Pills */}
+      <div className="px-4 py-2 border-b border-border flex items-center gap-1.5 overflow-x-auto scrollbar-thin flex-shrink-0 bg-card/40">
         {categories.map((cat) => (
           <button
             key={cat.id}
             onClick={() => setActiveCategory(cat.id)}
-            className={`px-4 py-2 rounded-xl text-sm font-bold whitespace-nowrap transition-all duration-150 flex-shrink-0 shadow-sm ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
               activeCategory === cat.id
-                ? 'bg-primary text-primary-foreground shadow-sm'
+                ? 'bg-primary text-primary-foreground shadow-xs scale-[1.02]'
+                : cat.id === 'cat-combos'
+                ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 hover:bg-purple-500/20'
                 : 'bg-secondary/80 text-foreground/80 hover:bg-secondary hover:text-foreground'
             }`}
           >
+            {cat.id === 'cat-combos' && <Boxes size={14} />}
             {cat.label}
           </button>
         ))}
       </div>
 
-      {/* Products Grid / List */}
+      {/* Products & Combos Grid */}
       <div className="flex-1 overflow-y-auto scrollbar-thin p-4">
-        {filtered.length === 0 ? (
+        {totalDisplayItems === 0 ? (
           <div className="flex flex-col items-center justify-center h-48 gap-3">
             <Search size={40} className="text-muted-foreground/30" />
-            <p className="text-base font-semibold text-muted-foreground">No se encontraron productos</p>
+            <p className="text-base font-semibold text-muted-foreground">No se encontraron productos o combos</p>
             <button onClick={() => { setSearch(''); setActiveCategory('cat-all'); }} className="text-sm font-bold text-primary hover:underline">
               Limpiar filtros
             </button>
           </div>
         ) : viewMode === 'grid' ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
-            {filtered.map((p) => (
+            {/* COMBOS CARDS */}
+            {filteredCombos.map((c) => (
+              <button
+                key={`combo-${c.id}`}
+                onClick={() => handleComboClick(c)}
+                className="pos-product-card relative flex flex-col bg-gradient-to-b from-purple-500/5 to-card border border-purple-500/30 hover:border-purple-500 rounded-2xl p-3 sm:p-3.5 text-left transition-all shadow-card hover:shadow-card-hover cursor-pointer group"
+              >
+                <span className="absolute top-2.5 right-2.5 bg-purple-600 text-white text-[10px] font-black px-2 py-0.5 rounded-md flex items-center gap-1 shadow-xs z-10">
+                  <Sparkles size={10} /> COMBO
+                </span>
+
+                <div className="h-16 sm:h-20 w-full mb-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center overflow-hidden flex-shrink-0 relative">
+                  <img src={c.image || 'https://images.unsplash.com/photo-1533089860892-a7c6f0a88666?w=120&h=120&fit=crop'} alt={c.name} className="w-full h-full object-cover" />
+                </div>
+
+                <p className="text-xs sm:text-sm font-black text-foreground leading-snug line-clamp-2 min-h-[2.4rem]">
+                  {c.name}
+                </p>
+
+                <div className="flex items-center gap-1.5 mt-1">
+                  <span className="text-[10px] font-extrabold text-purple-600 dark:text-purple-400 bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20">
+                    {c.items.length} items
+                  </span>
+                  <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                    -{c.savingsPercent.toFixed(0)}% Ahorro
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between mt-2 pt-1 border-t border-border/40">
+                  <p className="text-sm sm:text-base font-black tabular-nums text-purple-600 dark:text-purple-400">
+                    RD$ {c.price.toLocaleString('es-DO')}
+                  </p>
+                  <span className="line-through text-[11px] text-muted-foreground font-semibold">
+                    RD$ {c.normalPrice}
+                  </span>
+                </div>
+                <p className="text-[10px] font-mono text-muted-foreground mt-0.5">Cod: {c.code}</p>
+              </button>
+            ))}
+
+            {/* STANDARD PRODUCTS CARDS */}
+            {filteredProducts.map((p) => (
               <button
                 key={p.id}
                 onClick={() => handleProductClick(p)}
@@ -306,7 +405,6 @@ export default function ProductPanel({ onAddToCart, onOpenScale, awaitingDelete 
                   ${p.outOfStock ? 'opacity-50 cursor-not-allowed border-border' : 'border-border/80 hover:border-primary/50 cursor-pointer'}
                 `}
               >
-                {/* Smaller, compact product icon */}
                 <div className="h-16 sm:h-20 w-full mb-2.5 rounded-xl bg-primary/5 border border-primary/10 flex items-center justify-center overflow-hidden flex-shrink-0 relative">
                   <ProductInitial name={p.name} size="lg" />
                   {p.isWeighted && (
@@ -344,7 +442,32 @@ export default function ProductPanel({ onAddToCart, onOpenScale, awaitingDelete 
           </div>
         ) : (
           <div className="space-y-1">
-            {filtered.map((p) => (
+            {/* LIST VISTA FOR COMBOS */}
+            {filteredCombos.map((c) => (
+              <button
+                key={`combo-list-${c.id}`}
+                onClick={() => handleComboClick(c)}
+                className="w-full flex items-center gap-3 p-2.5 rounded-xl border border-purple-500/30 bg-purple-500/5 hover:border-purple-500 text-left transition-all cursor-pointer"
+              >
+                <div className="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center text-purple-600 font-bold">
+                  <Boxes size={20} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-black text-foreground truncate">{c.name}</p>
+                    <span className="text-[10px] font-black bg-purple-600 text-white px-1.5 py-0.5 rounded">COMBO</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground font-mono">{c.code} • {c.items.length} componentes</p>
+                </div>
+                <div className="flex-shrink-0 text-right">
+                  <p className="text-sm font-black tabular-nums text-purple-600 dark:text-purple-400">RD$ {c.price.toLocaleString('es-DO')}</p>
+                  <p className="text-xs line-through text-muted-foreground">RD$ {c.normalPrice}</p>
+                </div>
+              </button>
+            ))}
+
+            {/* LIST VISTA FOR PRODUCTS */}
+            {filteredProducts.map((p) => (
               <button
                 key={p.id}
                 onClick={() => handleProductClick(p)}
@@ -393,6 +516,14 @@ export default function ProductPanel({ onAddToCart, onOpenScale, awaitingDelete 
           </div>
         ))}
       </div>
+
+      {/* Combo Stock Alert Modal */}
+      <ComboStockAlertModal
+        isOpen={alertOpen}
+        onClose={() => setAlertOpen(false)}
+        comboName={alertComboName}
+        missingItems={missingItems}
+      />
     </div>
   );
 }
