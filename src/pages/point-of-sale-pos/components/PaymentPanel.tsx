@@ -1,9 +1,17 @@
 import React, { useMemo, useState } from 'react';
-import { CreditCard, Banknote, Smartphone, Split, Printer, CheckCircle, X, Plus, AlertCircle } from 'lucide-react';
+import { CreditCard, Banknote, Smartphone, Split, Printer, CheckCircle, X, Plus, AlertCircle, FileText, Check, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import type { CartItem, Customer } from './POSTerminal';
 import type { PaymentSplit } from '@/lib/posStore';
 import { logAuditEvent } from '@/lib/auditStore';
+import {
+  generateNextNCF,
+  saveFiscalInvoice,
+  validateRNC,
+  NCF_TYPES,
+  type NCFType,
+  type FiscalInvoiceRecord,
+} from '@/lib/ncfStore';
 
 type PaymentMethod = 'cash' | 'card' | 'transfer' | 'credit' | 'split';
 
@@ -11,8 +19,10 @@ interface PaymentPanelProps {
   total: number;
   cart: CartItem[];
   customer: Customer | null;
-  onComplete: (payments: PaymentSplit) => void;
+  onComplete: (payments: PaymentSplit, fiscalInvoice?: FiscalInvoiceRecord) => void;
   orderCompleted: boolean;
+  fiscalEnabled?: boolean;
+  onToggleFiscal?: (enabled: boolean) => void;
   onClose?: () => void;
   onNewSale?: () => void;
 }
@@ -33,6 +43,8 @@ export default function PaymentPanel({
   customer,
   onComplete,
   orderCompleted,
+  fiscalEnabled = true,
+  onToggleFiscal,
   onClose,
   onNewSale,
 }: PaymentPanelProps) {
@@ -42,6 +54,11 @@ export default function PaymentPanel({
   const [printReceipt, setPrintReceipt] = useState(true);
   const [split, setSplit] = useState({ cash: '', card: '', transfer: '', credit: '' });
   const [lastChange, setLastChange] = useState(0);
+
+  // Fiscal Invoice (NCF) State
+  const [ncfType, setNcfType] = useState<NCFType>('B02');
+  const [rncClient, setRncClient] = useState('');
+  const [companyName, setCompanyName] = useState('');
 
   const fmt = (v: number) =>
     `RD$ ${v.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -102,6 +119,26 @@ export default function PaymentPanel({
       toast.error('El carrito está vacío');
       return;
     }
+
+    if (fiscalEnabled) {
+      const ncfSpec = NCF_TYPES[ncfType];
+      if (ncfSpec.requiresRnc) {
+        if (!rncClient.trim()) {
+          toast.error('Debes ingresar el RNC o Cédula para este tipo de comprobante fiscal');
+          return;
+        }
+        const valResult = validateRNC(rncClient);
+        if (!valResult.valid) {
+          toast.error(`RNC/Cédula no válido: ${valResult.message}`);
+          return;
+        }
+        if (!companyName.trim()) {
+          toast.error('Debes ingresar la Razón Social / Nombre Comercial del cliente');
+          return;
+        }
+      }
+    }
+
     const payments = buildPayments();
     if (!payments) return;
 
@@ -118,17 +155,62 @@ export default function PaymentPanel({
         payments.credit > 0 ? `Crédito ${fmt(payments.credit)}` : null,
       ].filter(Boolean);
 
+      let fiscalInvoice: FiscalInvoiceRecord | undefined;
+
+      if (fiscalEnabled) {
+        // Generate NCF and Fiscal Invoice
+        const { ncf, expirationDate } = generateNextNCF(ncfType);
+        const now = new Date();
+
+        const subtotalNet = total / 1.18;
+        const totalItbis = total - subtotalNet;
+
+        fiscalInvoice = {
+          id: `inv-${Date.now()}`,
+          ncf,
+          ncfType,
+          rncClient: rncClient.trim() || customer?.phone || undefined,
+          companyName: companyName.trim() || customer?.name || 'Consumidor Final',
+          issueDate: now.toLocaleDateString('es-DO'),
+          issueTime: now.toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit' }),
+          subtotal: Math.round(subtotalNet * 100) / 100,
+          itbis: Math.round(totalItbis * 100) / 100,
+          total,
+          paymentMethod: parts.join(' · '),
+          cashier: 'Caja #1 (Admin)',
+          expirationDate,
+          items: cart.map((item) => {
+            const itemNet = item.price / 1.18;
+            const itemItbis = item.price - itemNet;
+            return {
+              sku: item.sku,
+              name: item.name,
+              qty: item.qty,
+              price: item.price,
+              itbis: Math.round(itemItbis * item.qty * 100) / 100,
+              subtotal: item.price * item.qty,
+            };
+          }),
+        };
+
+        saveFiscalInvoice(fiscalInvoice);
+        toast.success(`Venta completada — NCF: ${ncf}`);
+      } else {
+        toast.success(`Venta completada — ${fmt(total)} (Sin Comprobante Fiscal)`);
+      }
+
       logAuditEvent({
         user: 'Admin General',
         role: 'Administrador',
         action: 'Venta',
         module: 'POS',
-        details: `Venta procesada por ${fmt(total)} (${parts.join(' · ')})`,
-        after: { total, payments, change: computedChange, cartCount: cart.length },
+        details: fiscalInvoice
+          ? `Factura Fiscal ${fiscalInvoice.ncf} emitida por ${fmt(total)} (${parts.join(' · ')})`
+          : `Venta procesada por ${fmt(total)} (${parts.join(' · ')})`,
+        after: { total, payments, ncf: fiscalInvoice?.ncf, change: computedChange, cartCount: cart.length },
       });
 
-      toast.success(`Venta completada — ${fmt(total)}`);
-      onComplete(payments);
+      onComplete(payments, fiscalInvoice);
     }, 400);
   };
 
@@ -189,17 +271,118 @@ export default function PaymentPanel({
                 key={`pm-${m.id}`}
                 type="button"
                 onClick={() => setMethod(m.id)}
-                className={`flex flex-col items-center justify-center p-2 rounded-lg border transition-all active:scale-95 text-center
-                  ${method === m.id
-                    ? 'bg-primary text-primary-foreground font-bold shadow-xs border-primary'
-                    : 'bg-secondary/60 border-border text-muted-foreground hover:bg-secondary hover:text-foreground'
-                  }`}
+                className={`flex flex-col items-center justify-center p-2 rounded-lg border transition-all active:scale-95 text-center ${
+                  method === m.id
+                    ? 'bg-primary text-white border-primary shadow-xs font-bold'
+                    : 'bg-card border-border hover:bg-secondary text-foreground'
+                }`}
               >
-                {m.icon}
-                <span className="text-[10px] font-bold mt-1 leading-none">{m.label}</span>
+                <div className="mb-0.5">{m.icon}</div>
+                <span className="text-[10px]">{m.label}</span>
               </button>
             ))}
           </div>
+        </div>
+
+        {/* NCF / Comprobante Fiscal Selector Block */}
+        <div
+          className={`p-3 rounded-xl border transition-all ${
+            fiscalEnabled
+              ? 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700'
+              : 'bg-slate-100/50 dark:bg-slate-800/20 border-slate-200/50 dark:border-slate-800'
+          } space-y-2 text-xs`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+              <FileText size={14} className={fiscalEnabled ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400'} />
+              Comprobante Fiscal (DGII)
+            </span>
+
+            {/* Toggle Switch */}
+            <button
+              type="button"
+              onClick={() => onToggleFiscal && onToggleFiscal(!fiscalEnabled)}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-extrabold transition-all cursor-pointer ${
+                fiscalEnabled
+                  ? 'bg-indigo-600 text-white shadow-2xs'
+                  : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+              }`}
+            >
+              <span>{fiscalEnabled ? 'ACTIVADO (NCF)' : 'DESACTIVADO (Sin NCF)'}</span>
+            </button>
+          </div>
+
+          {fiscalEnabled ? (
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1 pt-1">
+                {(['B02', 'B01', 'B15', 'B14'] as NCFType[]).map((t) => (
+                  <button
+                    key={`ncf-btn-${t}`}
+                    type="button"
+                    onClick={() => setNcfType(t)}
+                    className={`py-1.5 px-2 rounded-lg text-[10px] font-bold border transition-all ${
+                      ncfType === t
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs'
+                        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100'
+                    }`}
+                  >
+                    {t === 'B02' && 'B02 · Consumo'}
+                    {t === 'B01' && 'B01 · Crédito'}
+                    {t === 'B15' && 'B15 · Gobierno'}
+                    {t === 'B14' && 'B14 · Especial'}
+                  </button>
+                ))}
+              </div>
+
+              {/* RNC / Cédula & Razón Social inputs when required */}
+              {NCF_TYPES[ncfType].requiresRnc && (
+                <div className="pt-2 border-t border-slate-200 dark:border-slate-700 space-y-2 animate-fadeIn">
+                  <div>
+                    <div className="flex items-center justify-between mb-0.5">
+                      <label className="text-[10px] font-bold text-slate-700 dark:text-slate-300">
+                        RNC / Cédula del Cliente *
+                      </label>
+                      {rncClient && (
+                        <span
+                          className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                            validateRNC(rncClient).valid
+                              ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                              : 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
+                          }`}
+                        >
+                          {validateRNC(rncClient).message}
+                        </span>
+                      )}
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="Ej: 131456789 o 00112345678"
+                      value={rncClient}
+                      onChange={(e) => setRncClient(e.target.value)}
+                      className="input-field text-xs h-8 font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-0.5 block">
+                      Razón Social / Nombre Comercial *
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Nombre oficial registrado en DGII"
+                      value={companyName}
+                      onChange={(e) => setCompanyName(e.target.value)}
+                      className="input-field text-xs h-8"
+                    />
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <p className="text-[11px] text-slate-400 font-medium py-1">
+              ⚠️ Venta procesada como Factura Simple (Sin Comprobante Fiscal NCF). Haz clic arriba para activar.
+            </p>
+          )}
         </div>
 
         {/* Cash options */}

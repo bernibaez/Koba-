@@ -10,6 +10,8 @@ import PosHoldModal from './PosHoldModal';
 import PosScaleModal from './PosScaleModal';
 import PosReturnModal from './PosReturnModal';
 import PosCashSwitchModal from './PosCashSwitchModal';
+import RegisterDetailsModal from './RegisterDetailsModal';
+import FiscalInvoiceModal from '@/components/FiscalInvoiceModal';
 import { getCashRegister, type CashRegisterId } from '@/lib/cashRegisters';
 import {
   DELETE_SKU,
@@ -19,6 +21,7 @@ import {
   type HeldSale,
   type PaymentSplit,
 } from '@/lib/posStore';
+import type { FiscalInvoiceRecord } from '@/lib/ncfStore';
 import { getCombos, recordComboSale } from '@/lib/comboStore';
 
 const ADMIN_OWN_CASH: CashRegisterId = '1';
@@ -60,6 +63,9 @@ export default function POSTerminal() {
   const [scaleOpen, setScaleOpen] = useState(false);
   const [scaleParams, setScaleParams] = useState<{ productId?: string; weight?: number } | null>(null);
   const [returnOpen, setReturnOpen] = useState(false);
+  const [registerDetailsOpen, setRegisterDetailsOpen] = useState(false);
+  const [lastFiscalInvoice, setLastFiscalInvoice] = useState<FiscalInvoiceRecord | null>(null);
+  const [fiscalEnabled, setFiscalEnabled] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
 
   const handleOpenScale = (productId?: string, weight?: number) => {
@@ -214,7 +220,9 @@ export default function POSTerminal() {
     cart,
     customer: selectedCustomer,
     orderCompleted,
-    onComplete: (_payments: PaymentSplit) => {
+    fiscalEnabled,
+    onToggleFiscal: (val: boolean) => setFiscalEnabled(val),
+    onComplete: (_payments: PaymentSplit, fiscalInvoice?: FiscalInvoiceRecord) => {
       cart.forEach((cartItem) => {
         if (cartItem.isCombo && cartItem.comboId) {
           const combo = getCombos().find((c) => c.id === cartItem.comboId);
@@ -225,6 +233,9 @@ export default function POSTerminal() {
       });
 
       setLastPayments(_payments);
+      if (fiscalInvoice) {
+        setLastFiscalInvoice(fiscalInvoice);
+      }
       setOrderCompleted(true);
     },
     onNewSale: clearCart,
@@ -248,6 +259,7 @@ export default function POSTerminal() {
         onReturn={() => setReturnOpen(true)}
         onCancelDelete={() => setAwaitingDeleteScan(false)}
         onSwitchCash={() => setCashSwitchOpen(true)}
+        onOpenRegisterDetails={() => setRegisterDetailsOpen(true)}
       />
 
       {/* Main Grid: Left Panel (Cart) & Right Panel (Products Catalog) */}
@@ -268,6 +280,8 @@ export default function POSTerminal() {
             globalDiscountAmount={globalDiscountAmount}
             total={total}
             onCheckout={() => setPaymentOpen(true)}
+            fiscalEnabled={fiscalEnabled}
+            onToggleFiscal={() => setFiscalEnabled((prev) => !prev)}
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
           />
@@ -287,6 +301,15 @@ export default function POSTerminal() {
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-lg p-3 mt-3 flex-shrink-0 flex flex-wrap items-center justify-between gap-3">
         {/* Left Action Shortcuts */}
         <div className="flex items-center gap-2 overflow-x-auto py-0.5">
+          <button
+            type="button"
+            onClick={() => setPaymentOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black text-indigo-700 dark:text-indigo-300 bg-indigo-100/70 dark:bg-indigo-950/80 border border-indigo-300 dark:border-indigo-800 hover:bg-indigo-200 transition-all shadow-2xs active:scale-95"
+            title="Emitir Factura Fiscal con NCF de la DGII"
+          >
+            <FileText size={16} className="text-indigo-600 dark:text-indigo-400" />
+            <span>Factura Fiscal (NCF)</span>
+          </button>
           <button
             type="button"
             onClick={() => toast.info('Generando preventa...')}
@@ -409,6 +432,17 @@ export default function POSTerminal() {
           currentId={activeCashId}
           onSelect={setActiveCashId}
           onClose={() => setCashSwitchOpen(false)}
+        />
+      )}
+      {registerDetailsOpen && (
+        <RegisterDetailsModal
+          onClose={() => setRegisterDetailsOpen(false)}
+        />
+      )}
+      {lastFiscalInvoice && (
+        <FiscalInvoiceModal
+          invoice={lastFiscalInvoice}
+          onClose={() => setLastFiscalInvoice(null)}
         />
       )}
     </div>

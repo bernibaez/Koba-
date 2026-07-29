@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import {
-  Building2, MapPin, FileText, Printer, Tag, DollarSign, Globe, Bell, Shield, Mail, Upload, Save, ChevronRight, Trash2, ImageIcon
+  Building2, MapPin, FileText, Printer, Tag, DollarSign, Globe, Bell, Shield, Mail, Upload, Save, ChevronRight, Trash2, ImageIcon, ShieldCheck
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -10,11 +10,13 @@ import {
   readLogoFile,
   setCompanyLogo,
 } from '@/lib/companyLogo';
+import NCFSettingsTab from './settings/NCFSettingsTab';
 
 const settingsSections = [
   { id: 'company', label: 'Empresa', icon: <Building2 size={18} /> },
   { id: 'locations', label: 'Ubicaciones', icon: <MapPin size={18} /> },
   { id: 'invoice', label: 'Facturación', icon: <FileText size={18} /> },
+  { id: 'ncf', label: 'Secuencias NCF (DGII)', icon: <ShieldCheck size={18} /> },
   { id: 'printers', label: 'Impresoras', icon: <Printer size={18} /> },
   { id: 'taxes', label: 'Impuestos', icon: <Tag size={18} /> },
   { id: 'currency', label: 'Moneda', icon: <DollarSign size={18} /> },
@@ -261,7 +263,9 @@ export default function SettingsPage() {
               </div>
             )}
 
-            {!['company','locations','taxes','currency','notifications','invoice']?.includes(activeSection) && (
+            {activeSection === 'ncf' && <NCFSettingsTab />}
+
+            {!['company','locations','taxes','currency','notifications','invoice','ncf']?.includes(activeSection) && (
               <div className="card p-6 flex flex-col items-center justify-center py-16 text-center">
                 <div className="w-16 h-16 rounded-2xl bg-secondary flex items-center justify-center mb-4">
                   {settingsSections?.find(s => s?.id === activeSection)?.icon}

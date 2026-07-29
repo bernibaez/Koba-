@@ -31,6 +31,7 @@ const navItems: NavItem[] = [
   { id: 'nav-scales', label: 'Balanzas', icon: <Scale size={20} />, href: '/scales', group: 'Inventario' },
   { id: 'nav-contacts', label: 'Contactos', icon: <Users size={20} />, href: '/contacts', group: 'CRM' },
   { id: 'nav-cash-closure', label: 'Cierre de Caja', icon: <Lock size={20} />, href: '/cash-closure', group: 'Finanzas' },
+  { id: 'nav-maleta', label: 'Maleta / Detalles', icon: <Briefcase size={20} />, href: '/maleta', group: 'Finanzas' },
   { id: 'nav-expenses', label: 'Gastos', icon: <DollarSign size={20} />, href: '/expenses', group: 'Finanzas' },
   { id: 'nav-receivable', label: 'Cuentas por Cobrar', icon: <HandCoins size={20} />, href: '/accounts-receivable', group: 'Finanzas' },
   { id: 'nav-payable', label: 'Cuentas por Pagar', icon: <Wallet size={20} />, href: '/accounts-payable', group: 'Finanzas' },

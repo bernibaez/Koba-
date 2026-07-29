@@ -11,6 +11,7 @@ import {
   type MaletaCut,
 } from '@/lib/posStore';
 import { exportTableToPdf, formatMoneyPdf } from '@/lib/exportPdf';
+import RegisterDetailsModal from './point-of-sale-pos/components/RegisterDetailsModal';
 
 const mockProductsSold = [
   { sku: 'ARR-SEL-5LB', barcode: '7891000100103', name: 'Arroz Selecto 5lb', qty: 42, total: 11970 },
@@ -31,6 +32,7 @@ export default function MaletaPage() {
   const [bagAmount, setBagAmount] = useState('70000');
   const [selected, setSelected] = useState<MaletaCut | null>(null);
   const [tab, setTab] = useState<'cut' | 'history'>('cut');
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
 
   const payments = { cash: 52429.65, card: 18200, transfer: 6400, credit: 3200 };
   const salesTotal = payments.cash + payments.card + payments.transfer + payments.credit;
@@ -113,9 +115,19 @@ export default function MaletaPage() {
             </h1>
             <p className="text-sm text-muted-foreground mt-1">Retiros parciales sin cerrar la jornada</p>
           </div>
-          <div className="flex gap-1 bg-secondary rounded-xl p-1 w-fit">
-            <button type="button" onClick={() => setTab('cut')} className={`px-4 py-2 rounded-lg text-sm font-medium ${tab === 'cut' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground'}`}>Nuevo corte</button>
-            <button type="button" onClick={() => setTab('history')} className={`px-4 py-2 rounded-lg text-sm font-medium ${tab === 'history' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground'}`}>Historial</button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowDetailsModal(true)}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition-all shadow-sm active:scale-95"
+            >
+              <Briefcase size={16} />
+              <span>Registrar detalles</span>
+            </button>
+            <div className="flex gap-1 bg-secondary rounded-xl p-1 w-fit">
+              <button type="button" onClick={() => setTab('cut')} className={`px-4 py-2 rounded-lg text-sm font-medium ${tab === 'cut' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground'}`}>Nuevo corte</button>
+              <button type="button" onClick={() => setTab('history')} className={`px-4 py-2 rounded-lg text-sm font-medium ${tab === 'history' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground'}`}>Historial</button>
+            </div>
           </div>
         </div>
 
@@ -252,6 +264,12 @@ export default function MaletaPage() {
           </div>
         )}
       </div>
+
+      {showDetailsModal && (
+        <RegisterDetailsModal
+          onClose={() => setShowDetailsModal(false)}
+        />
+      )}
     </AppLayout>
   );
 }

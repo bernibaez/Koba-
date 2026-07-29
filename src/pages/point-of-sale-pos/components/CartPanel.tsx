@@ -24,6 +24,8 @@ interface CartPanelProps {
   globalDiscountAmount: number;
   total: number;
   onCheckout: () => void;
+  fiscalEnabled?: boolean;
+  onToggleFiscal?: () => void;
   searchQuery?: string;
   onSearchChange?: (q: string) => void;
 }
@@ -41,6 +43,8 @@ export default function CartPanel({
   taxTotal,
   globalDiscountAmount,
   total,
+  fiscalEnabled = true,
+  onToggleFiscal,
   searchQuery = '',
   onSearchChange,
 }: CartPanelProps) {
@@ -219,10 +223,26 @@ export default function CartPanel({
       {/* Cart Summary Footer */}
       <div className="bg-slate-50 dark:bg-slate-800/60 rounded-xl p-3 border border-slate-200 dark:border-slate-700 flex-shrink-0 space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-4 text-xs font-black text-slate-800 dark:text-slate-100">
-          <div>
-            <span>Artículos: </span>
-            <span className="text-indigo-600 font-black tabular-nums">{totalItemsCount.toFixed(2)}</span>
+          <div className="flex items-center gap-3">
+            <div>
+              <span>Artículos: </span>
+              <span className="text-indigo-600 font-black tabular-nums">{totalItemsCount.toFixed(2)}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => onToggleFiscal && onToggleFiscal()}
+              className={`inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-md border transition-all cursor-pointer shadow-2xs ${
+                fiscalEnabled
+                  ? 'bg-indigo-100 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border-indigo-300 dark:border-indigo-800 hover:bg-rose-100 hover:text-rose-700 hover:border-rose-300'
+                  : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-700 hover:bg-indigo-100 hover:text-indigo-700'
+              }`}
+              title={fiscalEnabled ? 'Comprobante Fiscal Activado — Clic para desactivar' : 'Comprobante Fiscal Desactivado — Clic para activar'}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${fiscalEnabled ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
+              <span>{fiscalEnabled ? 'NCF Activado (DGII)' : 'Sin Comprobante Fiscal'}</span>
+            </button>
           </div>
+
           <div>
             <span>Total: </span>
             <span className="text-emerald-600 dark:text-emerald-400 font-black tabular-nums text-sm">{fmt(total)}</span>
@@ -234,7 +254,7 @@ export default function CartPanel({
             Descuento (i) PUNTOS (-): <span className="font-bold text-slate-800 dark:text-slate-200">✍ 0.00</span>
           </div>
           <div>
-            Impuesto del pedido(+): (i) <span className="font-bold text-slate-800 dark:text-slate-200">✍ {taxTotal.toFixed(2)}</span>
+            ITBIS (18%) desglosado: <span className="font-bold text-slate-800 dark:text-slate-200">RD$ {taxTotal.toFixed(2)}</span>
           </div>
           <div>
             Transporte(+): (i) <span className="font-bold text-slate-800 dark:text-slate-200">✍ 0.00</span>

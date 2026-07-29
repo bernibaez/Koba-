@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  Home, RotateCcw, XCircle, Briefcase, Scale, Undo2, Pause, PlusCircle, Calendar, CreditCard
+  Home, RotateCcw, XCircle, Briefcase, Scale, Undo2, Pause, PlusCircle, Calendar, Monitor
 } from 'lucide-react';
 
 interface POSHeaderProps {
@@ -19,6 +19,7 @@ interface POSHeaderProps {
   onReturn: () => void;
   onCancelDelete: () => void;
   onSwitchCash: () => void;
+  onOpenRegisterDetails?: () => void;
 }
 
 export default function POSHeader({
@@ -36,6 +37,7 @@ export default function POSHeader({
   onReturn,
   onCancelDelete,
   onSwitchCash,
+  onOpenRegisterDetails,
 }: POSHeaderProps) {
   const [timeStr, setTimeStr] = useState('');
 
@@ -80,71 +82,71 @@ export default function POSHeader({
           </div>
         </div>
 
-        {/* Center: Square Icon Action Buttons */}
-        <div className="flex items-center gap-1.5 overflow-x-auto py-0.5">
+        {/* Center: Solid Vibrant Action Buttons */}
+        <div className="flex items-center gap-2 overflow-x-auto py-0.5">
           <button
             type="button"
             onClick={onClear}
-            className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-rose-50 hover:border-rose-200 hover:text-rose-600 transition-all shadow-2xs"
+            className="p-2.5 rounded-xl bg-slate-700 hover:bg-slate-800 text-white transition-all shadow-xs active:scale-95 border border-slate-600"
             title="Venta Previa / Reajustar"
           >
-            <RotateCcw size={16} />
+            <RotateCcw size={18} strokeWidth={2.3} />
           </button>
 
           <button
             type="button"
             onClick={onClear}
-            className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-red-500 hover:bg-red-50 hover:border-red-200 transition-all shadow-2xs"
+            className="p-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white transition-all shadow-xs active:scale-95 border border-red-500"
             title="Cancelar / Limpiar"
           >
-            <XCircle size={16} />
+            <XCircle size={18} strokeWidth={2.3} />
           </button>
 
           <button
             type="button"
-            onClick={onSwitchCash}
-            className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-emerald-600 hover:bg-emerald-50 hover:border-emerald-200 transition-all shadow-2xs"
-            title="Cambiar de Caja"
+            onClick={onOpenRegisterDetails}
+            className="p-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white transition-all shadow-xs active:scale-95 border border-emerald-500"
+            title="Registrar detalles (Maleta)"
           >
-            <Briefcase size={16} />
+            <Briefcase size={18} strokeWidth={2.3} />
           </button>
 
           <button
             type="button"
             onClick={onScale}
-            className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-teal-600 hover:bg-teal-50 hover:border-teal-200 transition-all shadow-2xs"
+            className="p-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white transition-all shadow-xs active:scale-95 border border-teal-500"
             title="Balanza (Pesados SKU: 200)"
           >
-            <Scale size={16} />
+            <Scale size={18} strokeWidth={2.3} />
           </button>
 
           <button
             type="button"
             onClick={onReturn}
-            className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-rose-500 hover:bg-rose-50 hover:border-rose-200 transition-all shadow-2xs"
+            className="p-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white transition-all shadow-xs active:scale-95 border border-rose-500"
             title="Devolución"
           >
-            <Undo2 size={16} />
+            <Undo2 size={18} strokeWidth={2.3} />
           </button>
 
           <button
             type="button"
             onClick={onSwitchCash}
-            className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-200 transition-all shadow-2xs"
-            title="Terminal de Pago"
+            className="p-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white transition-all shadow-xs active:scale-95 border border-indigo-500"
+            title="Acceso Remoto / Entrar a una caja"
           >
-            <CreditCard size={16} />
+            <Monitor size={18} strokeWidth={2.3} />
           </button>
 
           <button
             type="button"
             onClick={onHold}
-            className="relative p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-purple-50 hover:border-purple-200 hover:text-purple-600 transition-all shadow-2xs"
+            className="relative p-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white transition-all shadow-xs active:scale-95 border border-purple-500"
             title="Suspender / Pausar Venta"
           >
-            <Pause size={16} />
+            <Pause size={18} strokeWidth={2.3} />
             {heldCount > 0 && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 bg-purple-600 text-white text-[10px] rounded-full flex items-center justify-center font-bold">
+              <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-amber-400 text-slate-950 text-[11px] rounded-full flex items-center justify-center font-black border-2 border-white dark:border-slate-900 shadow-xs">
                 {heldCount}
               </span>
             )}

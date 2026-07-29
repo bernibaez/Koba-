@@ -1,9 +1,11 @@
-export type CashRegisterId = '1' | '2' | '3';
+export type CashRegisterId = '1' | '2' | '3' | '4';
 
 export type CashRegisterSession = {
   id: CashRegisterId;
   label: string;
   cashier: string;
+  role: string;
+  isAdminBox?: boolean;
   open: boolean;
   openedAt: string;
   salesToday: number;
@@ -16,45 +18,69 @@ export type CashRegisterSession = {
 export const CASH_REGISTERS: CashRegisterSession[] = [
   {
     id: '1',
-    label: 'Caja #1',
-    cashier: 'Roberto Díaz',
+    label: 'Caja #1 - Administrador',
+    cashier: 'Sra. Alba Iris Martinez',
+    role: 'Administrador General',
+    isAdminBox: true,
     open: true,
-    openedAt: '08:02',
-    salesToday: 48250.5,
-    tickets: 64,
-    cartItems: 3,
-    currentTotal: 765,
+    openedAt: '07:30 AM',
+    salesToday: 132660.16,
+    tickets: 85,
+    cartItems: 4,
+    currentTotal: 1850.00,
     movements: [
-      { time: '08:02', type: 'Apertura', detail: 'Fondo inicial', amount: 5000 },
-      { time: '09:15', type: 'Venta', detail: 'FAC-1201 · Efectivo', amount: 1850 },
-      { time: '10:40', type: 'Venta', detail: 'FAC-1208 · Tarjeta', amount: 4320 },
-      { time: '11:05', type: 'Gasto', detail: 'Mensajería', amount: -200 },
-      { time: '12:30', type: 'Venta', detail: 'FAC-1220 · Transferencia', amount: 9800 },
-      { time: 'Ahora', type: 'En curso', detail: 'Carrito activo · 3 ítems', amount: 765 },
+      { time: '07:30 AM', type: 'Apertura', detail: 'Fondo de caja inicial', amount: 10000 },
+      { time: '09:15 AM', type: 'Venta', detail: 'FAC-00101 · Efectivo', amount: 12500 },
+      { time: '10:40 AM', type: 'Venta', detail: 'FAC-00102 · Tarjeta', amount: 43200 },
+      { time: '11:05 AM', type: 'Gasto', detail: 'Insumos de empaque', amount: -1500 },
+      { time: '12:30 PM', type: 'Venta', detail: 'FAC-00103 · Transferencia', amount: 68460.16 },
+      { time: 'Ahora', type: 'En curso', detail: 'Carrito activo · 4 ítems', amount: 1850 },
     ],
   },
   {
     id: '2',
-    label: 'Caja #2',
+    label: 'Caja #2 - Mostrador Principal',
     cashier: 'Luisa Fernández',
+    role: 'Cajero Senior',
+    isAdminBox: false,
     open: true,
-    openedAt: '08:10',
-    salesToday: 35600,
-    tickets: 48,
-    cartItems: 5,
-    currentTotal: 2140,
+    openedAt: '08:00 AM',
+    salesToday: 45600.00,
+    tickets: 52,
+    cartItems: 2,
+    currentTotal: 940.00,
     movements: [
-      { time: '08:10', type: 'Apertura', detail: 'Fondo inicial', amount: 4000 },
-      { time: '09:50', type: 'Venta', detail: 'FAC-2103 · Efectivo', amount: 920 },
-      { time: '11:20', type: 'Devolución', detail: 'DEV-014', amount: -450 },
-      { time: '13:00', type: 'Venta', detail: 'FAC-2115 · Crédito', amount: 12500 },
-      { time: 'Ahora', type: 'En curso', detail: 'Carrito activo · 5 ítems', amount: 2140 },
+      { time: '08:00 AM', type: 'Apertura', detail: 'Fondo inicial', amount: 5000 },
+      { time: '09:50 AM', type: 'Venta', detail: 'FAC-00201 · Efectivo', amount: 3920 },
+      { time: '11:20 AM', type: 'Devolución', detail: 'DEV-0014', amount: -450 },
+      { time: '01:00 PM', type: 'Venta', detail: 'FAC-00205 · Tarjeta', amount: 12500 },
+      { time: 'Ahora', type: 'En curso', detail: 'Carrito activo · 2 ítems', amount: 940 },
     ],
   },
   {
     id: '3',
-    label: 'Caja #3',
-    cashier: 'Miguel Torres',
+    label: 'Caja #3 - Servicio Rápido / Express',
+    cashier: 'Carlos López',
+    role: 'Cajero POS',
+    isAdminBox: false,
+    open: true,
+    openedAt: '08:30 AM',
+    salesToday: 28400.00,
+    tickets: 41,
+    cartItems: 0,
+    currentTotal: 0,
+    movements: [
+      { time: '08:30 AM', type: 'Apertura', detail: 'Fondo inicial', amount: 3000 },
+      { time: '10:15 AM', type: 'Venta', detail: 'FAC-00301 · Efectivo', amount: 8400 },
+      { time: '12:00 PM', type: 'Venta', detail: 'FAC-00304 · Tarjeta', amount: 17000 },
+    ],
+  },
+  {
+    id: '4',
+    label: 'Caja #4 - Sucursal Remanente',
+    cashier: 'Disponible / Sin asignar',
+    role: 'Turno Tarde',
+    isAdminBox: false,
     open: false,
     openedAt: '—',
     salesToday: 0,
@@ -62,11 +88,11 @@ export const CASH_REGISTERS: CashRegisterSession[] = [
     cartItems: 0,
     currentTotal: 0,
     movements: [
-      { time: '22:05', type: 'Cierre', detail: 'Sesión anterior cerrada', amount: 0 },
+      { time: 'Ayer', type: 'Cierre', detail: 'Turno finalizado', amount: 0 },
     ],
   },
 ];
 
 export function getCashRegister(id: CashRegisterId) {
-  return CASH_REGISTERS.find((c) => c.id === id)!;
+  return CASH_REGISTERS.find((c) => c.id === id) || CASH_REGISTERS[0];
 }
