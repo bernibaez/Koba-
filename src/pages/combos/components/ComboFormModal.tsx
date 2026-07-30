@@ -12,12 +12,14 @@ import {
   Clock,
   Check,
   RefreshCw,
-  Image as ImageIcon,
   Info,
   Percent,
+  Search,
+  CheckCircle2,
 } from 'lucide-react';
 import { Combo, ComboItem, PricingMode } from '@/lib/comboStore';
 import { getStoredProducts, ProductItem } from '@/lib/productStore';
+import CategoryIcon from '@/components/ui/CategoryIcon';
 import { toast } from 'sonner';
 
 interface ComboFormModalProps {
@@ -97,6 +99,10 @@ export default function ComboFormModal({
   const [startTime, setStartTime] = useState('06:00');
   const [endTime, setEndTime] = useState('22:00');
 
+  // Search & Filter for adding products
+  const [prodSearchTerm, setProdSearchTerm] = useState('');
+  const [prodCategoryFilter, setProdCategoryFilter] = useState('all');
+
   useEffect(() => {
     const prods = getStoredProducts();
     setAvailableProducts(prods);
@@ -107,7 +113,7 @@ export default function ComboFormModal({
       setBarcode(editingCombo.barcode);
       setDescription(editingCombo.description);
       setCategory(editingCombo.category || CATEGORIES[0]);
-      setImage(editingCombo.image || PRESET_IMAGES[0].url);
+      setImage('');
       setItems(editingCombo.items || []);
       setDiscountType(editingCombo.discountType || 'fixed');
       setPriceInput(editingCombo.price || 0);
@@ -132,7 +138,7 @@ export default function ComboFormModal({
       setBarcode(randomBar);
       setDescription('');
       setCategory(CATEGORIES[0]);
-      setImage(PRESET_IMAGES[0].url);
+      setImage('');
       setItems([]);
       setDiscountType('fixed');
       setPriceInput(0);
@@ -168,17 +174,24 @@ export default function ComboFormModal({
   const savingsPercent = normalPrice > 0 ? (savingsAmount / normalPrice) * 100 : 0;
   const profitMargin = finalPrice > 0 ? ((finalPrice - totalCost) / finalPrice) * 100 : 0;
 
-  // Handlers for Items
-  const handleAddItem = () => {
-    if (!selectedProdId) {
-      toast.error('Selecciona un producto para agregar');
-      return;
-    }
-    const prod = availableProducts.find((p) => p.id === selectedProdId);
-    if (!prod) return;
+  const prodCategoriesList = Array.from(new Set(availableProducts.map((p) => p.category))).filter(Boolean);
 
+  const filteredAvailableProducts = availableProducts.filter((p) => {
+    const matchSearch =
+      !prodSearchTerm.trim() ||
+      p.name.toLowerCase().includes(prodSearchTerm.toLowerCase()) ||
+      p.sku.toLowerCase().includes(prodSearchTerm.toLowerCase()) ||
+      p.category.toLowerCase().includes(prodSearchTerm.toLowerCase()) ||
+      p.barcode.includes(prodSearchTerm);
+
+    const matchCat = prodCategoryFilter === 'all' || p.category === prodCategoryFilter;
+    return matchSearch && matchCat;
+  });
+
+  // Handlers for Items
+  const addSpecificProductToCombo = (prod: ProductItem) => {
     if (items.some((i) => i.productId === prod.id)) {
-      toast.warning('Este producto ya está en el combo. Incrementa la cantidad en la tabla.');
+      toast.warning(`"${prod.name}" ya está en el combo. Puedes incrementar su cantidad en la tabla.`);
       return;
     }
 
@@ -195,13 +208,22 @@ export default function ComboFormModal({
 
     const updated = [...items, newItem];
     setItems(updated);
-    setSelectedProdId('');
+    toast.success(`✓ "${prod.name}" agregado al combo`);
 
-    // If initial price was 0, default fixed price to 10% off normal
     if (priceInput === 0 && discountType === 'fixed') {
       const newNormal = updated.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
       setPriceInput(Math.round(newNormal * 0.9));
     }
+  };
+
+  const handleAddItem = () => {
+    if (!selectedProdId) {
+      toast.error('Selecciona un producto para agregar');
+      return;
+    }
+    const prod = availableProducts.find((p) => p.id === selectedProdId);
+    if (prod) addSpecificProductToCombo(prod);
+    setSelectedProdId('');
   };
 
   const handleUpdateItemQty = (itemId: string, newQty: number) => {
@@ -406,24 +428,14 @@ export default function ComboFormModal({
 
             <div>
               <label className="text-xs font-bold text-muted-foreground mb-1.5 block">
-                Imagen del Combo (Opcional)
+                Icono Representativo del Combo
               </label>
-              <div className="flex flex-wrap items-center gap-2">
-                {PRESET_IMAGES.map((img) => (
-                  <button
-                    key={img.label}
-                    type="button"
-                    onClick={() => setImage(img.url)}
-                    className={`relative rounded-xl overflow-hidden border-2 transition-all p-0.5 ${
-                      image === img.url ? 'border-primary ring-2 ring-primary/30 scale-105' : 'border-border/60 hover:border-primary/50'
-                    }`}
-                  >
-                    <img src={img.url} alt={img.label} className="w-12 h-12 object-cover rounded-lg" />
-                    <span className="absolute bottom-0 inset-x-0 bg-black/60 text-[9px] text-white text-center font-bold truncate px-0.5">
-                      {img.label}
-                    </span>
-                  </button>
-                ))}
+              <div className="flex items-center gap-3 p-3 bg-secondary/40 rounded-xl border border-border/60">
+                <CategoryIcon category={category} name={name} isCombo size="lg" />
+                <div>
+                  <span className="text-xs font-bold text-foreground block">Icono por categoría</span>
+                  <span className="text-[11px] text-muted-foreground block">Icono visual asignado a "{category || 'Combo'}"</span>
+                </div>
               </div>
             </div>
           </div>
@@ -438,34 +450,85 @@ export default function ComboFormModal({
                 </h3>
               </div>
               <span className="text-xs font-bold text-muted-foreground bg-secondary px-2.5 py-1 rounded-lg">
-                {items.length} Componentes
+                {items.length} Componente{items.length === 1 ? '' : 's'}
               </span>
             </div>
 
-            {/* Add product bar */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-              <select
-                aria-label="Seleccionar Producto"
-                value={selectedProdId}
-                onChange={(e) => setSelectedProdId(e.target.value)}
-                className="input-field flex-1 text-sm font-semibold"
-              >
-                <option value="">-- Seleccionar producto para añadir --</option>
-                {availableProducts.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} ({p.sku}) - Stock: {p.currentStock} {p.unit} - RD$ {p.salePrice}
-                  </option>
-                ))}
-              </select>
+            {/* Interactive Product Search & Quick-Add List */}
+            <div className="space-y-3 p-4 bg-secondary/30 rounded-2xl border border-border/60">
+              <div className="flex flex-col sm:flex-row gap-2.5 items-center justify-between">
+                <div className="relative flex-1 w-full">
+                  <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-primary" />
+                  <input
+                    type="text"
+                    placeholder="Buscar producto por nombre (ej. arroz, aceite), SKU o categoría..."
+                    value={prodSearchTerm}
+                    onChange={(e) => setProdSearchTerm(e.target.value)}
+                    className="input-field pl-10 h-10 text-xs font-bold w-full"
+                  />
+                </div>
 
-              <button
-                type="button"
-                onClick={handleAddItem}
-                className="btn-primary text-xs font-extrabold flex items-center justify-center gap-1.5 px-4 py-2.5"
-              >
-                <Plus size={16} />
-                Agregar Producto
-              </button>
+                <select
+                  aria-label="Filtrar por categoría"
+                  value={prodCategoryFilter}
+                  onChange={(e) => setProdCategoryFilter(e.target.value)}
+                  className="input-field h-10 text-xs font-bold w-full sm:w-auto"
+                >
+                  <option value="all">Todas las Categorías ({availableProducts.length})</option>
+                  {prodCategoriesList.map((cat) => (
+                    <option key={cat} value={cat}>
+                      {cat}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Live Matching Products List */}
+              <div className="max-h-48 overflow-y-auto scrollbar-thin border border-border/60 rounded-xl divide-y divide-border/60 bg-card">
+                {filteredAvailableProducts.length === 0 ? (
+                  <div className="p-4 text-center text-xs text-muted-foreground">
+                    No se encontraron productos coincidentes con "{prodSearchTerm}"
+                  </div>
+                ) : (
+                  filteredAvailableProducts.map((p) => {
+                    const isAdded = items.some((i) => i.productId === p.id);
+                    return (
+                      <div key={p.id} className="p-2.5 flex items-center justify-between hover:bg-secondary/40 transition-colors gap-3">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <CategoryIcon category={p.category} name={p.name} size="sm" />
+                          <div className="min-w-0">
+                            <p className="font-bold text-foreground text-xs truncate">{p.name}</p>
+                            <p className="text-[10px] font-mono text-muted-foreground">
+                              {p.sku} | Costo: RD$ {p.costPrice} | Venta: RD$ {p.salePrice} | Stock: {p.currentStock} {p.unit}
+                            </p>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => addSpecificProductToCombo(p)}
+                          disabled={isAdded}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-extrabold flex items-center gap-1 transition-colors flex-shrink-0 ${
+                            isAdded
+                              ? 'bg-emerald-500/10 text-emerald-600 cursor-not-allowed border border-emerald-500/20'
+                              : 'btn-primary shadow-2xs'
+                          }`}
+                        >
+                          {isAdded ? (
+                            <>
+                              <CheckCircle2 size={13} /> Agregado
+                            </>
+                          ) : (
+                            <>
+                              <Plus size={13} /> Agregar
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
             </div>
 
             {/* Items Table */}

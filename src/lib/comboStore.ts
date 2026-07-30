@@ -90,7 +90,7 @@ export const DEFAULT_COMBOS: Combo[] = [
     endDate: '2026-12-31',
     startTime: '06:00',
     endTime: '12:00',
-    image: 'https://images.unsplash.com/photo-1533089860892-a7c6f0a88666?w=200&h=200&fit=crop',
+    image: '',
     items: [
       { id: 'ci-1', productId: 'prod-007', sku: 'PAN-AGU-UN', name: 'Pan de Agua', quantity: 2, unitPrice: 12, costPrice: 7, subtotal: 24 },
       { id: 'ci-2', productId: 'prod-006', sku: 'HUE-X12', name: 'Huevos x12', quantity: 1, unitPrice: 165, costPrice: 120, subtotal: 165 },
@@ -126,7 +126,7 @@ export const DEFAULT_COMBOS: Combo[] = [
     endDate: '2026-12-31',
     startTime: '00:00',
     endTime: '23:59',
-    image: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=200&h=200&fit=crop',
+    image: '',
     items: [
       { id: 'ci-5', productId: 'prod-001', sku: 'ARR-SEL-5LB', name: 'Arroz Selecto 5lb', quantity: 2, unitPrice: 285, costPrice: 210, subtotal: 570 },
       { id: 'ci-6', productId: 'prod-008', sku: 'HAB-NEG-1LB', name: 'Habichuelas Negras 1lb', quantity: 3, unitPrice: 85, costPrice: 62, subtotal: 255 },
@@ -162,7 +162,7 @@ export const DEFAULT_COMBOS: Combo[] = [
     endDate: '2026-11-30',
     startTime: '08:00',
     endTime: '20:00',
-    image: 'https://images.unsplash.com/photo-1585664811087-47f65abbad64?w=200&h=200&fit=crop',
+    image: '',
     items: [
       { id: 'ci-9', productId: 'prod-011', sku: 'DET-LIQ-1.5', name: 'Detergente Líq. 1.5L', quantity: 2, unitPrice: 285, costPrice: 195, subtotal: 570 },
       { id: 'ci-10', productId: 'prod-013', sku: 'PAP-HIG-X4', name: 'Papel Higiénico x4', quantity: 2, unitPrice: 195, costPrice: 138, subtotal: 390 },
@@ -196,7 +196,7 @@ export const DEFAULT_COMBOS: Combo[] = [
     endDate: '2026-08-31',
     startTime: '10:00',
     endTime: '18:00',
-    image: 'https://images.unsplash.com/photo-1566478989037-eec170784d0b?w=200&h=200&fit=crop',
+    image: '',
     items: [
       { id: 'ci-11', productId: 'prod-016', sku: 'CHI-LAY-42', name: 'Chips Lay\'s 42g', quantity: 2, unitPrice: 75, costPrice: 52, subtotal: 150 },
       { id: 'ci-12', productId: 'prod-010', sku: 'JUG-NAR-1L', name: 'Jugo Naranja 1L', quantity: 1, unitPrice: 145, costPrice: 105, subtotal: 145 },

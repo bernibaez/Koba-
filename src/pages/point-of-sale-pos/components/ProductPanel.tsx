@@ -7,6 +7,8 @@ import ComboStockAlertModal from '@/pages/combos/components/ComboStockAlertModal
 import { toast } from 'sonner';
 import { scaleProducts } from '../utils/scaleUtils';
 
+import CategoryIcon from '@/components/ui/CategoryIcon';
+
 interface Product {
   id: string;
   sku: string;
@@ -243,15 +245,11 @@ export default function ProductPanel({ onAddToCart, onOpenScale }: ProductPanelP
                     ${p.outOfStock ? 'opacity-40 border-slate-200 cursor-not-allowed' : 'border-slate-200 dark:border-slate-700/80 hover:border-indigo-500 cursor-pointer'}
                   `}
                 >
-                  {/* Image Box */}
-                  <div className="w-full h-16 rounded-lg bg-slate-50 dark:bg-slate-700/50 border border-slate-200/60 dark:border-slate-600/40 flex items-center justify-center mb-1.5 relative">
-                    {p.image ? (
-                      <img src={p.image} alt={p.name} className="w-full h-full object-cover rounded-lg" />
-                    ) : (
-                      <ImageIcon size={20} className="text-slate-300 dark:text-slate-500" />
-                    )}
+                  {/* Icon Box */}
+                  <div className="w-full h-16 rounded-lg flex items-center justify-center mb-1.5 relative overflow-hidden">
+                    <CategoryIcon category={p.category} name={p.name} size="lg" className="w-full h-full rounded-lg" />
                     {p.isWeighted && (
-                      <span className="absolute bottom-1 right-1 bg-emerald-600 text-white p-0.5 rounded text-[8px] font-bold" title="Balanza">
+                      <span className="absolute bottom-1 right-1 bg-emerald-600 text-white p-0.5 rounded text-[8px] font-bold z-10 shadow-xs" title="Balanza">
                         <Scale size={10} />
                       </span>
                     )}

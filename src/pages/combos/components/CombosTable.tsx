@@ -17,6 +17,8 @@ import {
 import { Combo } from '@/lib/comboStore';
 import { TableRowSkeleton } from '@/components/ui/LoadingSkeleton';
 
+import CategoryIcon from '@/components/ui/CategoryIcon';
+
 interface CombosTableProps {
   combos: Combo[];
   loading: boolean;
@@ -150,14 +152,10 @@ export default function CombosTable({
                   key={combo.id}
                   className="hover:bg-secondary/30 transition-colors group"
                 >
-                  {/* Combo info & image */}
+                  {/* Combo info & icon */}
                   <td className="py-3.5 px-4">
                     <div className="flex items-center gap-3">
-                      <img
-                        src={combo.image || 'https://images.unsplash.com/photo-1533089860892-a7c6f0a88666?w=80&h=80&fit=crop'}
-                        alt={combo.name}
-                        className="w-11 h-11 rounded-xl object-cover border border-border/80 flex-shrink-0 bg-secondary"
-                      />
+                      <CategoryIcon category={combo.category} name={combo.name} isCombo size="md" />
                       <div className="min-w-0">
                         <p
                           onClick={() => onViewDetail(combo)}

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { ArrowUpDown, ArrowUp, ArrowDown, Edit, Trash2, Eye, Printer, ToggleLeft, ToggleRight, Sparkles } from 'lucide-react';
 import type { Product } from './ProductManagementScreen';
 import StatusBadge from '@/components/ui/StatusBadge';
-import ProductInitial from '@/components/ui/ProductInitial';
+import CategoryIcon from '@/components/ui/CategoryIcon';
 import { generateUniqueBarcode } from '@/lib/barcodeUtils';
 import { toast } from 'sonner';
 
@@ -168,9 +168,9 @@ export default function ProductsTable({
                     />
                   </td>
 
-                  {/* Inicial */}
+                  {/* Icon */}
                   <td className="px-3 py-2">
-                    <ProductInitial name={product.name} size="sm" />
+                    <CategoryIcon category={product.category} name={product.name} size="sm" />
                   </td>
 
                   {/* Name */}

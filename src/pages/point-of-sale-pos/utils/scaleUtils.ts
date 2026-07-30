@@ -12,12 +12,12 @@ export interface ScaleProduct {
 }
 
 export const scaleProducts: ScaleProduct[] = [
-  { productId: 'prod-scale-pollo', name: 'Pollo Entero', sku: 'POL-ENT-LB', price: 98, cost: 72, tax: 0, unit: 'Libra', barcode: '2001001', category: 'Carnes', image: 'https://images.unsplash.com/photo-1604503468506-a8da13d82791?w=120&h=120&fit=crop' },
-  { productId: 'prod-scale-res', name: 'Carne de Res', sku: 'RES-LB', price: 185, cost: 140, tax: 0, unit: 'Libra', barcode: '2001002', category: 'Carnes', image: 'https://images.unsplash.com/photo-1588347818036-558601350947?w=120&h=120&fit=crop' },
-  { productId: 'prod-scale-queso', name: 'Queso Blanco', sku: 'QUE-BLA-LB', price: 120, cost: 90, tax: 0, unit: 'Libra', barcode: '2001003', category: 'Lácteos', image: 'https://images.unsplash.com/photo-1486297678162-eb2a19b0a32d?w=120&h=120&fit=crop' },
-  { productId: 'prod-scale-platano', name: 'Plátano Verde', sku: 'PLA-VER-LB', price: 25, cost: 15, tax: 0, unit: 'Libra', barcode: '2001004', category: 'Frutas', image: 'https://images.unsplash.com/photo-1571771894821-ce9b6c11b08e?w=120&h=120&fit=crop' },
-  { productId: 'prod-scale-cerdo', name: 'Chuleta de Cerdo', sku: 'CER-CHU-LB', price: 160, cost: 120, tax: 0, unit: 'Libra', barcode: '2001005', category: 'Carnes', image: 'https://images.unsplash.com/photo-1432139555190-58524dae6a55?w=120&h=120&fit=crop' },
-  { productId: 'prod-scale-pescado', name: 'Filete de Mero', sku: 'PES-MER-LB', price: 240, cost: 180, tax: 0, unit: 'Libra', barcode: '2001006', category: 'Carnes', image: 'https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?w=120&h=120&fit=crop' },
+  { productId: 'prod-scale-pollo', name: 'Pollo Entero', sku: 'POL-ENT-LB', price: 98, cost: 72, tax: 0, unit: 'Libra', barcode: '2001001', category: 'Carnes' },
+  { productId: 'prod-scale-res', name: 'Carne de Res', sku: 'RES-LB', price: 185, cost: 140, tax: 0, unit: 'Libra', barcode: '2001002', category: 'Carnes' },
+  { productId: 'prod-scale-queso', name: 'Queso Blanco', sku: 'QUE-BLA-LB', price: 120, cost: 90, tax: 0, unit: 'Libra', barcode: '2001003', category: 'Lácteos' },
+  { productId: 'prod-scale-platano', name: 'Plátano Verde', sku: 'PLA-VER-LB', price: 25, cost: 15, tax: 0, unit: 'Libra', barcode: '2001004', category: 'Frutas' },
+  { productId: 'prod-scale-cerdo', name: 'Chuleta de Cerdo', sku: 'CER-CHU-LB', price: 160, cost: 120, tax: 0, unit: 'Libra', barcode: '2001005', category: 'Carnes' },
+  { productId: 'prod-scale-pescado', name: 'Filete de Mero', sku: 'PES-MER-LB', price: 240, cost: 180, tax: 0, unit: 'Libra', barcode: '2001006', category: 'Carnes' },
 ];
 
 export interface ParsedScaleBarcode {

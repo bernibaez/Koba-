@@ -3,6 +3,8 @@ import { X, Layers, Calendar, Store, CheckCircle, PackageCheck, AlertTriangle } 
 import { Combo } from '@/lib/comboStore';
 import { getStoredProducts } from '@/lib/productStore';
 
+import CategoryIcon from '@/components/ui/CategoryIcon';
+
 interface ComboDetailModalProps {
   combo: Combo | null;
   isOpen: boolean;
@@ -27,11 +29,7 @@ export default function ComboDetailModal({
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-border/80 bg-secondary/30">
           <div className="flex items-center gap-3">
-            <img
-              src={combo.image || 'https://images.unsplash.com/photo-1533089860892-a7c6f0a88666?w=80&h=80&fit=crop'}
-              alt={combo.name}
-              className="w-12 h-12 rounded-xl object-cover border border-border/80"
-            />
+            <CategoryIcon category={combo.category} name={combo.name} isCombo size="lg" />
             <div>
               <h2 className="text-lg font-black text-foreground">{combo.name}</h2>
               <div className="flex items-center gap-2 mt-0.5">
