@@ -1,11 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Search, Scale, Boxes, Image as ImageIcon, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { CartItem } from './POSTerminal';
 import { DELETE_SKU } from '@/lib/posStore';
-import { getCombos, checkComboStockAvailability, Combo } from '@/lib/comboStore';
+import { checkComboStockAvailability, type Combo } from '@/lib/comboStore';
 import ComboStockAlertModal from '@/pages/combos/components/ComboStockAlertModal';
 import { toast } from 'sonner';
 import { scaleProducts } from '../utils/scaleUtils';
+import { useProductos } from '@/hooks/useProductos';
+import { useCombos } from '@/hooks/useCombos';
 
 import CategoryIcon from '@/components/ui/CategoryIcon';
 
@@ -39,45 +41,6 @@ const categories = [
   { id: 'cat-snacks', label: 'Snacks' },
 ];
 
-const standardProducts: Product[] = [
-  { id: 'prod-001', sku: '11772', barcode: '7891000100103', name: '3 Evaporada Famosa', category: 'Lácteos', price: 145, cost: 108, stock: 457.39, unit: 'Und', tax: 0, image: '', lowStock: false, outOfStock: false },
-  { id: 'prod-002', sku: '42', barcode: '7891000200104', name: 'Ace Detallado', category: 'Limpieza', price: 95, cost: 65, stock: 42, unit: 'Und', tax: 18, image: '', lowStock: false, outOfStock: false },
-  { id: 'prod-003', sku: '7462381341418', barcode: '7462381341418', name: 'Aceite Aurora Med.', category: 'Granos', price: 185, cost: 130, stock: 0, unit: 'Und', tax: 18, image: '', lowStock: false, outOfStock: true },
-  { id: 'prod-004', sku: '7460193700096', barcode: '7460193700096', name: 'Aceite Crisol 16oz', category: 'Granos', price: 115, cost: 85, stock: 57, unit: 'Und', tax: 18, image: '', lowStock: false, outOfStock: false },
-  { id: 'prod-005', sku: '7460193705718', barcode: '7460193705718', name: 'Aceite Crisol 34oz', category: 'Granos', price: 195, cost: 140, stock: 41, unit: 'Und', tax: 18, image: '', lowStock: false, outOfStock: false },
-  { id: 'prod-006', sku: '7460193703301', barcode: '7460193703301', name: 'Aceite Crisol 8oz', category: 'Granos', price: 65, cost: 45, stock: 146, unit: 'Und', tax: 18, image: '', lowStock: false, outOfStock: false },
-  { id: 'prod-007', sku: '7460193700133', barcode: '7460193700133', name: 'Aceite Crisol Galón', category: 'Granos', price: 785, cost: 580, stock: 25, unit: 'Und', tax: 18, image: '', lowStock: false, outOfStock: false },
-  { id: 'prod-008', sku: '7460193703981', barcode: '7460193703981', name: 'Aceite Crisol Mas...', category: 'Granos', price: 215, cost: 160, stock: 0, unit: 'Und', tax: 18, image: '', lowStock: false, outOfStock: true },
-  { id: 'prod-009', sku: '7460193700119', barcode: '7460193700119', name: 'Aceite Crisol Medi...', category: 'Granos', price: 145, cost: 105, stock: 116, unit: 'Und', tax: 18, image: '', lowStock: false, outOfStock: false },
-  { id: 'prod-010', sku: '7460193741891', barcode: '7460193741891', name: 'Aceite Crisol Sache...', category: 'Granos', price: 35, cost: 24, stock: 52, unit: 'Und', tax: 18, image: '', lowStock: false, outOfStock: false },
-  { id: 'prod-011', sku: '7460193704063', barcode: '7460193704063', name: 'Aceite Crisol Yumbo', category: 'Granos', price: 425, cost: 310, stock: 56, unit: 'Und', tax: 18, image: '', lowStock: false, outOfStock: false },
-  { id: 'prod-012', sku: '718912323215', barcode: '718912323215', name: 'Aceite De Coco...', category: 'Granos', price: 295, cost: 210, stock: 17, unit: 'Und', tax: 18, image: '', lowStock: false, outOfStock: false },
-  { id: 'prod-013', sku: 'ACE-OLV-20ML', barcode: '7891001300115', name: 'Aceite De Oliva 20ml', category: 'Granos', price: 45, cost: 28, stock: 88, unit: 'Und', tax: 18, image: '', lowStock: false, outOfStock: false },
-  { id: 'prod-014', sku: 'POL-ENT-LB', barcode: '7891000300105', name: 'Pollo Entero /lb', category: 'Carnes', price: 98, cost: 72, stock: 45, unit: 'LB', tax: 0, image: '', lowStock: false, outOfStock: false, isWeighted: true },
-];
-
-const products: Product[] = [
-  ...standardProducts,
-  ...scaleProducts
-    .filter((sp) => !standardProducts.some((p) => p.sku === sp.sku))
-    .map((sp) => ({
-      id: sp.productId,
-      sku: sp.sku,
-      barcode: sp.barcode,
-      name: sp.name,
-      category: sp.category || 'Carnes',
-      price: sp.price,
-      cost: sp.cost,
-      stock: 85,
-      unit: sp.unit,
-      tax: sp.tax,
-      image: sp.image || '',
-      lowStock: false,
-      outOfStock: false,
-      isWeighted: true,
-    })),
-];
-
 interface ProductPanelProps {
   onAddToCart: (product: Omit<CartItem, 'qty' | 'discount'>, qty?: number) => void;
   onOpenScale?: (productId?: string, weight?: number) => void;
@@ -94,12 +57,55 @@ export default function ProductPanel({ onAddToCart, onOpenScale }: ProductPanelP
   const [alertComboName, setAlertComboName] = useState('');
   const [missingItems, setMissingItems] = useState<{ productId: string; sku: string; name: string; required: number; available: number }[]>([]);
 
+  const { productosUi } = useProductos({ pagina: 1, limite: 200, busqueda: search, estado: 'activo' });
+  const { combos } = useCombos(true);
+
+  const products: Product[] = useMemo(() => {
+    const fromStore = productosUi.map(
+      (p): Product => ({
+        id: p.id,
+        sku: p.sku,
+        barcode: p.barcode,
+        name: p.name,
+        category: p.category,
+        price: p.salePrice,
+        cost: p.costPrice,
+        stock: p.currentStock,
+        unit: p.unit,
+        tax: p.tax,
+        image: p.image,
+        lowStock: p.stockStatus === 'low',
+        outOfStock: p.stockStatus === 'out',
+        isWeighted: p.unit.toLowerCase().includes('lb') || p.unit.toLowerCase().includes('kg'),
+      })
+    );
+    const weightedExtras = scaleProducts
+      .filter((sp) => !fromStore.some((p) => p.sku === sp.sku))
+      .map((sp) => ({
+        id: sp.productId,
+        sku: sp.sku,
+        barcode: sp.barcode,
+        name: sp.name,
+        category: sp.category || 'Carnes',
+        price: sp.price,
+        cost: sp.cost,
+        stock: 85,
+        unit: sp.unit,
+        tax: sp.tax,
+        image: sp.image || '',
+        lowStock: false,
+        outOfStock: false,
+        isWeighted: true,
+      }));
+    return [...fromStore, ...weightedExtras];
+  }, [productosUi]);
+
   // Reset pagination on category/search change
   useEffect(() => {
     setCurrentPage(1);
   }, [activeCategory, search]);
 
-  const allCombos = getCombos().filter((c) => c.active && c.visibleInPos);
+  const allCombos = combos.filter((c) => c.active && c.visibleInPos);
 
   const filteredProducts = activeCategory === 'cat-combos' ? [] : products.filter((p) => {
     if (p.sku === DELETE_SKU) return false;

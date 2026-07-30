@@ -224,7 +224,7 @@ export default function Topbar({
   };
 
   const handleLogout = () => {
-    logout();
+    void logout();
     toast.success('Sesión cerrada');
     navigate('/login', { replace: true });
   };

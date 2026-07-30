@@ -1,0 +1,210 @@
+import { getSupabase, isSupabaseConfigured, tryGetSupabase } from './clienteSupabase';
+import { COMBO_COLUMNS, type Combo, type ComboItem, type TipoDescuento } from '@/types/database';
+import {
+  getCombos as getLocalCombos,
+  saveOrUpdateCombo,
+  deleteCombo as deleteLocalCombo,
+  getComboById as getLocalComboById,
+  type Combo as UiCombo,
+  type ComboItem as UiComboItem,
+  type PricingMode,
+} from '@/lib/comboStore';
+
+const DESC_UI_A_DB: Record<PricingMode, TipoDescuento> = {
+  fixed: 'fijo',
+  percent: 'porcentaje',
+  amount: 'monto',
+};
+
+const DESC_DB_A_UI: Record<TipoDescuento, PricingMode> = {
+  fijo: 'fixed',
+  porcentaje: 'percent',
+  monto: 'amount',
+};
+
+export type ComboConItems = Combo & { items: ComboItem[] };
+
+export function comboDbAUi(c: Combo, items: ComboItem[] = []): UiCombo {
+  const normal = Number(c.precio_normal);
+  const price = Number(c.precio_venta);
+  const savingsAmount = Math.max(0, normal - price);
+  const savingsPercent = normal > 0 ? (savingsAmount / normal) * 100 : 0;
+  return {
+    id: c.id,
+    name: c.nombre,
+    code: c.codigo,
+    barcode: c.codigo_barras ?? '',
+    description: c.descripcion ?? '',
+    category: c.categoria,
+    price,
+    totalCost: Number(c.precio_costo_total),
+    normalPrice: normal,
+    discountType: c.tipo_descuento ? DESC_DB_A_UI[c.tipo_descuento] : 'fixed',
+    discountValue: Number(c.valor_descuento),
+    savingsAmount,
+    savingsPercent,
+    marginPercent: Number(c.porcentaje_margen),
+    active: c.activo,
+    visibleInPos: c.visible_en_pos,
+    allowSaleWithoutStock: c.permitir_venta_sin_stock,
+    applyTax: false,
+    allBranches: true,
+    branches: [],
+    startDate: c.fecha_inicio ?? '',
+    endDate: c.fecha_fin ?? '',
+    startTime: '00:00',
+    endTime: '23:59',
+    image: c.imagen_url ?? '',
+    items: items.map(
+      (it): UiComboItem => ({
+        id: it.id,
+        productId: it.producto_id,
+        sku: '',
+        name: '',
+        quantity: it.cantidad,
+        unitPrice: Number(it.precio_unitario),
+        costPrice: Number(it.costo_unitario),
+        subtotal: Number(it.subtotal),
+      })
+    ),
+    createdAt: c.creado_en ?? new Date().toISOString(),
+    updatedAt: c.actualizado_en ?? new Date().toISOString(),
+  };
+}
+
+export function uiComboADb(c: UiCombo): { combo: Partial<Combo>; items: Omit<ComboItem, 'id'>[] } {
+  return {
+    combo: {
+      codigo: c.code,
+      codigo_barras: c.barcode || null,
+      nombre: c.name,
+      descripcion: c.description || null,
+      categoria: c.category,
+      precio_venta: c.price,
+      precio_costo_total: c.totalCost ?? 0,
+      precio_normal: c.normalPrice,
+      tipo_descuento: DESC_UI_A_DB[c.discountType],
+      valor_descuento: c.discountValue,
+      porcentaje_margen: c.marginPercent,
+      activo: c.active,
+      visible_en_pos: c.visibleInPos,
+      permitir_venta_sin_stock: c.allowSaleWithoutStock,
+      fecha_inicio: c.startDate || null,
+      fecha_fin: c.endDate || null,
+      imagen_url: c.image || null,
+    },
+    items: c.items.map((it) => ({
+      combo_id: c.id,
+      producto_id: it.productId,
+      cantidad: it.quantity,
+      costo_unitario: it.costPrice,
+      precio_unitario: it.unitPrice,
+      subtotal: it.subtotal,
+    })),
+  };
+}
+
+export async function obtenerCombos(opts?: {
+  soloActivos?: boolean;
+  signal?: AbortSignal;
+}): Promise<ComboConItems[]> {
+  const sb = tryGetSupabase();
+  if (!sb) {
+    return getLocalCombos().map((c) => {
+      const { combo } = uiComboADb(c);
+      return {
+        ...(combo as Combo),
+        id: c.id,
+        items: c.items.map((it) => ({
+          id: it.id,
+          combo_id: c.id,
+          producto_id: it.productId,
+          cantidad: it.quantity,
+          costo_unitario: it.costPrice,
+          precio_unitario: it.unitPrice,
+          subtotal: it.subtotal,
+        })),
+      };
+    });
+  }
+
+  let query = sb.from('combos').select(COMBO_COLUMNS).order('nombre');
+  if (opts?.soloActivos) query = query.eq('activo', true);
+  if (opts?.signal) query = query.abortSignal(opts.signal);
+  const { data, error } = await query;
+  if (error) throw error;
+
+  const combos = (data ?? []) as Combo[];
+  if (combos.length === 0) return [];
+
+  const ids = combos.map((c) => c.id);
+  const { data: items, error: itemsErr } = await sb
+    .from('combo_items')
+    .select('id, combo_id, producto_id, cantidad, costo_unitario, precio_unitario, subtotal')
+    .in('combo_id', ids);
+  if (itemsErr) throw itemsErr;
+
+  const byCombo = new Map<string, ComboItem[]>();
+  for (const it of (items ?? []) as ComboItem[]) {
+    const arr = byCombo.get(it.combo_id) ?? [];
+    arr.push(it);
+    byCombo.set(it.combo_id, arr);
+  }
+
+  return combos.map((c) => ({ ...c, items: byCombo.get(c.id) ?? [] }));
+}
+
+export async function obtenerComboPorId(id: string): Promise<ComboConItems | null> {
+  const all = await obtenerCombos();
+  return all.find((c) => c.id === id) ?? null;
+}
+
+export async function guardarCombo(uiCombo: UiCombo): Promise<string> {
+  if (!isSupabaseConfigured()) {
+    saveOrUpdateCombo(uiCombo);
+    return uiCombo.id;
+  }
+
+  const sb = getSupabase();
+  const { combo, items } = uiComboADb(uiCombo);
+  const isNew = !uiCombo.id || uiCombo.id.startsWith('cmb-tmp') || uiCombo.id.startsWith('new-');
+
+  let comboId = uiCombo.id;
+  if (isNew) {
+    const { data, error } = await sb
+      .from('combos')
+      .insert({ ...combo, actualizado_en: new Date().toISOString() })
+      .select('id')
+      .single();
+    if (error) throw error;
+    comboId = data.id as string;
+  } else {
+    const { error } = await sb
+      .from('combos')
+      .update({ ...combo, actualizado_en: new Date().toISOString() })
+      .eq('id', comboId);
+    if (error) throw error;
+    await sb.from('combo_items').delete().eq('combo_id', comboId);
+  }
+
+  if (items.length > 0) {
+    const { error: itemsError } = await sb.from('combo_items').insert(
+      items.map((it) => ({ ...it, combo_id: comboId }))
+    );
+    if (itemsError) throw itemsError;
+  }
+
+  return comboId;
+}
+
+export async function eliminarCombo(id: string): Promise<void> {
+  if (!isSupabaseConfigured()) {
+    deleteLocalCombo(id);
+    return;
+  }
+  const sb = getSupabase();
+  const { error } = await sb.from('combos').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export { getLocalComboById, comboDbAUi as mapComboToUi };

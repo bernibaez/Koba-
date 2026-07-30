@@ -78,7 +78,7 @@ export default function LoginPage() {
     navigate(from && from !== '/login' ? from : ROLE_HOME[role], { replace: true });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     if (!username.trim() || !password) {
@@ -86,19 +86,22 @@ export default function LoginPage() {
       return;
     }
     setLoading(true);
-    const result = login(username, password);
-    setLoading(false);
-    if (!result.ok) {
-      setError(result.error);
-      return;
+    try {
+      const result = await login(username, password);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      toast.success(`Bienvenido, ${result.user.name}`);
+      goHome(result.user.role);
+    } finally {
+      setLoading(false);
     }
-    toast.success(`Bienvenido, ${result.user.name}`);
-    goHome(result.user.role);
   };
 
-  const handleCodeAccess = (e: React.FormEvent) => {
+  const handleCodeAccess = async (e: React.FormEvent) => {
     e.preventDefault();
-    const result = loginWithCode(accessCode);
+    const result = await loginWithCode(accessCode);
     if (!result.ok) {
       toast.error(result.error);
       return;

@@ -11,6 +11,7 @@ import {
   setCompanyLogo,
 } from '@/lib/companyLogo';
 import NCFSettingsTab from './settings/NCFSettingsTab';
+import PermissionsSettingsTab from './settings/PermissionsSettingsTab';
 
 const settingsSections = [
   { id: 'company', label: 'Empresa', icon: <Building2 size={18} /> },
@@ -265,7 +266,9 @@ export default function SettingsPage() {
 
             {activeSection === 'ncf' && <NCFSettingsTab />}
 
-            {!['company','locations','taxes','currency','notifications','invoice','ncf']?.includes(activeSection) && (
+            {activeSection === 'permissions' && <PermissionsSettingsTab />}
+
+            {!['company','locations','taxes','currency','notifications','invoice','ncf','permissions']?.includes(activeSection) && (
               <div className="card p-6 flex flex-col items-center justify-center py-16 text-center">
                 <div className="w-16 h-16 rounded-2xl bg-secondary flex items-center justify-center mb-4">
                   {settingsSections?.find(s => s?.id === activeSection)?.icon}

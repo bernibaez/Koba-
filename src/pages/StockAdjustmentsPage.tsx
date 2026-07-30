@@ -21,10 +21,11 @@ import { exportTableToPdf } from '@/lib/exportPdf';
 import { getStoredProducts, ProductItem } from '@/lib/productStore';
 import {
   getStoredAdjustments,
-  createBlockStockAdjustment,
   StockAdjustmentItem,
 } from '@/lib/stockAdjustmentStore';
+import { procesarAjusteStockBloque } from '@/services/inventario.service';
 import { toast } from 'sonner';
+import { useAuth } from '@/context/AuthContext';
 
 const typeMap = {
   entrada: { label: 'Entrada (+)', cls: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' },
@@ -33,6 +34,7 @@ const typeMap = {
 };
 
 export default function StockAdjustmentsPage() {
+  const { user } = useAuth();
   const [adjustments, setAdjustments] = useState<StockAdjustmentItem[]>([]);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('all');
@@ -117,7 +119,7 @@ export default function StockAdjustmentsPage() {
   const totalSalidas = adjustments.filter((a) => a.type === 'salida').reduce((sum, a) => sum + a.qty, 0);
   const totalPerdidas = adjustments.filter((a) => a.type === 'perdida').reduce((sum, a) => sum + a.qty, 0);
 
-  const handleSaveBlockAdjustment = () => {
+  const handleSaveBlockAdjustment = async () => {
     const adjustmentsToApply: { product: ProductItem; newQty: number; reason: string }[] = [];
 
     matchingBlockProducts.forEach((p) => {
@@ -136,11 +138,27 @@ export default function StockAdjustmentsPage() {
       return;
     }
 
-    const updated = createBlockStockAdjustment(adjustmentsToApply, 'Admin General');
-    setAdjustments(updated);
-    refreshData();
-    setShowModal(false);
-    toast.success(`✓ Se aplicaron ajustes a ${adjustmentsToApply.length} producto(s) exitosamente`);
+    try {
+      await procesarAjusteStockBloque(
+        adjustmentsToApply.map((a) => ({
+          producto_id: a.product.id,
+          tipo_ajuste:
+            a.newQty > a.product.currentStock
+              ? 'entrada'
+              : a.reason.toLowerCase().includes('perd')
+                ? 'perdida'
+                : 'salida',
+          cantidad_nueva: a.newQty,
+          motivo: a.reason,
+          responsable_id: user?.id ?? null,
+        }))
+      );
+      refreshData();
+      setShowModal(false);
+      toast.success(`✓ Se aplicaron ajustes a ${adjustmentsToApply.length} producto(s) exitosamente`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Error al aplicar ajustes');
+    }
   };
 
   const handleExportPdf = () => {

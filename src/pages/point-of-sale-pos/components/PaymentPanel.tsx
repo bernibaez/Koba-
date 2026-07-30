@@ -19,7 +19,7 @@ interface PaymentPanelProps {
   total: number;
   cart: CartItem[];
   customer: Customer | null;
-  onComplete: (payments: PaymentSplit, fiscalInvoice?: FiscalInvoiceRecord) => void;
+  onComplete: (payments: PaymentSplit, fiscalInvoice?: FiscalInvoiceRecord) => void | Promise<void>;
   orderCompleted: boolean;
   fiscalEnabled?: boolean;
   onToggleFiscal?: (enabled: boolean) => void;
@@ -210,7 +210,7 @@ export default function PaymentPanel({
         after: { total, payments, ncf: fiscalInvoice?.ncf, change: computedChange, cartCount: cart.length },
       });
 
-      onComplete(payments, fiscalInvoice);
+      void Promise.resolve(onComplete(payments, fiscalInvoice));
     }, 400);
   };
 

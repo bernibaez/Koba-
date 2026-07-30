@@ -1,11 +1,12 @@
-import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { getStoredUser, storeUser, type AuthUser } from '@/lib/auth';
 import {
-  authenticate,
-  authenticateByCode,
-  getStoredUser,
-  storeUser,
-  type AuthUser,
-} from '@/lib/auth';
+  cerrarSesion,
+  iniciarSesion,
+  iniciarSesionConCodigo,
+  obtenerSesionActual,
+} from '@/services/auth.service';
+import { isSupabaseConfigured, tryGetSupabase } from '@/services/clienteSupabase';
 
 type AuthSuccess = { ok: true; user: AuthUser };
 type AuthFailure = { ok: false; error: string };
@@ -13,33 +14,86 @@ type AuthFailure = { ok: false; error: string };
 type AuthContextValue = {
   user: AuthUser | null;
   isAuthenticated: boolean;
-  login: (username: string, password: string) => AuthSuccess | AuthFailure;
-  loginWithCode: (code: string) => AuthSuccess | AuthFailure;
-  logout: () => void;
+  isLoading: boolean;
+  login: (username: string, password: string) => Promise<AuthSuccess | AuthFailure>;
+  loginWithCode: (code: string) => Promise<AuthSuccess | AuthFailure>;
+  logout: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(() => getStoredUser());
+  const [user, setUser] = useState<AuthUser | null>(() =>
+    isSupabaseConfigured() ? null : getStoredUser()
+  );
+  const [isLoading, setIsLoading] = useState(isSupabaseConfigured());
 
-  const login = useCallback((username: string, password: string) => {
-    const result = authenticate(username, password);
+  useEffect(() => {
+    let cancelled = false;
+
+    async function hydrate() {
+      if (!isSupabaseConfigured()) {
+        setIsLoading(false);
+        return;
+      }
+      try {
+        const sessionUser = await obtenerSesionActual();
+        if (!cancelled) {
+          setUser(sessionUser);
+          storeUser(sessionUser);
+        }
+      } catch {
+        if (!cancelled) {
+          setUser(null);
+          storeUser(null);
+        }
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    }
+
+    hydrate();
+
+    const sb = tryGetSupabase();
+    if (!sb) return;
+
+    const { data: sub } = sb.auth.onAuthStateChange(async (event) => {
+      if (event === 'SIGNED_OUT') {
+        setUser(null);
+        storeUser(null);
+        return;
+      }
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        const sessionUser = await obtenerSesionActual();
+        setUser(sessionUser);
+        storeUser(sessionUser);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      sub.subscription.unsubscribe();
+    };
+  }, []);
+
+  const login = useCallback(async (username: string, password: string) => {
+    const result = await iniciarSesion(username, password);
     if (!result.ok) return result;
     storeUser(result.user);
     setUser(result.user);
     return { ok: true as const, user: result.user };
   }, []);
 
-  const loginWithCode = useCallback((code: string) => {
-    const result = authenticateByCode(code);
+  const loginWithCode = useCallback(async (code: string) => {
+    const result = await iniciarSesionConCodigo(code);
     if (!result.ok) return result;
     storeUser(result.user);
     setUser(result.user);
     return { ok: true as const, user: result.user };
   }, []);
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
+    await cerrarSesion();
     storeUser(null);
     setUser(null);
   }, []);
@@ -48,11 +102,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     () => ({
       user,
       isAuthenticated: !!user,
+      isLoading,
       login,
       loginWithCode,
       logout,
     }),
-    [user, login, loginWithCode, logout]
+    [user, isLoading, login, loginWithCode, logout]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

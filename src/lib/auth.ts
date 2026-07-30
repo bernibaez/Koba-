@@ -1,12 +1,11 @@
-export type UserRole =
-  | 'Administrador'
-  | 'Cajero'
-  | 'Vendedor'
-  | 'Almacenista'
-  | 'Contador';
+import type { UserRole } from '@/types/roles';
+
+export type { UserRole } from '@/types/roles';
+
+import { routesFromPermissions } from '@/lib/permissionsStore';
 
 export type AuthUser = {
-  id: number;
+  id: string;
   username: string;
   name: string;
   email: string;
@@ -14,14 +13,16 @@ export type AuthUser = {
   status: 'active' | 'inactive';
   phone: string;
   initials: string;
+  sucursalId?: string | null;
+  rolDb?: string;
 };
 
 type AuthAccount = AuthUser & { password: string };
 
-/** Cuentas de demo — mismas personas que Gestión de Usuarios */
+/** Cuentas de demo — fallback cuando Supabase no está configurado */
 export const AUTH_ACCOUNTS: AuthAccount[] = [
   {
-    id: 1,
+    id: '1',
     username: 'admin',
     name: 'Admin General',
     email: 'admin@marketerp.do',
@@ -32,7 +33,7 @@ export const AUTH_ACCOUNTS: AuthAccount[] = [
     initials: 'AG',
   },
   {
-    id: 2,
+    id: '2',
     username: 'maria',
     name: 'María García',
     email: 'maria@marketerp.do',
@@ -43,7 +44,7 @@ export const AUTH_ACCOUNTS: AuthAccount[] = [
     initials: 'MG',
   },
   {
-    id: 3,
+    id: '3',
     username: 'carlos',
     name: 'Carlos López',
     email: 'carlos@marketerp.do',
@@ -54,7 +55,7 @@ export const AUTH_ACCOUNTS: AuthAccount[] = [
     initials: 'CL',
   },
   {
-    id: 4,
+    id: '4',
     username: 'ana',
     name: 'Ana Martínez',
     email: 'ana@marketerp.do',
@@ -65,7 +66,7 @@ export const AUTH_ACCOUNTS: AuthAccount[] = [
     initials: 'AM',
   },
   {
-    id: 5,
+    id: '5',
     username: 'pedro',
     name: 'Pedro Sánchez',
     email: 'pedro@marketerp.do',
@@ -77,7 +78,7 @@ export const AUTH_ACCOUNTS: AuthAccount[] = [
   },
 ];
 
-/** Código de acceso rápido (botón "Acceder con código") */
+/** Código de acceso rápido (botón "Acceder con código") — solo modo local */
 export const ACCESS_CODES: Record<string, string> = {
   '1001': 'admin',
   '2002': 'maria',
@@ -135,7 +136,9 @@ export function getStoredUser(): AuthUser | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
-    return JSON.parse(raw) as AuthUser;
+    const parsed = JSON.parse(raw) as AuthUser;
+    // Migrar ids numéricos antiguos
+    return { ...parsed, id: String(parsed.id) };
   } catch {
     return null;
   }
@@ -149,11 +152,14 @@ export function storeUser(user: AuthUser | null) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
 }
 
-export function authenticate(username: string, password: string):
-  | { ok: true; user: AuthUser }
-  | { ok: false; error: string } {
+export function authenticate(
+  username: string,
+  password: string
+): { ok: true; user: AuthUser } | { ok: false; error: string } {
   const account = AUTH_ACCOUNTS.find(
-    (a) => a.username.toLowerCase() === username.trim().toLowerCase()
+    (a) =>
+      a.username.toLowerCase() === username.trim().toLowerCase() ||
+      a.email.toLowerCase() === username.trim().toLowerCase()
   );
   if (!account) return { ok: false, error: 'Usuario o contraseña incorrectos' };
   if (account.password !== password) return { ok: false, error: 'Usuario o contraseña incorrectos' };
@@ -161,9 +167,9 @@ export function authenticate(username: string, password: string):
   return { ok: true, user: toPublicUser(account) };
 }
 
-export function authenticateByCode(code: string):
-  | { ok: true; user: AuthUser }
-  | { ok: false; error: string } {
+export function authenticateByCode(
+  code: string
+): { ok: true; user: AuthUser } | { ok: false; error: string } {
   const username = ACCESS_CODES[code.trim()];
   if (!username) return { ok: false, error: 'Código de acceso inválido' };
   const account = AUTH_ACCOUNTS.find((a) => a.username === username);
@@ -174,10 +180,10 @@ export function authenticateByCode(code: string):
 }
 
 export function canAccessRoute(role: UserRole, pathname: string): boolean {
-  const allowed = ROLE_ROUTES[role];
-  if (allowed === ALL_ROUTES) return true;
-  if (pathname === '/') return allowed.includes('/');
-  return allowed.some((route) => route !== '/' && pathname.startsWith(route));
+  const fromMatrix = routesFromPermissions(role);
+  if (fromMatrix === '*') return true;
+  if (pathname === '/') return fromMatrix.includes('/');
+  return fromMatrix.some((route) => route !== '/' && pathname.startsWith(route));
 }
 
 export function canAccessNav(role: UserRole, href: string): boolean {

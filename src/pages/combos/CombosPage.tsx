@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import AppLayout from '@/components/AppLayout';
 import CombosHeader from './components/CombosHeader';
 import CombosToolbar from './components/CombosToolbar';
@@ -7,20 +7,13 @@ import ComboFormModal from './components/ComboFormModal';
 import ComboDetailModal from './components/ComboDetailModal';
 import ComboImportModal from './components/ComboImportModal';
 import ConfirmModal from '@/components/ui/ConfirmModal';
-import {
-  Combo,
-  getCombos,
-  saveOrUpdateCombo,
-  deleteCombo,
-  duplicateCombo,
-  toggleComboStatus,
-} from '@/lib/comboStore';
+import { Combo, duplicateCombo } from '@/lib/comboStore';
+import { useCombos } from '@/hooks/useCombos';
 import { exportTableToPdf, exportTableToExcel, formatMoneyPdf } from '@/lib/exportPdf';
 import { toast } from 'sonner';
 
 export default function CombosPage() {
-  const [combos, setCombos] = useState<Combo[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { combos, loading, refetch, guardar, eliminar } = useCombos();
 
   // Filters & Search
   const [search, setSearch] = useState('');
@@ -35,19 +28,6 @@ export default function CombosPage() {
   const [detailCombo, setDetailCombo] = useState<Combo | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [deleteTargetCombo, setDeleteTargetCombo] = useState<Combo | null>(null);
-
-  const refreshList = useCallback(() => {
-    setLoading(true);
-    setTimeout(() => {
-      const data = getCombos();
-      setCombos(data);
-      setLoading(false);
-    }, 250);
-  }, []);
-
-  useEffect(() => {
-    refreshList();
-  }, [refreshList]);
 
   // Keyboard Shortcuts Listener
   useEffect(() => {
@@ -106,43 +86,55 @@ export default function CombosPage() {
     setFormOpen(true);
   };
 
-  const handleSaveCombo = (comboToSave: Combo) => {
-    const updated = saveOrUpdateCombo(comboToSave);
-    setCombos(updated);
-    setFormOpen(false);
-    setEditingCombo(null);
-    toast.success(
-      editingCombo
-        ? `Combo "${comboToSave.name}" actualizado correctamente.`
-        : `Combo "${comboToSave.name}" creado con éxito.`
-    );
+  const handleSaveCombo = async (comboToSave: Combo) => {
+    try {
+      await guardar(comboToSave);
+      setFormOpen(false);
+      setEditingCombo(null);
+      toast.success(
+        editingCombo
+          ? `Combo "${comboToSave.name}" actualizado correctamente.`
+          : `Combo "${comboToSave.name}" creado con éxito.`
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Error al guardar combo');
+    }
   };
 
-  const handleDuplicate = (id: string) => {
+  const handleDuplicate = async (id: string) => {
     const res = duplicateCombo(id);
     if (res) {
-      setCombos(res.updatedList);
-      toast.success(`Combo duplicado como "${res.newCombo.name}".`);
+      try {
+        await guardar(res.newCombo);
+        toast.success(`Combo duplicado como "${res.newCombo.name}".`);
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Error al duplicar');
+      }
     }
   };
 
-  const handleToggleStatus = (id: string) => {
-    const updated = toggleComboStatus(id);
-    setCombos(updated);
-    const item = updated.find((c) => c.id === id);
-    if (item) {
+  const handleToggleStatus = async (id: string) => {
+    const item = combos.find((c) => c.id === id);
+    if (!item) return;
+    try {
+      await guardar({ ...item, active: !item.active });
       toast.info(
-        `Estado del combo "${item.name}" cambiado a: ${item.active ? 'ACTIVO' : 'INACTIVO'}`
+        `Estado del combo "${item.name}" cambiado a: ${!item.active ? 'ACTIVO' : 'INACTIVO'}`
       );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Error al cambiar estado');
     }
   };
 
-  const handleDeleteConfirm = () => {
+  const handleDeleteConfirm = async () => {
     if (!deleteTargetCombo) return;
-    const updated = deleteCombo(deleteTargetCombo.id);
-    setCombos(updated);
-    toast.error(`Combo "${deleteTargetCombo.name}" eliminado.`);
-    setDeleteTargetCombo(null);
+    try {
+      await eliminar(deleteTargetCombo.id);
+      toast.error(`Combo "${deleteTargetCombo.name}" eliminado.`);
+      setDeleteTargetCombo(null);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Error al eliminar');
+    }
   };
 
   const handleExportPDF = () => {
@@ -243,7 +235,7 @@ export default function CombosPage() {
         <ComboImportModal
           isOpen={importOpen}
           onClose={() => setImportOpen(false)}
-          onImportSuccess={refreshList}
+          onImportSuccess={() => refetch()}
         />
 
         {/* Confirm Delete Modal */}

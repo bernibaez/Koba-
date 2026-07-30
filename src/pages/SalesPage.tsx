@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { ShoppingCart, FileText, RotateCcw, Plus, Search, Filter, Download, Eye, Edit2, Trash2, Printer, X, FileSpreadsheet } from 'lucide-react';
 import { exportTableToPdf, exportTableToExcel, formatMoneyPdf } from '@/lib/exportPdf';
 import { toast } from 'sonner';
+import { useVentas } from '@/hooks/useVentas';
 
 interface Sale {
-  id: number;
+  id: string;
   code: string;
   customer: string;
   date: string;
@@ -29,15 +30,6 @@ interface SaleReturn {
   id: number; code: string; saleCode: string; customer: string; date: string; total: number; reason: string; status: 'approved' | 'pending';
 }
 
-const mockSales: Sale[] = [
-  { id: 1, code: 'FAC-001', customer: 'Juan Pérez', date: '2026-07-25', time: '10:30', items: 8, subtotal: 2400, tax: 432, discount: 0, total: 2832, cost: 1850, profit: 982, status: 'paid', payment: 'Efectivo', agent: 'Roberto Díaz' },
-  { id: 2, code: 'FAC-002', customer: 'Empresa ABC S.R.L.', date: '2026-07-25', time: '11:15', items: 25, subtotal: 18500, tax: 3330, discount: 500, total: 21330, cost: 14200, profit: 7130, status: 'paid', payment: 'Transferencia', agent: 'Luisa Fernández' },
-  { id: 3, code: 'FAC-003', customer: 'Rosa Jiménez', date: '2026-07-24', time: '14:20', items: 4, subtotal: 850, tax: 153, discount: 0, total: 1003, cost: 620, profit: 383, status: 'pending', payment: 'Crédito', agent: 'Roberto Díaz' },
-  { id: 4, code: 'FAC-004', customer: 'Distribuidora XYZ', date: '2026-07-24', time: '16:05', items: 40, subtotal: 45000, tax: 8100, discount: 1000, total: 52100, cost: 35000, profit: 17100, status: 'paid', payment: 'Cheque', agent: 'Luisa Fernández' },
-  { id: 5, code: 'FAC-005', customer: 'Carmen Reyes', date: '2026-07-23', time: '09:45', items: 3, subtotal: 620, tax: 111.6, discount: 0, total: 731.6, cost: 450, profit: 281.6, status: 'cancelled', payment: 'Efectivo', agent: 'Miguel Torres' },
-  { id: 6, code: 'FAC-006', customer: 'Pedro Martínez', date: '2026-07-23', time: '12:10', items: 12, subtotal: 3200, tax: 576, discount: 100, total: 3676, cost: 2400, profit: 1276, status: 'paid', payment: 'Tarjeta', agent: 'Roberto Díaz' },
-];
-
 const mockQuotes: Quote[] = [
   { id: 1, code: 'COT-001', customer: 'Empresa ABC S.R.L.', date: '2026-07-25', validUntil: '2026-08-01', total: 35000, status: 'pending' },
   { id: 2, code: 'COT-002', customer: 'Distribuidora XYZ', date: '2026-07-24', validUntil: '2026-07-31', total: 78000, status: 'approved' },
@@ -60,6 +52,14 @@ const saleStatusMap: Record<string, { label: string; cls: string }> = {
   converted: { label: 'Convertido', cls: 'badge-info' },
 };
 
+const metodoLabel: Record<string, string> = {
+  efectivo: 'Efectivo',
+  tarjeta: 'Tarjeta',
+  transferencia: 'Transferencia',
+  credito: 'Crédito',
+  mixto: 'Mixto',
+};
+
 export default function SalesPage() {
   const [tab, setTab] = useState<Tab>('sales');
   const [search, setSearch] = useState('');
@@ -68,15 +68,41 @@ export default function SalesPage() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [viewingSale, setViewingSale] = useState<Sale | null>(null);
 
-  const filteredSales = mockSales.filter((s) => {
-    const matchSearch =
-      s.code.toLowerCase().includes(search.toLowerCase()) ||
-      s.customer.toLowerCase().includes(search.toLowerCase()) ||
-      s.agent.toLowerCase().includes(search.toLowerCase());
-    const matchDateFrom = !dateFrom || s.date >= dateFrom;
-    const matchDateTo = !dateTo || s.date <= dateTo;
-    return matchSearch && matchDateFrom && matchDateTo;
+  const { ventas } = useVentas({
+    pagina: 1,
+    limite: 100,
+    busqueda: search,
+    fechaInicio: dateFrom || undefined,
+    fechaFin: dateTo || undefined,
   });
+
+  const sales: Sale[] = useMemo(
+    () =>
+      ventas.map((v) => {
+        const d = new Date(v.creado_en);
+        return {
+          id: v.id,
+          code: v.numero_factura,
+          customer: v.cliente_id ?? 'Cliente general',
+          date: d.toISOString().slice(0, 10),
+          time: d.toTimeString().slice(0, 5),
+          items: 0,
+          subtotal: Number(v.subtotal),
+          tax: Number(v.monto_impuesto),
+          discount: Number(v.monto_descuento),
+          total: Number(v.monto_total),
+          cost: Number(v.costo_total),
+          profit: Number(v.monto_total) - Number(v.costo_total),
+          status:
+            v.estado === 'completada' ? 'paid' : v.estado === 'anulada' ? 'cancelled' : 'pending',
+          payment: metodoLabel[v.metodo_pago] ?? v.metodo_pago,
+          agent: v.cajero_id ?? '—',
+        };
+      }),
+    [ventas]
+  );
+
+  const filteredSales = sales;
 
   const handleExportPdf = () => {
     if (tab === 'sales') {

@@ -3,7 +3,7 @@
 export type CashClosure = {
   id: string;
   code: string;
-  userId: number;
+  userId: string;
   username: string;
   userName: string;
   openedAt: string; // ISO or YYYY-MM-DD HH:mm
@@ -40,7 +40,7 @@ const INITIAL_CLOSURES: CashClosure[] = [
   {
     id: 'cc-101',
     code: 'CC-001',
-    userId: 2,
+    userId: '2',
     username: 'maria',
     userName: 'María García',
     openedAt: '2026-07-25 08:00',
@@ -66,7 +66,7 @@ const INITIAL_CLOSURES: CashClosure[] = [
   {
     id: 'cc-102',
     code: 'CC-002',
-    userId: 3,
+    userId: '3',
     username: 'carlos',
     userName: 'Carlos López',
     openedAt: '2026-07-25 08:15',

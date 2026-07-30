@@ -7,6 +7,7 @@ import PriceLabelModal from './PriceLabelModal';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 import { toast } from 'sonner';
 import { exportTableToPdf, formatMoneyPdf } from '@/lib/exportPdf';
+import { useProductos } from '@/hooks/useProductos';
 
 export interface Product {
   id: string;
@@ -46,7 +47,6 @@ export const initialProducts: Product[] = [
 ];
 
 export default function ProductManagementScreen() {
-  const [products, setProducts] = useState<Product[]>(initialProducts);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
   const [filterCategory, setFilterCategory] = useState('all');
@@ -60,18 +60,27 @@ export default function ProductManagementScreen() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [labelModalProducts, setLabelModalProducts] = useState<Product[] | null>(null);
 
+  const estadoDb =
+    filterStatus === 'active'
+      ? ('activo' as const)
+      : filterStatus === 'inactive'
+        ? ('inactivo' as const)
+        : filterStatus === 'discontinued'
+          ? ('descontinuado' as const)
+          : ('todos' as const);
+
+  const { productosUi, crear, actualizar, eliminar, refetch } = useProductos({
+    pagina: 1,
+    limite: 200,
+    busqueda: search,
+    categoria: filterCategory === 'all' ? undefined : filterCategory,
+    estado: estadoDb,
+  });
+
+  const products = productosUi;
+
   const filtered = products
-    .filter((p) => {
-      const matchSearch =
-        search === '' ||
-        p.name.toLowerCase().includes(search.toLowerCase()) ||
-        p.sku.toLowerCase().includes(search.toLowerCase()) ||
-        p.barcode.includes(search);
-      const matchCat = filterCategory === 'all' || p.category === filterCategory;
-      const matchStatus = filterStatus === 'all' || p.status === filterStatus;
-      const matchStock = filterStock === 'all' || p.stockStatus === filterStock;
-      return matchSearch && matchCat && matchStatus && matchStock;
-    })
+    .filter((p) => filterStock === 'all' || p.stockStatus === filterStock)
     .sort((a, b) => {
       const av = a[sortField];
       const bv = b[sortField];
@@ -110,49 +119,64 @@ export default function ProductManagementScreen() {
     }
   };
 
-  const handleSaveProduct = (product: Product) => {
-    if (products.find((p) => p.id === product.id)) {
-      setProducts((prev) => prev.map((p) => (p.id === product.id ? product : p)));
-      toast.success(`Producto "${product.name}" actualizado correctamente`);
-    } else {
-      setProducts((prev) => [...prev, product]);
-      toast.success(`Producto "${product.name}" creado correctamente`);
+  const handleSaveProduct = async (product: Product) => {
+    try {
+      if (products.find((p) => p.id === product.id)) {
+        await actualizar(product.id, product);
+        toast.success(`Producto "${product.name}" actualizado correctamente`);
+      } else {
+        await crear(product);
+        toast.success(`Producto "${product.name}" creado correctamente`);
+      }
+      setAddModalOpen(false);
+      setEditProduct(null);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Error al guardar producto');
     }
-    setAddModalOpen(false);
-    setEditProduct(null);
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!deleteId) return;
     setDeleteLoading(true);
-    setTimeout(() => {
+    try {
       const name = products.find((p) => p.id === deleteId)?.name;
-      setProducts((prev) => prev.filter((p) => p.id !== deleteId));
+      await eliminar(deleteId);
       setDeleteId(null);
-      setDeleteLoading(false);
-      setSelectedIds((prev) => { const n = new Set(prev); n.delete(deleteId); return n; });
+      setSelectedIds((prev) => {
+        const n = new Set(prev);
+        n.delete(deleteId);
+        return n;
+      });
       toast.success(`Producto "${name}" eliminado`);
-    }, 800);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Error al eliminar');
+    } finally {
+      setDeleteLoading(false);
+    }
   };
 
-  const handleBulkDelete = () => {
+  const handleBulkDelete = async () => {
     const count = selectedIds.size;
-    setProducts((prev) => prev.filter((p) => !selectedIds.has(p.id)));
-    setSelectedIds(new Set());
-    toast.success(`${count} productos eliminados`);
+    try {
+      await Promise.all([...selectedIds].map((id) => eliminar(id)));
+      setSelectedIds(new Set());
+      toast.success(`${count} productos eliminados`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Error al eliminar');
+      await refetch();
+    }
   };
 
-  const handleToggleStatus = (id: string) => {
-    setProducts((prev) =>
-      prev.map((p) =>
-        p.id === id
-          ? { ...p, status: p.status === 'active' ? 'inactive' : 'active' }
-          : p
-      )
-    );
+  const handleToggleStatus = async (id: string) => {
     const p = products.find((x) => x.id === id);
-    const newStatus = p?.status === 'active' ? 'inactivo' : 'activo';
-    toast.success(`Producto marcado como ${newStatus}`);
+    if (!p) return;
+    const newStatus = p.status === 'active' ? 'inactive' : 'active';
+    try {
+      await actualizar(id, { ...p, status: newStatus });
+      toast.success(`Producto marcado como ${newStatus === 'active' ? 'activo' : 'inactivo'}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Error al actualizar estado');
+    }
   };
 
   const handleExportPdf = () => {
@@ -215,7 +239,14 @@ export default function ProductManagementScreen() {
         onDelete={(id) => setDeleteId(id)}
         onToggleStatus={handleToggleStatus}
         onPrintLabel={(prods) => setLabelModalProducts(prods)}
-        onUpdateProduct={(p) => setProducts((prev) => prev.map((item) => item.id === p.id ? p : item))}
+        onUpdateProduct={async (p) => {
+          try {
+            await actualizar(p.id, p);
+          } catch (e) {
+            toast.error(e instanceof Error ? e.message : 'Error al actualizar');
+            await refetch();
+          }
+        }}
       />
 
       <ProductFormModal

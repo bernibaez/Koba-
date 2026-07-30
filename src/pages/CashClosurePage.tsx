@@ -81,7 +81,7 @@ export default function CashClosurePage() {
     const newClosure: CashClosure = {
       id: `cc-${Date.now()}`,
       code: `CC-${String(count).padStart(3, '0')}`,
-      userId: user?.id ?? 99,
+      userId: user?.id ?? '0',
       username: user?.username ?? 'usuario',
       userName: user?.name ?? 'Usuario Sistema',
       openedAt: mockCurrentSession.openedAt,

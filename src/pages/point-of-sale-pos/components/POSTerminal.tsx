@@ -23,6 +23,9 @@ import {
 } from '@/lib/posStore';
 import type { FiscalInvoiceRecord } from '@/lib/ncfStore';
 import { getCombos, recordComboSale } from '@/lib/comboStore';
+import { procesarVenta } from '@/services/ventas.service';
+import type { MetodoPago } from '@/types/database';
+import { useAuth } from '@/context/AuthContext';
 
 const ADMIN_OWN_CASH: CashRegisterId = '1';
 
@@ -52,6 +55,7 @@ export interface Customer {
 }
 
 export default function POSTerminal() {
+  const { user } = useAuth();
   const [cart, setCart] = useState<CartItem[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [globalDiscount, setGlobalDiscount] = useState(0);
@@ -222,7 +226,61 @@ export default function POSTerminal() {
     orderCompleted,
     fiscalEnabled,
     onToggleFiscal: (val: boolean) => setFiscalEnabled(val),
-    onComplete: (_payments: PaymentSplit, fiscalInvoice?: FiscalInvoiceRecord) => {
+    onComplete: async (_payments: PaymentSplit, fiscalInvoice?: FiscalInvoiceRecord) => {
+      const metodo: MetodoPago =
+        [_payments.cash, _payments.card, _payments.transfer, _payments.credit].filter((v) => v > 0)
+          .length > 1
+          ? 'mixto'
+          : _payments.cash > 0
+            ? 'efectivo'
+            : _payments.card > 0
+              ? 'tarjeta'
+              : _payments.transfer > 0
+                ? 'transferencia'
+                : _payments.credit > 0
+                  ? 'credito'
+                  : 'efectivo';
+
+      const costoTotal = cart.reduce((s, i) => s + i.cost * i.qty, 0);
+      const montoPagado =
+        _payments.cash + _payments.card + _payments.transfer + _payments.credit;
+
+      try {
+        await procesarVenta({
+          cajero_id: user?.id ?? null,
+          cliente_id: selectedCustomer?.id ?? null,
+          caja_id: String(activeCashId),
+          subtotal,
+          monto_impuesto: taxTotal,
+          monto_descuento: globalDiscountAmount,
+          monto_total: total,
+          costo_total: costoTotal,
+          metodo_pago: metodo,
+          monto_pagado: montoPagado,
+          monto_efectivo: _payments.cash,
+          monto_tarjeta: _payments.card,
+          monto_transferencia: _payments.transfer,
+          monto_credito: _payments.credit,
+          devuelta_entregada: Math.max(0, montoPagado - total),
+          ncf: fiscalInvoice?.ncf ?? null,
+          tipo_ncf: fiscalInvoice?.ncfType ?? null,
+          items: cart.map((item) => ({
+            producto_id: item.isCombo ? null : item.productId,
+            combo_id: item.comboId ?? null,
+            tipo_item: item.isCombo ? 'combo' : 'producto',
+            nombre_item: item.name,
+            precio_unitario: item.price,
+            costo_unitario: item.cost,
+            cantidad: item.qty,
+            porcentaje_impuesto: item.tax,
+            subtotal: item.price * item.qty * (1 - item.discount / 100),
+          })),
+        });
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Error al registrar la venta');
+        return;
+      }
+
       cart.forEach((cartItem) => {
         if (cartItem.isCombo && cartItem.comboId) {
           const combo = getCombos().find((c) => c.id === cartItem.comboId);

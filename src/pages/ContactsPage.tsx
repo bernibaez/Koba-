@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { Users, Truck, Tag, Plus, Search, Filter, Edit2, Trash2, Download, Eye, Phone, MapPin, CreditCard } from 'lucide-react';
 import { exportTableToPdf, formatMoneyPdf } from '@/lib/exportPdf';
+import { useClientes } from '@/hooks/useClientes';
+import { toast } from 'sonner';
 
 interface Customer {
-  id: number; name: string; phone: string; email: string; address: string;
+  id: string; name: string; phone: string; email: string; address: string;
   credit: number; purchases: number; balance: number; status: 'active' | 'inactive'; group: string;
 }
 interface Supplier {
@@ -14,14 +16,6 @@ interface Supplier {
 interface Group {
   id: number; name: string; discount: number; customers: number; description: string;
 }
-
-const mockCustomers: Customer[] = [
-  { id: 1, name: 'Juan Pérez', phone: '809-555-1001', email: 'juan@email.com', address: 'Av. 27 de Febrero #45, Santo Domingo', credit: 5000, purchases: 48, balance: 1200, status: 'active', group: 'VIP' },
-  { id: 2, name: 'Rosa Jiménez', phone: '809-555-1002', email: 'rosa@email.com', address: 'Calle El Conde #12, Santiago', credit: 3000, purchases: 22, balance: 0, status: 'active', group: 'Regular' },
-  { id: 3, name: 'Empresa ABC S.R.L.', phone: '809-555-1003', email: 'abc@empresa.com', address: 'Zona Industrial, La Romana', credit: 20000, purchases: 156, balance: 8500, status: 'active', group: 'Mayorista' },
-  { id: 4, name: 'Carmen Reyes', phone: '809-555-1004', email: 'carmen@email.com', address: 'Los Jardines, San Pedro', credit: 1000, purchases: 5, balance: 0, status: 'inactive', group: 'Regular' },
-  { id: 5, name: 'Distribuidora XYZ', phone: '809-555-1005', email: 'xyz@dist.com', address: 'Autopista Duarte Km 12', credit: 50000, purchases: 312, balance: 15000, status: 'active', group: 'Mayorista' },
-];
 
 const mockSuppliers: Supplier[] = [
   { id: 1, name: 'Distribuidora Nacional S.A.', phone: '809-555-2001', email: 'ventas@disnac.com', address: 'Zona Industrial Herrera', contact: 'Ing. Ramón Castro', purchases: 45, balance: 25000, status: 'active' },
@@ -43,6 +37,28 @@ export default function ContactsPage() {
   const [tab, setTab] = useState<Tab>('customers');
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
+  const [formNombre, setFormNombre] = useState('');
+  const [formTelefono, setFormTelefono] = useState('');
+  const [formCorreo, setFormCorreo] = useState('');
+
+  const { clientes, crear } = useClientes(search);
+
+  const filteredCustomers: Customer[] = useMemo(
+    () =>
+      clientes.map((c) => ({
+        id: c.id,
+        name: c.nombre,
+        phone: c.telefono ?? '',
+        email: c.correo ?? '',
+        address: c.direccion ?? '',
+        credit: Number(c.limite_credito),
+        purchases: 0,
+        balance: Number(c.balance_actual),
+        status: c.activo ? 'active' : 'inactive',
+        group: c.tipo_cliente,
+      })),
+    [clientes]
+  );
 
   const tabs = [
     { id: 'customers' as Tab, label: 'Clientes', icon: <Users size={16} /> },
@@ -50,10 +66,7 @@ export default function ContactsPage() {
     { id: 'groups' as Tab, label: 'Grupos', icon: <Tag size={16} /> },
   ];
 
-  const filteredCustomers = mockCustomers.filter(c =>
-    c.name.toLowerCase().includes(search.toLowerCase()) || c.phone.includes(search)
-  );
-  const filteredSuppliers = mockSuppliers.filter(s =>
+  const filteredSuppliers = mockSuppliers.filter((s) =>
     s.name.toLowerCase().includes(search.toLowerCase())
   );
 
@@ -210,7 +223,7 @@ export default function ContactsPage() {
               </table>
             </div>
             <div className="px-4 py-3 border-t border-border flex items-center justify-between text-sm text-muted-foreground">
-              <span>Mostrando {filteredCustomers.length} de {mockCustomers.length} clientes</span>
+              <span>Mostrando {filteredCustomers.length} clientes</span>
               <div className="flex gap-1">
                 <button className="px-3 py-1 rounded-lg hover:bg-secondary transition-colors">Anterior</button>
                 <button className="px-3 py-1 rounded-lg bg-primary text-primary-foreground">1</button>
@@ -318,10 +331,26 @@ export default function ContactsPage() {
               {tab === 'customers' ? 'Nuevo Cliente' : tab === 'suppliers' ? 'Nuevo Proveedor' : 'Nuevo Grupo'}
             </h2>
             <div className="grid grid-cols-2 gap-3">
-              <input className="input-field col-span-2" placeholder="Nombre" />
+              <input
+                className="input-field col-span-2"
+                placeholder="Nombre"
+                value={formNombre}
+                onChange={(e) => setFormNombre(e.target.value)}
+              />
               {tab !== 'groups' && <>
-                <input className="input-field" placeholder="Teléfono" />
-                <input className="input-field" placeholder="Email" type="email" />
+                <input
+                  className="input-field"
+                  placeholder="Teléfono"
+                  value={formTelefono}
+                  onChange={(e) => setFormTelefono(e.target.value)}
+                />
+                <input
+                  className="input-field"
+                  placeholder="Email"
+                  type="email"
+                  value={formCorreo}
+                  onChange={(e) => setFormCorreo(e.target.value)}
+                />
                 <input className="input-field col-span-2" placeholder="Dirección" />
               </>}
               {tab === 'customers' && <>
@@ -338,7 +367,35 @@ export default function ContactsPage() {
             </div>
             <div className="flex gap-3 mt-6">
               <button className="btn-secondary flex-1" onClick={() => setShowModal(false)}>Cancelar</button>
-              <button className="btn-primary flex-1">Guardar</button>
+              <button
+                className="btn-primary flex-1"
+                onClick={async () => {
+                  if (tab !== 'customers') {
+                    setShowModal(false);
+                    return;
+                  }
+                  if (!formNombre.trim()) {
+                    toast.error('Ingresa el nombre del cliente');
+                    return;
+                  }
+                  try {
+                    await crear({
+                      nombre: formNombre.trim(),
+                      telefono: formTelefono.trim() || undefined,
+                      correo: formCorreo.trim() || undefined,
+                    });
+                    toast.success('Cliente creado');
+                    setShowModal(false);
+                    setFormNombre('');
+                    setFormTelefono('');
+                    setFormCorreo('');
+                  } catch (e) {
+                    toast.error(e instanceof Error ? e.message : 'Error al crear cliente');
+                  }
+                }}
+              >
+                Guardar
+              </button>
             </div>
           </div>
         </div>
