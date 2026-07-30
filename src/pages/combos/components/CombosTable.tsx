@@ -113,19 +113,25 @@ export default function CombosTable({
                   <ArrowUpDown size={12} />
                 </div>
               </th>
+              <th className="py-4 px-3 text-right">
+                <div className="flex items-center justify-end gap-1 text-slate-600 dark:text-slate-300">
+                  Precio Costo
+                </div>
+              </th>
               <th className="py-4 px-3 text-right cursor-pointer hover:text-foreground" onClick={() => handleSort('price')}>
-                <div className="flex items-center justify-end gap-1">
-                  Precio Combo
+                <div className="flex items-center justify-end gap-1 text-emerald-600 dark:text-emerald-400">
+                  Precio Venta
                   <ArrowUpDown size={12} />
                 </div>
               </th>
+              <th className="py-4 px-3 text-center">Margen Ganancia</th>
               <th className="py-4 px-3 text-right cursor-pointer hover:text-foreground" onClick={() => handleSort('normalPrice')}>
                 <div className="flex items-center justify-end gap-1">
                   Precio Normal
                   <ArrowUpDown size={12} />
                 </div>
               </th>
-              <th className="py-4 px-3 text-center">Ahorro</th>
+              <th className="py-4 px-3 text-center">Ahorro Cliente</th>
               <th className="py-4 px-3 text-center">Componentes</th>
               <th className="py-4 px-3 text-center">Estado</th>
               <th className="py-4 px-3">Vigencia / Sucursales</th>
@@ -135,6 +141,10 @@ export default function CombosTable({
           <tbody className="divide-y divide-border/60">
             {paginatedCombos.map((combo) => {
               const isExpired = combo.endDate && new Date(combo.endDate) < new Date();
+              const comboCost = combo.totalCost ?? (combo.items ? combo.items.reduce((s, i) => s + (i.costPrice || 0) * (i.quantity || 1), 0) : 0);
+              const profitAmt = combo.price - comboCost;
+              const profitPct = combo.marginPercent ?? (combo.price > 0 ? ((profitAmt / combo.price) * 100) : 0);
+
               return (
                 <tr
                   key={combo.id}
@@ -167,9 +177,26 @@ export default function CombosTable({
                     <div className="font-mono text-[11px] text-muted-foreground">{combo.barcode}</div>
                   </td>
 
-                  {/* Price */}
+                  {/* Cost Price */}
                   <td className="py-3.5 px-3 text-right">
-                    <span className="font-black text-primary text-base">{formatCurrency(combo.price)}</span>
+                    <span className="font-bold text-muted-foreground text-sm">{formatCurrency(comboCost)}</span>
+                  </td>
+
+                  {/* Sale Price */}
+                  <td className="py-3.5 px-3 text-right">
+                    <span className="font-black text-emerald-600 dark:text-emerald-400 text-base">{formatCurrency(combo.price)}</span>
+                  </td>
+
+                  {/* Profit Margin */}
+                  <td className="py-3.5 px-3 text-center">
+                    <div className="inline-flex flex-col items-center">
+                      <span className="text-xs font-black text-purple-600 dark:text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-md border border-purple-500/20 tabular-nums">
+                        +{profitPct.toFixed(1)}%
+                      </span>
+                      <span className="text-[10px] font-bold text-muted-foreground mt-0.5 tabular-nums">
+                        +{formatCurrency(profitAmt)}
+                      </span>
+                    </div>
                   </td>
 
                   {/* Normal price */}

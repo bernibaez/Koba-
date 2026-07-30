@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { ShoppingBag, RotateCcw, Plus, Search, Filter, Download, Eye, Edit2, Trash2, X, PackagePlus, Check, CheckCircle2, ShoppingCart, Minus } from 'lucide-react';
 import { exportTableToPdf, formatMoneyPdf } from '@/lib/exportPdf';
-import { getStoredProducts, updateProductStockInStore, ProductItem } from '@/lib/productStore';
+import { getStoredProducts, updateProductStockInStore, updateProductPurchaseDataInStore, ProductItem } from '@/lib/productStore';
 import { toast } from 'sonner';
 
 interface Purchase {
@@ -35,7 +35,8 @@ export interface PurchaseLineItem {
   name: string;
   sku: string;
   qty: number;
-  price: number;
+  price: number; // Cost Price
+  salePrice: number; // Sale Price
   taxPercent: number;
 }
 
@@ -78,9 +79,9 @@ export default function PurchasesPage() {
 
   // Dynamic Purchase Items State
   const [purchaseItems, setPurchaseItems] = useState<PurchaseLineItem[]>([
-    { id: '1', productId: '1', name: 'Arroz Selecto 5lb', sku: 'ARR-001', qty: 50, price: 180, taxPercent: 0 },
-    { id: '2', productId: '2', name: 'Aceite Vegetal 1L', sku: 'ACE-001', qty: 24, price: 220, taxPercent: 18 },
-    { id: '3', productId: '3', name: 'Azúcar Blanca 2lb', sku: 'AZU-001', qty: 36, price: 95, taxPercent: 0 },
+    { id: '1', productId: 'prod-001', name: 'Arroz Selecto 5lb', sku: 'ARR-SEL-5LB', qty: 50, price: 210, salePrice: 285, taxPercent: 0 },
+    { id: '2', productId: 'prod-002', name: 'Aceite Vegetal 1L', sku: 'ACE-VEG-1L', qty: 24, price: 140, salePrice: 195, taxPercent: 18 },
+    { id: '3', productId: 'prod-005', name: 'Azúcar Blanca 5lb', sku: 'AZU-BLA-5LB', qty: 36, price: 128, salePrice: 175, taxPercent: 0 },
   ]);
 
   // Modal for Adding Products
@@ -88,7 +89,8 @@ export default function PurchasesPage() {
   const [modalSearch, setModalSearch] = useState('');
   const [selectedProduct, setSelectedProduct] = useState<ProductItem | null>(null);
   const [modalQty, setModalQty] = useState<number>(1);
-  const [modalPrice, setModalPrice] = useState<number>(0);
+  const [modalPrice, setModalPrice] = useState<number>(0); // Precio Costo
+  const [modalSalePrice, setModalSalePrice] = useState<number>(0); // Precio Venta
   const [customName, setCustomName] = useState('');
   const [lastAddedNotice, setLastAddedNotice] = useState<string | null>(null);
 
@@ -124,6 +126,10 @@ export default function PurchasesPage() {
     setPurchaseItems(prev => prev.map(item => item.id === id ? { ...item, price: Math.max(0, price) } : item));
   };
 
+  const handleUpdateLineSalePrice = (id: string, salePrice: number) => {
+    setPurchaseItems(prev => prev.map(item => item.id === id ? { ...item, salePrice: Math.max(0, salePrice) } : item));
+  };
+
   const handleRemoveLine = (id: string) => {
     setPurchaseItems(prev => prev.filter(item => item.id !== id));
     toast.info('Producto removido de la orden');
@@ -141,7 +147,8 @@ export default function PurchasesPage() {
     }
 
     const itemName = selectedProduct ? selectedProduct.name : customName.trim();
-    const itemPrice = modalPrice > 0 ? modalPrice : (selectedProduct ? (selectedProduct.costPrice || selectedProduct.salePrice) : 100);
+    const itemCostPrice = modalPrice > 0 ? modalPrice : (selectedProduct ? (selectedProduct.costPrice || selectedProduct.salePrice) : 100);
+    const itemSalePrice = modalSalePrice > 0 ? modalSalePrice : (selectedProduct ? selectedProduct.salePrice : Math.round(itemCostPrice * 1.3));
 
     const newItem: PurchaseLineItem = {
       id: `item-${Date.now()}`,
@@ -149,14 +156,15 @@ export default function PurchasesPage() {
       name: itemName,
       sku: selectedProduct ? selectedProduct.sku : `CUSTOM-${Date.now().toString().slice(-4)}`,
       qty: modalQty,
-      price: itemPrice,
+      price: itemCostPrice,
+      salePrice: itemSalePrice,
       taxPercent: selectedProduct ? (selectedProduct.tax ?? 18) : 18,
     };
 
     setPurchaseItems(prev => [...prev, newItem]);
     
     // In-modal visual confirmation feedback
-    const noticeText = `✓ Añadido a la compra: ${itemName} (${modalQty} und) — RD$ ${(modalQty * itemPrice).toLocaleString('es-DO', { minimumFractionDigits: 2 })}`;
+    const noticeText = `✓ Añadido: ${itemName} (${modalQty} und) — Costo: RD$ ${itemCostPrice.toLocaleString('es-DO')} | Venta: RD$ ${itemSalePrice.toLocaleString('es-DO')}`;
     setLastAddedNotice(noticeText);
     toast.success(`Añadido: ${itemName} (${modalQty} und)`);
 
@@ -165,6 +173,7 @@ export default function PurchasesPage() {
     setCustomName('');
     setModalQty(1);
     setModalPrice(0);
+    setModalSalePrice(0);
     setModalSearch('');
 
     if (shouldCloseModal) {
@@ -178,10 +187,10 @@ export default function PurchasesPage() {
       return;
     }
 
-    // 1. Update Inventory Stock for each product
+    // 1. Update Inventory Stock and Prices in catalog
     purchaseItems.forEach(item => {
       if (item.productId && !item.productId.startsWith('custom-')) {
-        updateProductStockInStore(item.productId, item.qty);
+        updateProductPurchaseDataInStore(item.productId, item.qty, item.price, item.salePrice);
       }
     });
 
@@ -200,7 +209,7 @@ export default function PurchasesPage() {
     };
 
     setPurchasesList(prev => [newPurchase, ...prev]);
-    toast.success('Compra guardada exitosamente y stock actualizado en inventario');
+    toast.success('Compra guardada exitosamente. Stock, precio de costo y precio de venta actualizados en catálogo.');
     setShowAddForm(false);
   };
 
@@ -333,6 +342,8 @@ export default function PurchasesPage() {
                         <th className="text-left py-2.5 px-3 text-muted-foreground font-semibold">Producto</th>
                         <th className="text-center py-2.5 px-3 text-muted-foreground font-semibold">Cantidad</th>
                         <th className="text-right py-2.5 px-3 text-muted-foreground font-semibold">Precio Costo (RD$)</th>
+                        <th className="text-right py-2.5 px-3 text-muted-foreground font-semibold">Precio Venta (RD$)</th>
+                        <th className="text-center py-2.5 px-3 text-muted-foreground font-semibold">Margen</th>
                         <th className="text-right py-2.5 px-3 text-muted-foreground font-semibold">Subtotal</th>
                         <th className="text-center py-2.5 px-3"></th>
                       </tr>
@@ -340,51 +351,75 @@ export default function PurchasesPage() {
                     <tbody className="divide-y divide-border/60">
                       {purchaseItems.length === 0 ? (
                         <tr>
-                          <td colSpan={5} className="text-center py-8 text-muted-foreground">
+                          <td colSpan={7} className="text-center py-8 text-muted-foreground">
                             No has agregado ningún producto a esta compra. Haz clic en <strong>Agregar producto</strong> arriba.
                           </td>
                         </tr>
                       ) : (
-                        purchaseItems.map((item) => (
-                          <tr key={item.id} className="hover:bg-secondary/20 transition-colors">
-                            <td className="py-2.5 px-3">
-                              <p className="font-bold text-foreground">{item.name}</p>
-                              <p className="text-xs font-mono text-muted-foreground">{item.sku}</p>
-                            </td>
-                            <td className="py-2.5 px-3 text-center">
-                              <input
-                                type="number"
-                                min={1}
-                                value={item.qty}
-                                onChange={(e) => handleUpdateLineQty(item.id, Number(e.target.value))}
-                                className="input-field w-20 text-center py-1 font-bold"
-                              />
-                            </td>
-                            <td className="py-2.5 px-3 text-right">
-                              <input
-                                type="number"
-                                min={0}
-                                step="0.01"
-                                value={item.price}
-                                onChange={(e) => handleUpdateLinePrice(item.id, Number(e.target.value))}
-                                className="input-field w-28 text-right py-1 font-bold tabular-nums"
-                              />
-                            </td>
-                            <td className="py-2.5 px-3 text-right font-black text-foreground tabular-nums">
-                              RD$ {(item.qty * item.price).toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                            </td>
-                            <td className="py-2.5 px-3 text-center">
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveLine(item.id)}
-                                className="p-1.5 text-muted-foreground hover:text-danger hover:bg-danger-bg rounded-lg transition-colors"
-                                title="Eliminar ítem"
-                              >
-                                <Trash2 size={15} />
-                              </button>
-                            </td>
-                          </tr>
-                        ))
+                        purchaseItems.map((item) => {
+                          const marginAmt = item.salePrice - item.price;
+                          const marginPct = item.price > 0 ? ((marginAmt / item.price) * 100) : 0;
+
+                          return (
+                            <tr key={item.id} className="hover:bg-secondary/20 transition-colors">
+                              <td className="py-2.5 px-3">
+                                <p className="font-bold text-foreground">{item.name}</p>
+                                <p className="text-xs font-mono text-muted-foreground">{item.sku}</p>
+                              </td>
+                              <td className="py-2.5 px-3 text-center">
+                                <input
+                                  type="number"
+                                  min={1}
+                                  value={item.qty}
+                                  onChange={(e) => handleUpdateLineQty(item.id, Number(e.target.value))}
+                                  className="input-field w-20 text-center py-1 font-bold"
+                                />
+                              </td>
+                              <td className="py-2.5 px-3 text-right">
+                                <input
+                                  type="number"
+                                  min={0}
+                                  step="0.01"
+                                  value={item.price}
+                                  onChange={(e) => handleUpdateLinePrice(item.id, Number(e.target.value))}
+                                  className="input-field w-24 text-right py-1 font-bold tabular-nums"
+                                />
+                              </td>
+                              <td className="py-2.5 px-3 text-right">
+                                <input
+                                  type="number"
+                                  min={0}
+                                  step="0.01"
+                                  value={item.salePrice}
+                                  onChange={(e) => handleUpdateLineSalePrice(item.id, Number(e.target.value))}
+                                  className="input-field w-24 text-right py-1 font-bold tabular-nums text-emerald-600 dark:text-emerald-400"
+                                />
+                              </td>
+                              <td className="py-2.5 px-3 text-center">
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-extrabold tabular-nums ${
+                                  marginAmt >= 0
+                                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                                    : 'bg-danger-bg text-danger border border-danger/20'
+                                }`}>
+                                  {marginPct >= 0 ? `+${marginPct.toFixed(0)}%` : `${marginPct.toFixed(0)}%`}
+                                </span>
+                              </td>
+                              <td className="py-2.5 px-3 text-right font-black text-foreground tabular-nums">
+                                RD$ {(item.qty * item.price).toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                              </td>
+                              <td className="py-2.5 px-3 text-center">
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveLine(item.id)}
+                                  className="p-1.5 text-muted-foreground hover:text-danger hover:bg-danger-bg rounded-lg transition-colors"
+                                  title="Eliminar ítem"
+                                >
+                                  <Trash2 size={15} />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })
                       )}
                     </tbody>
                   </table>
@@ -434,7 +469,7 @@ export default function PurchasesPage() {
         {/* MODAL MEJORADO: Agregar Múltiples Productos Continuamente */}
         {showProductModal && (
           <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-            <div className="w-full max-w-xl bg-card rounded-2xl border border-border shadow-2xl overflow-hidden flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95 duration-150">
+            <div className="w-full max-w-2xl bg-card rounded-2xl border border-border shadow-2xl overflow-hidden flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95 duration-150">
               {/* Modal Header with Added Counter */}
               <div className="px-5 py-4 border-b border-border flex items-center justify-between bg-primary/5">
                 <div className="flex items-center gap-3">
@@ -443,7 +478,7 @@ export default function PurchasesPage() {
                   </div>
                   <div>
                     <h3 className="font-extrabold text-foreground text-base">Agregar Productos a la Compra</h3>
-                    <p className="text-xs text-muted-foreground">Selecciona y agrega varios productos continuamente</p>
+                    <p className="text-xs text-muted-foreground">Actualiza el costo y precio de venta al registrar la entrada</p>
                   </div>
                 </div>
                 
@@ -489,7 +524,7 @@ export default function PurchasesPage() {
                 {/* System Products Grid / Picker */}
                 <div className="space-y-1.5">
                   <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Productos Encontrados</p>
-                  <div className="max-h-48 overflow-y-auto border border-border rounded-xl divide-y divide-border/60 bg-secondary/10 scrollbar-thin">
+                  <div className="max-h-44 overflow-y-auto border border-border rounded-xl divide-y divide-border/60 bg-secondary/10 scrollbar-thin">
                     {filteredSystemProducts.length === 0 ? (
                       <div className="p-4 text-center text-xs text-muted-foreground">
                         No se encontraron productos en catálogo. Escribe un nombre abajo para agregar un ítem personalizado.
@@ -503,6 +538,7 @@ export default function PurchasesPage() {
                             onClick={() => {
                               setSelectedProduct(p);
                               setModalPrice(p.costPrice || p.salePrice);
+                              setModalSalePrice(p.salePrice);
                               setCustomName('');
                             }}
                             className={`p-3 flex items-center justify-between cursor-pointer transition-all ${
@@ -517,9 +553,9 @@ export default function PurchasesPage() {
                             </div>
                             <div className="text-right flex-shrink-0">
                               <p className="text-xs font-black tabular-nums text-primary">
-                                Costo: RD$ {(p.costPrice || p.salePrice).toLocaleString()}
+                                Costo actual: RD$ {(p.costPrice || p.salePrice).toLocaleString()}
                               </p>
-                              <span className="text-[10px] text-muted-foreground font-semibold">Venta: RD$ {p.salePrice.toLocaleString()}</span>
+                              <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold">Venta actual: RD$ {p.salePrice.toLocaleString()}</span>
                             </div>
                           </div>
                         );
@@ -544,8 +580,8 @@ export default function PurchasesPage() {
                 </div>
 
                 {/* Quantity & Price Section */}
-                <div className="bg-secondary/30 p-3.5 rounded-2xl border border-border space-y-3">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="bg-secondary/30 p-4 rounded-2xl border border-border space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     {/* Quantity with Increment Buttons */}
                     <div>
                       <label className="block text-xs font-bold text-foreground mb-1">
@@ -593,7 +629,7 @@ export default function PurchasesPage() {
                     {/* Cost Price */}
                     <div>
                       <label className="block text-xs font-bold text-foreground mb-1">
-                        Precio Costo Unitario (RD$) <span className="text-danger">*</span>
+                        Precio Costo (RD$) <span className="text-danger">*</span>
                       </label>
                       <input
                         type="number"
@@ -603,13 +639,79 @@ export default function PurchasesPage() {
                         onChange={(e) => setModalPrice(Number(e.target.value))}
                         className="input-field text-base font-black text-right h-10 tabular-nums"
                       />
+                      {selectedProduct && selectedProduct.costPrice > 0 && (
+                        <span className="text-[10px] text-muted-foreground mt-1 block text-right font-medium">
+                          Anterior: RD$ {selectedProduct.costPrice.toLocaleString()}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Sale Price */}
+                    <div>
+                      <label className="block text-xs font-bold text-emerald-600 dark:text-emerald-400 mb-1">
+                        Precio de Venta (RD$) <span className="text-danger">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        value={modalSalePrice}
+                        onChange={(e) => setModalSalePrice(Number(e.target.value))}
+                        className="input-field text-base font-black text-right h-10 tabular-nums border-emerald-500/50 focus:border-emerald-500 text-emerald-600 dark:text-emerald-400"
+                      />
+                      {selectedProduct && selectedProduct.salePrice > 0 && (
+                        <span className="text-[10px] text-muted-foreground mt-1 block text-right font-medium">
+                          Actual tienda: RD$ {selectedProduct.salePrice.toLocaleString()}
+                        </span>
+                      )}
                     </div>
                   </div>
+
+                  {/* Profit Margin Calculator & Presets */}
+                  {modalPrice > 0 && (
+                    <div className="bg-card p-3 rounded-xl border border-border space-y-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                        <span className="font-bold text-muted-foreground">Calcular Precio Venta por Margen:</span>
+                        <div className="flex items-center gap-1">
+                          {[20, 30, 35, 40, 50].map((pct) => (
+                            <button
+                              key={`margin-${pct}`}
+                              type="button"
+                              onClick={() => setModalSalePrice(Math.round(modalPrice * (1 + pct / 100)))}
+                              className="px-2 py-0.5 text-[11px] font-extrabold bg-secondary hover:bg-emerald-500/15 hover:text-emerald-600 dark:hover:text-emerald-400 rounded-md border border-border transition-colors tabular-nums"
+                            >
+                              +{pct}%
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="pt-2 border-t border-border/50 flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground font-medium">Ganancia por unidad:</span>
+                          <span className={`font-black tabular-nums ${modalSalePrice - modalPrice >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-danger'}`}>
+                            RD$ {(modalSalePrice - modalPrice).toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-muted-foreground font-medium">Margen %:</span>
+                          <span className={`px-2 py-0.5 rounded-lg text-xs font-black tabular-nums ${
+                            modalSalePrice - modalPrice >= 0
+                              ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
+                              : 'bg-danger-bg text-danger border border-danger/30'
+                          }`}>
+                            {modalPrice > 0 ? (((modalSalePrice - modalPrice) / modalPrice) * 100).toFixed(1) : 0}%
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Live Item Total Preview */}
                   {(selectedProduct || customName) && (
                     <div className="bg-primary/10 border border-primary/20 rounded-xl p-3 flex justify-between items-center text-xs">
-                      <span className="font-bold text-foreground">Importe para este renglón:</span>
+                      <span className="font-bold text-foreground">Importe total para esta compra:</span>
                       <span className="font-black text-base text-primary tabular-nums">
                         RD$ {(modalQty * modalPrice).toLocaleString('es-DO', { minimumFractionDigits: 2 })}
                       </span>
@@ -618,7 +720,7 @@ export default function PurchasesPage() {
                 </div>
               </div>
 
-              {/* Action Buttons: Add Continuously vs Complete */}
+              {/* Action Buttons */}
               <div className="p-4 border-t border-border flex flex-wrap items-center justify-between gap-3 bg-secondary/20">
                 <button
                   type="button"
@@ -658,8 +760,8 @@ export default function PurchasesPage() {
             onClick={() => {
               setInvoiceNumber(nextPurchaseInvoice());
               setPurchaseItems([
-                { id: '1', productId: '1', name: 'Arroz Selecto 5lb', sku: 'ARR-001', qty: 50, price: 180, taxPercent: 0 },
-                { id: '2', productId: '2', name: 'Aceite Vegetal 1L', sku: 'ACE-001', qty: 24, price: 220, taxPercent: 18 },
+                { id: '1', productId: 'prod-001', name: 'Arroz Selecto 5lb', sku: 'ARR-SEL-5LB', qty: 50, price: 210, salePrice: 285, taxPercent: 0 },
+                { id: '2', productId: 'prod-002', name: 'Aceite Vegetal 1L', sku: 'ACE-VEG-1L', qty: 24, price: 140, salePrice: 195, taxPercent: 18 },
               ]);
               setShowAddForm(true);
             }}

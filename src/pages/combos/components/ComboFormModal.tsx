@@ -244,6 +244,7 @@ export default function ComboFormModal({
       description: description.trim(),
       category,
       price: Math.round(finalPrice),
+      totalCost: Math.round(totalCost),
       normalPrice: Math.round(normalPrice),
       discountType,
       discountValue:
@@ -481,8 +482,10 @@ export default function ComboFormModal({
                       <th className="p-3">Código</th>
                       <th className="p-3 text-center">Stock Disp.</th>
                       <th className="p-3 text-center">Cantidad</th>
-                      <th className="p-3 text-right">Precio Unit.</th>
-                      <th className="p-3 text-right">Subtotal</th>
+                      <th className="p-3 text-right">Costo Unit.</th>
+                      <th className="p-3 text-right">Venta Unit.</th>
+                      <th className="p-3 text-right">Subtotal Costo</th>
+                      <th className="p-3 text-right">Subtotal Venta</th>
                       <th className="p-3 text-center">Acción</th>
                     </tr>
                   </thead>
@@ -508,7 +511,11 @@ export default function ComboFormModal({
                               className="w-16 input-field text-center font-bold text-xs p-1"
                             />
                           </td>
-                          <td className="p-3 text-right font-semibold">RD$ {item.unitPrice.toFixed(2)}</td>
+                          <td className="p-3 text-right font-semibold text-muted-foreground">RD$ {item.costPrice.toFixed(2)}</td>
+                          <td className="p-3 text-right font-semibold text-emerald-600 dark:text-emerald-400">RD$ {item.unitPrice.toFixed(2)}</td>
+                          <td className="p-3 text-right font-bold text-slate-600 dark:text-slate-300">
+                            RD$ {(item.costPrice * item.quantity).toFixed(2)}
+                          </td>
                           <td className="p-3 text-right font-black text-foreground">
                             RD$ {item.subtotal.toFixed(2)}
                           </td>
@@ -525,12 +532,15 @@ export default function ComboFormModal({
                       );
                     })}
                   </tbody>
-                  <tfoot className="bg-secondary/40 font-extrabold border-t border-border/80">
+                  <tfoot className="bg-secondary/40 font-extrabold border-t border-border/80 text-xs">
                     <tr>
-                      <td colSpan={5} className="p-3 text-right uppercase tracking-wider text-muted-foreground">
-                        Suma Normal Componentes:
+                      <td colSpan={6} className="p-3 text-right uppercase tracking-wider text-muted-foreground">
+                        Totales Componentes (Costo vs Venta Normal):
                       </td>
-                      <td className="p-3 text-right text-sm font-black text-foreground">
+                      <td className="p-3 text-right font-bold text-slate-700 dark:text-slate-200">
+                        RD$ {totalCost.toFixed(2)}
+                      </td>
+                      <td className="p-3 text-right font-black text-foreground">
                         RD$ {normalPrice.toFixed(2)}
                       </td>
                       <td />
@@ -546,7 +556,7 @@ export default function ComboFormModal({
             <div className="flex items-center gap-2 border-b border-border/60 pb-3">
               <DollarSign size={18} className="text-primary" />
               <h3 className="text-sm font-black text-foreground uppercase tracking-wide">
-                3. Precio y Ahorro del Combo
+                3. Precio de Costo, Precio de Venta y Margen del Combo
               </h3>
             </div>
 
@@ -562,7 +572,7 @@ export default function ComboFormModal({
                 }`}
               >
                 <DollarSign size={18} />
-                <span>Precio Fijo Directo</span>
+                <span>Precio Venta Fijo Directo</span>
               </button>
 
               <button
@@ -575,7 +585,7 @@ export default function ComboFormModal({
                 }`}
               >
                 <Percent size={18} />
-                <span>% Descuento</span>
+                <span>% Descuento s/Venta Normal</span>
               </button>
 
               <button
@@ -592,79 +602,109 @@ export default function ComboFormModal({
               </button>
             </div>
 
-            {/* Inputs based on pricing mode */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-secondary/30 p-4 rounded-xl border border-border/60">
-              {discountType === 'fixed' && (
+            {/* Inputs & Cost/Sale Breakdown */}
+            <div className="space-y-4 bg-secondary/30 p-4 rounded-xl border border-border/60">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Cost Price Info */}
                 <div>
-                  <label htmlFor={`${formId}-price-fixed`} className="text-xs font-bold text-muted-foreground mb-1 block">
-                    Precio Final del Combo (RD$)
+                  <label className="text-xs font-bold text-muted-foreground mb-1 block">
+                    Precio Costo (RD$)
                   </label>
-                  <input
-                    id={`${formId}-price-fixed`}
-                    type="number"
-                    min={0}
-                    step={1}
-                    value={priceInput}
-                    onChange={(e) => setPriceInput(parseFloat(e.target.value) || 0)}
-                    className="input-field text-base font-black text-primary"
-                  />
+                  <div className="relative">
+                    <input
+                      type="text"
+                      readOnly
+                      value={`RD$ ${totalCost.toLocaleString('es-DO', { minimumFractionDigits: 2 })}`}
+                      className="input-field text-base font-black bg-secondary/60 cursor-not-allowed text-foreground"
+                    />
+                    <span className="text-[10px] text-muted-foreground mt-1 block font-medium">
+                      Suma del costo de adquisición de los componentes
+                    </span>
+                  </div>
                 </div>
-              )}
 
-              {discountType === 'percent' && (
-                <div>
-                  <label htmlFor={`${formId}-price-percent`} className="text-xs font-bold text-muted-foreground mb-1 block">
-                    Porcentaje de Descuento (%)
-                  </label>
-                  <input
-                    id={`${formId}-price-percent`}
-                    type="number"
-                    min={0}
-                    max={100}
-                    step={0.5}
-                    value={percentInput}
-                    onChange={(e) => setPercentInput(parseFloat(e.target.value) || 0)}
-                    className="input-field text-base font-black text-primary"
-                  />
-                </div>
-              )}
+                {/* Sale Price Input */}
+                {discountType === 'fixed' && (
+                  <div>
+                    <label htmlFor={`${formId}-price-fixed`} className="text-xs font-bold text-emerald-600 dark:text-emerald-400 mb-1 block">
+                      Precio de Venta (RD$) *
+                    </label>
+                    <input
+                      id={`${formId}-price-fixed`}
+                      type="number"
+                      min={0}
+                      step={1}
+                      value={priceInput}
+                      onChange={(e) => setPriceInput(parseFloat(e.target.value) || 0)}
+                      className="input-field text-base font-black text-emerald-600 dark:text-emerald-400 border-emerald-500/40 focus:border-emerald-500"
+                    />
+                    <span className="text-[10px] text-muted-foreground mt-1 block font-medium">
+                      Precio de venta final que pagará el cliente
+                    </span>
+                  </div>
+                )}
 
-              {discountType === 'amount' && (
-                <div>
-                  <label htmlFor={`${formId}-price-amount`} className="text-xs font-bold text-muted-foreground mb-1 block">
-                    Monto de Descuento en RD$
-                  </label>
-                  <input
-                    id={`${formId}-price-amount`}
-                    type="number"
-                    min={0}
-                    step={5}
-                    value={amountInput}
-                    onChange={(e) => setAmountInput(parseFloat(e.target.value) || 0)}
-                    className="input-field text-base font-black text-primary"
-                  />
-                </div>
-              )}
+                {discountType === 'percent' && (
+                  <div>
+                    <label htmlFor={`${formId}-price-percent`} className="text-xs font-bold text-emerald-600 dark:text-emerald-400 mb-1 block">
+                      Porcentaje de Descuento (%)
+                    </label>
+                    <input
+                      id={`${formId}-price-percent`}
+                      type="number"
+                      min={0}
+                      max={100}
+                      step={0.5}
+                      value={percentInput}
+                      onChange={(e) => setPercentInput(parseFloat(e.target.value) || 0)}
+                      className="input-field text-base font-black text-emerald-600 dark:text-emerald-400 border-emerald-500/40"
+                    />
+                    <span className="text-[10px] text-muted-foreground mt-1 block font-medium">
+                      Precio de Venta calculado: RD$ {finalPrice.toFixed(2)}
+                    </span>
+                  </div>
+                )}
 
-              {/* Real-time Summary Cards */}
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="bg-card p-2.5 rounded-lg border border-border/80">
-                  <span className="text-[10px] text-muted-foreground font-bold block">Precio Normal</span>
-                  <span className="font-extrabold text-foreground">RD$ {normalPrice.toFixed(2)}</span>
+                {discountType === 'amount' && (
+                  <div>
+                    <label htmlFor={`${formId}-price-amount`} className="text-xs font-bold text-emerald-600 dark:text-emerald-400 mb-1 block">
+                      Monto de Descuento en RD$
+                    </label>
+                    <input
+                      id={`${formId}-price-amount`}
+                      type="number"
+                      min={0}
+                      step={5}
+                      value={amountInput}
+                      onChange={(e) => setAmountInput(parseFloat(e.target.value) || 0)}
+                      className="input-field text-base font-black text-emerald-600 dark:text-emerald-400 border-emerald-500/40"
+                    />
+                    <span className="text-[10px] text-muted-foreground mt-1 block font-medium">
+                      Precio de Venta calculado: RD$ {finalPrice.toFixed(2)}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Real-time Financial Breakdown Cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs pt-2 border-t border-border/50">
+                <div className="bg-card p-3 rounded-xl border border-border/80">
+                  <span className="text-[10px] text-muted-foreground font-bold block uppercase">Precio Costo</span>
+                  <span className="font-extrabold text-foreground text-sm">RD$ {totalCost.toFixed(2)}</span>
                 </div>
-                <div className="bg-card p-2.5 rounded-lg border border-border/80">
-                  <span className="text-[10px] text-muted-foreground font-bold block">Precio Combo</span>
-                  <span className="font-black text-primary">RD$ {finalPrice.toFixed(2)}</span>
+                <div className="bg-card p-3 rounded-xl border border-border/80">
+                  <span className="text-[10px] text-emerald-600 font-bold block uppercase">Precio de Venta</span>
+                  <span className="font-black text-emerald-600 text-sm">RD$ {finalPrice.toFixed(2)}</span>
                 </div>
-                <div className="bg-card p-2.5 rounded-lg border border-border/80">
-                  <span className="text-[10px] text-emerald-600 font-bold block">Ahorro Cliente</span>
-                  <span className="font-extrabold text-emerald-600">
-                    RD$ {savingsAmount.toFixed(2)} ({savingsPercent.toFixed(1)}%)
+                <div className="bg-card p-3 rounded-xl border border-border/80">
+                  <span className="text-[10px] text-purple-600 font-bold block uppercase">Ganancia Neta</span>
+                  <span className="font-extrabold text-purple-600 text-sm">
+                    RD$ {(finalPrice - totalCost).toFixed(2)}
                   </span>
                 </div>
-                <div className="bg-card p-2.5 rounded-lg border border-border/80">
-                  <span className="text-[10px] text-purple-600 font-bold block">Margen Ganancia</span>
-                  <span className="font-extrabold text-purple-600">{profitMargin.toFixed(1)}%</span>
+                <div className="bg-card p-3 rounded-xl border border-border/80">
+                  <span className="text-[10px] text-purple-600 font-bold block uppercase">Margen Ganancia %</span>
+                  <span className="font-extrabold text-purple-600 text-sm">{profitMargin.toFixed(1)}%</span>
                 </div>
               </div>
             </div>

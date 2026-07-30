@@ -54,28 +54,38 @@ export default function ComboDetailModal({
         {/* Body */}
         <div className="p-6 space-y-6 overflow-y-auto max-h-[75vh] scrollbar-thin">
           {/* Summary Badges */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
-            <div className="p-3 bg-secondary/40 rounded-xl border border-border/60">
-              <span className="text-[10px] font-bold text-muted-foreground block uppercase">Precio Combo</span>
-              <span className="text-base font-black text-primary">{formatCurrency(combo.price)}</span>
-            </div>
-            <div className="p-3 bg-secondary/40 rounded-xl border border-border/60">
-              <span className="text-[10px] font-bold text-muted-foreground block uppercase">Precio Normal</span>
-              <span className="text-sm font-extrabold line-through text-muted-foreground">
-                {formatCurrency(combo.normalPrice)}
-              </span>
-            </div>
-            <div className="p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
-              <span className="text-[10px] font-bold text-emerald-600 block uppercase">Ahorro Cliente</span>
-              <span className="text-sm font-black text-emerald-600">
-                {formatCurrency(combo.savingsAmount)} (-{combo.savingsPercent.toFixed(1)}%)
-              </span>
-            </div>
-            <div className="p-3 bg-purple-500/10 rounded-xl border border-purple-500/20">
-              <span className="text-[10px] font-bold text-purple-600 block uppercase">Margen Ganancia</span>
-              <span className="text-sm font-black text-purple-600">{combo.marginPercent.toFixed(1)}%</span>
-            </div>
-          </div>
+          {(() => {
+            const costVal = combo.totalCost ?? combo.items.reduce((s, i) => s + (i.costPrice || 0) * i.quantity, 0);
+            const profitVal = combo.price - costVal;
+            return (
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-center">
+                <div className="p-3 bg-secondary/40 rounded-xl border border-border/60">
+                  <span className="text-[10px] font-bold text-muted-foreground block uppercase">Precio Costo</span>
+                  <span className="text-sm font-black text-foreground">{formatCurrency(costVal)}</span>
+                </div>
+                <div className="p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
+                  <span className="text-[10px] font-bold text-emerald-600 block uppercase">Precio Venta</span>
+                  <span className="text-sm font-black text-emerald-600">{formatCurrency(combo.price)}</span>
+                </div>
+                <div className="p-3 bg-secondary/40 rounded-xl border border-border/60">
+                  <span className="text-[10px] font-bold text-muted-foreground block uppercase">Precio Normal</span>
+                  <span className="text-xs font-extrabold line-through text-muted-foreground">
+                    {formatCurrency(combo.normalPrice)}
+                  </span>
+                </div>
+                <div className="p-3 bg-purple-500/10 rounded-xl border border-purple-500/20">
+                  <span className="text-[10px] font-bold text-purple-600 block uppercase">Ganancia Neta</span>
+                  <span className="text-xs font-black text-purple-600">{formatCurrency(profitVal)} ({combo.marginPercent.toFixed(1)}%)</span>
+                </div>
+                <div className="p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
+                  <span className="text-[10px] font-bold text-emerald-600 block uppercase">Ahorro Cliente</span>
+                  <span className="text-xs font-black text-emerald-600">
+                    {formatCurrency(combo.savingsAmount)} (-{combo.savingsPercent.toFixed(1)}%)
+                  </span>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Description */}
           {combo.description && (
@@ -96,9 +106,12 @@ export default function ComboDetailModal({
                   <tr>
                     <th className="p-2.5">Producto</th>
                     <th className="p-2.5">SKU</th>
-                    <th className="p-2.5 text-center">Cantidad en Combo</th>
+                    <th className="p-2.5 text-center">Cantidad</th>
                     <th className="p-2.5 text-center">Stock Actual</th>
-                    <th className="p-2.5 text-right">Subtotal</th>
+                    <th className="p-2.5 text-right">Costo Unit.</th>
+                    <th className="p-2.5 text-right">Venta Unit.</th>
+                    <th className="p-2.5 text-right">Subtotal Costo</th>
+                    <th className="p-2.5 text-right">Subtotal Venta</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/60">
@@ -120,7 +133,10 @@ export default function ComboDetailModal({
                             <span className="text-emerald-600">{stock}</span>
                           )}
                         </td>
-                        <td className="p-2.5 text-right font-black">RD$ {item.subtotal.toFixed(2)}</td>
+                        <td className="p-2.5 text-right font-semibold text-muted-foreground">RD$ {item.costPrice.toFixed(2)}</td>
+                        <td className="p-2.5 text-right font-semibold text-emerald-600 dark:text-emerald-400">RD$ {item.unitPrice.toFixed(2)}</td>
+                        <td className="p-2.5 text-right font-bold text-slate-600 dark:text-slate-300">RD$ {(item.costPrice * item.quantity).toFixed(2)}</td>
+                        <td className="p-2.5 text-right font-black text-foreground">RD$ {item.subtotal.toFixed(2)}</td>
                       </tr>
                     );
                   })}

@@ -27,6 +27,15 @@ export function saveStoredProducts(products: ProductItem[]): void {
 }
 
 export function updateProductStockInStore(productIdOrSku: string, deltaQty: number): ProductItem[] {
+  return updateProductPurchaseDataInStore(productIdOrSku, deltaQty);
+}
+
+export function updateProductPurchaseDataInStore(
+  productIdOrSku: string,
+  deltaQty: number,
+  newCostPrice?: number,
+  newSalePrice?: number
+): ProductItem[] {
   const products = getStoredProducts();
   const updated = products.map((p) => {
     if (p.id === productIdOrSku || p.sku === productIdOrSku || p.barcode === productIdOrSku) {
@@ -39,6 +48,8 @@ export function updateProductStockInStore(productIdOrSku: string, deltaQty: numb
         ...p,
         currentStock: newStock,
         stockStatus,
+        ...(newCostPrice !== undefined && newCostPrice > 0 ? { costPrice: newCostPrice } : {}),
+        ...(newSalePrice !== undefined && newSalePrice > 0 ? { salePrice: newSalePrice } : {}),
       };
     }
     return p;
@@ -46,3 +57,4 @@ export function updateProductStockInStore(productIdOrSku: string, deltaQty: numb
   saveStoredProducts(updated);
   return updated;
 }
+

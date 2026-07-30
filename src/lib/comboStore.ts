@@ -20,8 +20,9 @@ export interface Combo {
   barcode: string;
   description: string;
   category: string;
-  price: number;
-  normalPrice: number;
+  price: number; // Precio Venta del Combo
+  totalCost?: number; // Precio Costo Total del Combo (componentes)
+  normalPrice: number; // Precio Normal Suministros
   discountType: PricingMode;
   discountValue: number;
   savingsAmount: number;
@@ -72,6 +73,7 @@ export const DEFAULT_COMBOS: Combo[] = [
     description: 'Desayuno completo con Pan de Agua, Huevos x12, Jugo de Naranja y Leche Evaporada.',
     category: 'Desayunos & Ofertas',
     price: 399,
+    totalCost: 260,
     normalPrice: 467,
     discountType: 'fixed',
     discountValue: 399,
@@ -107,6 +109,7 @@ export const DEFAULT_COMBOS: Combo[] = [
     description: 'Paquete de despensa esencial con Arroz Selecto 5lb, Habichuelas Negras, Aceite y Azúcar.',
     category: 'Despensa',
     price: 999,
+    totalCost: 874,
     normalPrice: 1195,
     discountType: 'percent',
     discountValue: 16.4,
@@ -142,6 +145,7 @@ export const DEFAULT_COMBOS: Combo[] = [
     description: 'Ahorro especial en Detergente Líquido y Papel Higiénico para el hogar.',
     category: 'Hogar & Limpieza',
     price: 820,
+    totalCost: 666,
     normalPrice: 960,
     discountType: 'amount',
     discountValue: 140,
@@ -175,6 +179,7 @@ export const DEFAULT_COMBOS: Combo[] = [
     description: 'Combina tus papitas Lay\'s preferidas con Jugo de Naranja y Yogur Griego.',
     category: 'Meriendas',
     price: 415,
+    totalCost: 349,
     normalPrice: 490,
     discountType: 'percent',
     discountValue: 15,
@@ -254,7 +259,13 @@ export function getCombos(): Combo[] {
       return DEFAULT_COMBOS;
     }
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : DEFAULT_COMBOS;
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      return parsed.map((c: Combo) => ({
+        ...c,
+        totalCost: c.totalCost ?? (c.items ? c.items.reduce((s, i) => s + (i.costPrice || 0) * (i.quantity || 1), 0) : 0),
+      }));
+    }
+    return DEFAULT_COMBOS;
   } catch {
     return DEFAULT_COMBOS;
   }
