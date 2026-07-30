@@ -1,14 +1,8 @@
 import React, { useState } from 'react';
 import { Minus, Plus, Trash2, User, Search, PlusCircle, CreditCard, Info } from 'lucide-react';
 import type { CartItem, Customer } from './POSTerminal';
-
-const mockCustomers: Customer[] = [
-  { id: 'cust-001', name: 'Rosa Martínez', phone: '809-555-0142', credit: 5000 },
-  { id: 'cust-002', name: 'Pedro Sánchez', phone: '829-555-0287', credit: 12000 },
-  { id: 'cust-003', name: 'María Torres', phone: '849-555-0398', credit: 2500 },
-  { id: 'cust-004', name: 'Fernando Díaz', phone: '809-555-0511', credit: 8000 },
-  { id: 'cust-005', name: 'Josefa Guerrero', phone: '829-555-0623', credit: 3500 },
-];
+import { getPosCustomers } from '@/lib/posCustomers';
+import PosAddCustomerModal from './PosAddCustomerModal';
 
 interface CartPanelProps {
   cart: CartItem[];
@@ -35,20 +29,16 @@ export default function CartPanel({
   customer,
   onSetCustomer,
   onUpdateQty,
-  onUpdateDiscount,
   onRemove,
-  globalDiscount,
-  onSetGlobalDiscount,
-  subtotal,
   taxTotal,
-  globalDiscountAmount,
   total,
   fiscalEnabled = true,
   onToggleFiscal,
   searchQuery = '',
   onSearchChange,
 }: CartPanelProps) {
-  const [editingDiscountId, setEditingDiscountId] = useState<string | null>(null);
+  const [customers, setCustomers] = useState<Customer[]>(() => getPosCustomers());
+  const [addCustomerOpen, setAddCustomerOpen] = useState(false);
 
   const fmt = (v: number) =>
     `RD$ ${v.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -64,19 +54,20 @@ export default function CartPanel({
           <div className="relative flex-1">
             <User size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
             <select
-              value={customer?.id || 'generic'}
+              value={customer?.id || ''}
               onChange={(e) => {
                 const val = e.target.value;
-                if (val === 'generic') onSetCustomer(null);
-                else {
-                  const found = mockCustomers.find((c) => c.id === val);
-                  if (found) onSetCustomer(found);
+                if (!val) {
+                  onSetCustomer(null);
+                  return;
                 }
+                const found = customers.find((c) => c.id === val);
+                if (found) onSetCustomer(found);
               }}
               className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl pl-8 pr-3 h-10 text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 truncate"
             >
-              <option value="generic">Cliente Contado</option>
-              {mockCustomers.map((c) => (
+              <option value="">Seleccionar cliente...</option>
+              {customers.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name} ({c.phone})
                 </option>
@@ -85,6 +76,7 @@ export default function CartPanel({
           </div>
           <button
             type="button"
+            onClick={() => setAddCustomerOpen(true)}
             className="w-10 h-10 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center font-bold flex-shrink-0 transition-colors shadow-2xs"
             title="Agregar nuevo cliente"
           >
@@ -165,13 +157,11 @@ export default function CartPanel({
         ) : (
           cart.map((item) => (
             <div key={item.id} className="grid grid-cols-12 gap-2 px-4 py-3 items-center hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-              {/* Product Info */}
               <div className="col-span-5 min-w-0">
                 <p className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 truncate">{item.name}</p>
                 <p className="text-[11px] font-mono text-slate-400 truncate">{item.sku}</p>
               </div>
 
-              {/* Quantity controls */}
               <div className="col-span-3 flex items-center justify-center gap-1">
                 <button
                   type="button"
@@ -196,7 +186,6 @@ export default function CartPanel({
                 </button>
               </div>
 
-              {/* Line Subtotal */}
               <div className="col-span-3 text-right">
                 <p className="text-xs sm:text-sm font-black tabular-nums text-slate-900 dark:text-white">
                   {fmt(item.price * item.qty * (1 - item.discount / 100))}
@@ -204,7 +193,6 @@ export default function CartPanel({
                 <p className="text-[10px] text-slate-400 font-medium">{fmt(item.price)} c/u</p>
               </div>
 
-              {/* Delete Button */}
               <div className="col-span-1 text-center">
                 <button
                   type="button"
@@ -261,6 +249,16 @@ export default function CartPanel({
           </div>
         </div>
       </div>
+
+      {addCustomerOpen && (
+        <PosAddCustomerModal
+          onClose={() => setAddCustomerOpen(false)}
+          onCreated={(c) => {
+            setCustomers(getPosCustomers());
+            onSetCustomer(c);
+          }}
+        />
+      )}
     </div>
   );
 }
