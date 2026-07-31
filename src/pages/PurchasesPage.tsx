@@ -1,8 +1,13 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
-import { ShoppingBag, RotateCcw, Plus, Search, Filter, Download, Eye, Edit2, Trash2, X, PackagePlus, Check, CheckCircle2, ShoppingCart, Minus } from 'lucide-react';
+import { ShoppingBag, RotateCcw, Plus, Search, Filter, Download, Eye, Edit2, Trash2, X, PackagePlus, Check, CheckCircle2, ShoppingCart, Minus, Package } from 'lucide-react';
 import { exportTableToPdf, formatMoneyPdf } from '@/lib/exportPdf';
-import { getStoredProducts, updateProductStockInStore, updateProductPurchaseDataInStore, ProductItem } from '@/lib/productStore';
+import {
+  addProductToStore,
+  getStoredProducts,
+  updateProductPurchaseDataInStore,
+  ProductItem,
+} from '@/lib/productStore';
 import { toast } from 'sonner';
 
 interface Purchase {
@@ -86,15 +91,28 @@ export default function PurchasesPage() {
 
   // Modal for Adding Products
   const [showProductModal, setShowProductModal] = useState(false);
+  const [modalTab, setModalTab] = useState<'catalog' | 'new'>('catalog');
   const [modalSearch, setModalSearch] = useState('');
   const [selectedProduct, setSelectedProduct] = useState<ProductItem | null>(null);
   const [modalQty, setModalQty] = useState<number>(1);
   const [modalPrice, setModalPrice] = useState<number>(0); // Precio Costo
   const [modalSalePrice, setModalSalePrice] = useState<number>(0); // Precio Venta
-  const [customName, setCustomName] = useState('');
   const [lastAddedNotice, setLastAddedNotice] = useState<string | null>(null);
+  const [catalogVersion, setCatalogVersion] = useState(0);
 
-  const systemProducts = getStoredProducts();
+  // Formulario producto nuevo
+  const [newName, setNewName] = useState('');
+  const [newSku, setNewSku] = useState('');
+  const [newBarcode, setNewBarcode] = useState('');
+  const [newCategory, setNewCategory] = useState('General');
+  const [newUnit, setNewUnit] = useState('Unidad');
+  const [newTax, setNewTax] = useState(18);
+
+  const systemProducts = useMemo(() => getStoredProducts(), [catalogVersion, showProductModal]);
+  const categories = useMemo(
+    () => Array.from(new Set(systemProducts.map((p) => p.category).filter(Boolean))).sort(),
+    [systemProducts]
+  );
 
   const filteredPurchases = purchasesList.filter(p =>
     p.code.toLowerCase().includes(search.toLowerCase()) ||
@@ -135,46 +153,119 @@ export default function PurchasesPage() {
     toast.info('Producto removido de la orden');
   };
 
-  const handleAddProductToPurchase = (shouldCloseModal = false) => {
-    if (!selectedProduct && !customName.trim()) {
-      toast.error('Selecciona un producto del catálogo o escribe un nombre');
-      return;
-    }
+  const resetModalForm = () => {
+    setSelectedProduct(null);
+    setModalQty(1);
+    setModalPrice(0);
+    setModalSalePrice(0);
+    setModalSearch('');
+    setNewName('');
+    setNewSku('');
+    setNewBarcode('');
+    setNewCategory('General');
+    setNewUnit('Unidad');
+    setNewTax(18);
+  };
 
+  const handleAddProductToPurchase = (shouldCloseModal = false) => {
     if (modalQty <= 0) {
       toast.error('Ingresa una cantidad válida mayor a 0');
       return;
     }
 
-    const itemName = selectedProduct ? selectedProduct.name : customName.trim();
-    const itemCostPrice = modalPrice > 0 ? modalPrice : (selectedProduct ? (selectedProduct.costPrice || selectedProduct.salePrice) : 100);
-    const itemSalePrice = modalSalePrice > 0 ? modalSalePrice : (selectedProduct ? selectedProduct.salePrice : Math.round(itemCostPrice * 1.3));
+    let product: ProductItem | null = selectedProduct;
+    let createdNew = false;
+
+    if (modalTab === 'new' || (!product && modalTab === 'catalog')) {
+      if (modalTab === 'new') {
+        if (!newName.trim()) {
+          toast.error('Escribe el nombre del producto');
+          return;
+        }
+        if (!newSku.trim()) {
+          toast.error('Escribe un SKU para el producto');
+          return;
+        }
+        if (modalPrice <= 0) {
+          toast.error('Ingresa el precio de compra (costo)');
+          return;
+        }
+        if (modalSalePrice <= 0) {
+          toast.error('Ingresa el precio de venta');
+          return;
+        }
+        const skuExists = systemProducts.some(
+          (p) => p.sku.toLowerCase() === newSku.trim().toLowerCase()
+        );
+        if (skuExists) {
+          toast.error('Ya existe un producto con ese SKU');
+          return;
+        }
+
+        product = addProductToStore({
+          name: newName.trim(),
+          sku: newSku.trim().toUpperCase(),
+          barcode: newBarcode.trim() || `GEN-${Date.now().toString().slice(-8)}`,
+          category: newCategory.trim() || 'General',
+          brand: '',
+          unit: newUnit.trim() || 'Unidad',
+          supplier,
+          costPrice: modalPrice,
+          salePrice: modalSalePrice,
+          wholesalePrice: modalSalePrice,
+          tax: newTax,
+          minStock: 10,
+          currentStock: 0,
+          image: '',
+          expiryDate: null,
+          warranty: 'N/A',
+          status: 'active',
+        });
+        createdNew = true;
+        setCatalogVersion((v) => v + 1);
+      }
+    }
+
+    if (!product) {
+      toast.error('Selecciona un producto del catálogo o crea uno nuevo');
+      return;
+    }
+
+    const itemCostPrice = modalPrice > 0 ? modalPrice : product.costPrice || 0;
+    const itemSalePrice = modalSalePrice > 0 ? modalSalePrice : product.salePrice || 0;
+
+    if (itemCostPrice <= 0) {
+      toast.error('Ingresa el precio de compra (costo)');
+      return;
+    }
+    if (itemSalePrice <= 0) {
+      toast.error('Ingresa el precio de venta');
+      return;
+    }
 
     const newItem: PurchaseLineItem = {
       id: `item-${Date.now()}`,
-      productId: selectedProduct ? selectedProduct.id : `custom-${Date.now()}`,
-      name: itemName,
-      sku: selectedProduct ? selectedProduct.sku : `CUSTOM-${Date.now().toString().slice(-4)}`,
+      productId: product.id,
+      name: product.name,
+      sku: product.sku,
       qty: modalQty,
       price: itemCostPrice,
       salePrice: itemSalePrice,
-      taxPercent: selectedProduct ? (selectedProduct.tax ?? 18) : 18,
+      taxPercent: product.tax ?? newTax,
     };
 
-    setPurchaseItems(prev => [...prev, newItem]);
-    
-    // In-modal visual confirmation feedback
-    const noticeText = `✓ Añadido: ${itemName} (${modalQty} und) — Costo: RD$ ${itemCostPrice.toLocaleString('es-DO')} | Venta: RD$ ${itemSalePrice.toLocaleString('es-DO')}`;
-    setLastAddedNotice(noticeText);
-    toast.success(`Añadido: ${itemName} (${modalQty} und)`);
+    setPurchaseItems((prev) => [...prev, newItem]);
 
-    // Reset inputs for next product WITHOUT closing modal
-    setSelectedProduct(null);
-    setCustomName('');
-    setModalQty(1);
-    setModalPrice(0);
-    setModalSalePrice(0);
-    setModalSearch('');
+    const noticeText = `✓ ${createdNew ? 'Creado y añadido' : 'Añadido'}: ${product.name} (${modalQty} und) — Compra: RD$ ${itemCostPrice.toLocaleString('es-DO')} | Venta: RD$ ${itemSalePrice.toLocaleString('es-DO')}`;
+    setLastAddedNotice(noticeText);
+    toast.success(
+      createdNew
+        ? `Producto nuevo "${product.name}" creado y añadido a la compra`
+        : `Añadido: ${product.name} (${modalQty} und)`
+    );
+
+    resetModalForm();
+    if (createdNew) setModalTab('catalog');
 
     if (shouldCloseModal) {
       setShowProductModal(false);
@@ -188,11 +279,12 @@ export default function PurchasesPage() {
     }
 
     // 1. Update Inventory Stock and Prices in catalog
-    purchaseItems.forEach(item => {
-      if (item.productId && !item.productId.startsWith('custom-')) {
+    purchaseItems.forEach((item) => {
+      if (item.productId) {
         updateProductPurchaseDataInStore(item.productId, item.qty, item.price, item.salePrice);
       }
     });
+    setCatalogVersion((v) => v + 1);
 
     // 2. Add to purchases list
     const newPurchase: Purchase = {
@@ -326,6 +418,8 @@ export default function PurchasesPage() {
                     type="button"
                     onClick={() => {
                       setLastAddedNotice(null);
+                      resetModalForm();
+                      setModalTab('catalog');
                       setShowProductModal(true);
                     }}
                     className="btn-primary flex items-center gap-2 text-xs py-2 px-3.5 shadow-md"
@@ -341,8 +435,14 @@ export default function PurchasesPage() {
                       <tr className="border-b border-border bg-secondary/30">
                         <th className="text-left py-2.5 px-3 text-muted-foreground font-semibold">Producto</th>
                         <th className="text-center py-2.5 px-3 text-muted-foreground font-semibold">Cantidad</th>
-                        <th className="text-right py-2.5 px-3 text-muted-foreground font-semibold">Precio Costo (RD$)</th>
-                        <th className="text-right py-2.5 px-3 text-muted-foreground font-semibold">Precio Venta (RD$)</th>
+                        <th className="text-right py-2.5 px-3 text-muted-foreground font-semibold">
+                          Precio compra
+                          <span className="block text-[10px] font-normal normal-case">editable</span>
+                        </th>
+                        <th className="text-right py-2.5 px-3 text-muted-foreground font-semibold">
+                          Precio venta
+                          <span className="block text-[10px] font-normal normal-case text-emerald-600">editable</span>
+                        </th>
                         <th className="text-center py-2.5 px-3 text-muted-foreground font-semibold">Margen</th>
                         <th className="text-right py-2.5 px-3 text-muted-foreground font-semibold">Subtotal</th>
                         <th className="text-center py-2.5 px-3"></th>
@@ -376,24 +476,32 @@ export default function PurchasesPage() {
                                 />
                               </td>
                               <td className="py-2.5 px-3 text-right">
-                                <input
-                                  type="number"
-                                  min={0}
-                                  step="0.01"
-                                  value={item.price}
-                                  onChange={(e) => handleUpdateLinePrice(item.id, Number(e.target.value))}
-                                  className="input-field w-24 text-right py-1 font-bold tabular-nums"
-                                />
+                                <div className="inline-flex items-center gap-1 justify-end">
+                                  <span className="text-[10px] text-muted-foreground font-semibold">RD$</span>
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    step="0.01"
+                                    value={item.price}
+                                    onChange={(e) => handleUpdateLinePrice(item.id, Number(e.target.value))}
+                                    className="input-field w-28 text-right py-1.5 font-bold tabular-nums"
+                                    title="Precio de compra / costo"
+                                  />
+                                </div>
                               </td>
                               <td className="py-2.5 px-3 text-right">
-                                <input
-                                  type="number"
-                                  min={0}
-                                  step="0.01"
-                                  value={item.salePrice}
-                                  onChange={(e) => handleUpdateLineSalePrice(item.id, Number(e.target.value))}
-                                  className="input-field w-24 text-right py-1 font-bold tabular-nums text-emerald-600 dark:text-emerald-400"
-                                />
+                                <div className="inline-flex items-center gap-1 justify-end">
+                                  <span className="text-[10px] text-emerald-600 font-semibold">RD$</span>
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    step="0.01"
+                                    value={item.salePrice}
+                                    onChange={(e) => handleUpdateLineSalePrice(item.id, Number(e.target.value))}
+                                    className="input-field w-28 text-right py-1.5 font-bold tabular-nums text-emerald-600 dark:text-emerald-400 border-emerald-500/30"
+                                    title="Precio de venta"
+                                  />
+                                </div>
                               </td>
                               <td className="py-2.5 px-3 text-center">
                                 <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-extrabold tabular-nums ${
@@ -505,93 +613,231 @@ export default function PurchasesPage() {
               )}
 
               <div className="p-5 space-y-4 overflow-y-auto flex-1 scrollbar-thin">
-                {/* Search Input */}
-                <div>
-                  <label className="block text-xs font-bold text-muted-foreground mb-1.5">Buscar Producto en Catálogo</label>
-                  <div className="relative">
-                    <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-primary" />
-                    <input
-                      type="text"
-                      placeholder="Escribe para buscar por nombre, SKU o código..."
-                      value={modalSearch}
-                      onChange={(e) => setModalSearch(e.target.value)}
-                      className="input-field pl-10 h-11 text-sm font-medium shadow-2xs"
-                      autoFocus
-                    />
-                  </div>
-                </div>
-
-                {/* System Products Grid / Picker */}
-                <div className="space-y-1.5">
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Productos Encontrados</p>
-                  <div className="max-h-44 overflow-y-auto border border-border rounded-xl divide-y divide-border/60 bg-secondary/10 scrollbar-thin">
-                    {filteredSystemProducts.length === 0 ? (
-                      <div className="p-4 text-center text-xs text-muted-foreground">
-                        No se encontraron productos en catálogo. Escribe un nombre abajo para agregar un ítem personalizado.
-                      </div>
-                    ) : (
-                      filteredSystemProducts.map((p) => {
-                        const isSelected = selectedProduct?.id === p.id;
-                        return (
-                          <div
-                            key={p.id}
-                            onClick={() => {
-                              setSelectedProduct(p);
-                              setModalPrice(p.costPrice || p.salePrice);
-                              setModalSalePrice(p.salePrice);
-                              setCustomName('');
-                            }}
-                            className={`p-3 flex items-center justify-between cursor-pointer transition-all ${
-                              isSelected
-                                ? 'bg-primary/15 border-l-4 border-primary text-foreground shadow-2xs'
-                                : 'hover:bg-secondary/60 text-slate-700 dark:text-slate-200'
-                            }`}
-                          >
-                            <div className="min-w-0 flex-1 pr-2">
-                              <p className="text-xs font-extrabold truncate">{p.name}</p>
-                              <p className="text-[11px] font-mono text-muted-foreground">{p.sku} · Stock actual: <strong className="text-foreground">{p.currentStock}</strong> {p.unit}</p>
-                            </div>
-                            <div className="text-right flex-shrink-0">
-                              <p className="text-xs font-black tabular-nums text-primary">
-                                Costo actual: RD$ {(p.costPrice || p.salePrice).toLocaleString()}
-                              </p>
-                              <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold">Venta actual: RD$ {p.salePrice.toLocaleString()}</span>
-                            </div>
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                </div>
-
-                {/* Custom Product Entry (Alternative) */}
-                <div className="pt-2 border-t border-border">
-                  <label className="block text-xs font-bold text-muted-foreground mb-1.5">O Crear Ítem no registrado en inventario</label>
-                  <input
-                    type="text"
-                    placeholder="Nombre del nuevo producto o ítem personalizado..."
-                    value={customName}
-                    onChange={(e) => {
-                      setCustomName(e.target.value);
+                {/* Tabs: Catálogo / Nuevo */}
+                <div className="flex gap-1 p-1 bg-secondary rounded-xl w-fit">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setModalTab('catalog');
                       setSelectedProduct(null);
                     }}
-                    className="input-field text-sm h-10"
-                  />
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      modalTab === 'catalog'
+                        ? 'bg-card text-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    <Search size={14} />
+                    Catálogo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setModalTab('new');
+                      setSelectedProduct(null);
+                      setModalSearch('');
+                    }}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      modalTab === 'new'
+                        ? 'bg-card text-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    <Package size={14} />
+                    Producto nuevo
+                  </button>
                 </div>
 
-                {/* Quantity & Price Section */}
+                {modalTab === 'catalog' && (
+                  <>
+                    <div>
+                      <label className="block text-xs font-bold text-muted-foreground mb-1.5">
+                        Buscar en catálogo
+                      </label>
+                      <div className="relative">
+                        <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-primary" />
+                        <input
+                          type="text"
+                          placeholder="Nombre, SKU o código de barras…"
+                          value={modalSearch}
+                          onChange={(e) => setModalSearch(e.target.value)}
+                          className="input-field pl-10 h-11 text-sm font-medium"
+                          autoFocus
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                          Productos ({filteredSystemProducts.length})
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setModalTab('new')}
+                          className="text-[11px] font-bold text-primary hover:underline"
+                        >
+                          + Crear producto nuevo
+                        </button>
+                      </div>
+                      <div className="max-h-44 overflow-y-auto border border-border rounded-xl divide-y divide-border/60 bg-secondary/10 scrollbar-thin">
+                        {filteredSystemProducts.length === 0 ? (
+                          <div className="p-4 text-center text-xs text-muted-foreground space-y-2">
+                            <p>No se encontraron productos.</p>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setModalTab('new');
+                                if (modalSearch.trim()) setNewName(modalSearch.trim());
+                              }}
+                              className="text-primary font-bold hover:underline"
+                            >
+                              Crear “{modalSearch || 'nuevo producto'}”
+                            </button>
+                          </div>
+                        ) : (
+                          filteredSystemProducts.map((p) => {
+                            const isSelected = selectedProduct?.id === p.id;
+                            return (
+                              <div
+                                key={p.id}
+                                onClick={() => {
+                                  setSelectedProduct(p);
+                                  setModalPrice(p.costPrice || 0);
+                                  setModalSalePrice(p.salePrice || 0);
+                                }}
+                                className={`p-3 flex items-center justify-between cursor-pointer transition-all ${
+                                  isSelected
+                                    ? 'bg-primary/15 border-l-4 border-primary text-foreground'
+                                    : 'hover:bg-secondary/60'
+                                }`}
+                              >
+                                <div className="min-w-0 flex-1 pr-2">
+                                  <p className="text-xs font-extrabold truncate">{p.name}</p>
+                                  <p className="text-[11px] font-mono text-muted-foreground">
+                                    {p.sku} · Stock:{' '}
+                                    <strong className="text-foreground">{p.currentStock}</strong> {p.unit}
+                                  </p>
+                                </div>
+                                <div className="text-right flex-shrink-0 space-y-0.5">
+                                  <p className="text-xs font-black tabular-nums text-foreground">
+                                    Compra: RD$ {(p.costPrice || 0).toLocaleString('es-DO')}
+                                  </p>
+                                  <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold tabular-nums">
+                                    Venta: RD$ {(p.salePrice || 0).toLocaleString('es-DO')}
+                                  </p>
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {modalTab === 'new' && (
+                  <div className="space-y-3 rounded-2xl border border-border bg-secondary/20 p-4">
+                    <div className="flex items-center gap-2 text-sm font-bold text-foreground">
+                      <Package size={16} className="text-primary" />
+                      Registrar producto nuevo en catálogo
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="sm:col-span-2">
+                        <label className="block text-xs font-bold text-muted-foreground mb-1">
+                          Nombre <span className="text-danger">*</span>
+                        </label>
+                        <input
+                          className="input-field h-10 text-sm"
+                          placeholder="Ej. Leche Evaporada 410g"
+                          value={newName}
+                          onChange={(e) => setNewName(e.target.value)}
+                          autoFocus
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-muted-foreground mb-1">
+                          SKU <span className="text-danger">*</span>
+                        </label>
+                        <input
+                          className="input-field h-10 text-sm font-mono uppercase"
+                          placeholder="Ej. LEC-EVA-410"
+                          value={newSku}
+                          onChange={(e) => setNewSku(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-muted-foreground mb-1">
+                          Código de barras
+                        </label>
+                        <input
+                          className="input-field h-10 text-sm font-mono"
+                          placeholder="Opcional"
+                          value={newBarcode}
+                          onChange={(e) => setNewBarcode(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-muted-foreground mb-1">Categoría</label>
+                        <input
+                          className="input-field h-10 text-sm"
+                          list="purchase-categories"
+                          value={newCategory}
+                          onChange={(e) => setNewCategory(e.target.value)}
+                        />
+                        <datalist id="purchase-categories">
+                          {categories.map((c) => (
+                            <option key={c} value={c} />
+                          ))}
+                        </datalist>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-xs font-bold text-muted-foreground mb-1">Unidad</label>
+                          <select
+                            className="input-field h-10 text-sm"
+                            value={newUnit}
+                            onChange={(e) => setNewUnit(e.target.value)}
+                          >
+                            {['Unidad', 'Libra', 'Kg', 'Caja', 'Paquete', 'Galón', 'Litro'].map((u) => (
+                              <option key={u} value={u}>
+                                {u}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-muted-foreground mb-1">ITBIS %</label>
+                          <select
+                            className="input-field h-10 text-sm"
+                            value={newTax}
+                            onChange={(e) => setNewTax(Number(e.target.value))}
+                          >
+                            <option value={0}>0%</option>
+                            <option value={16}>16%</option>
+                            <option value={18}>18%</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Quantity & editable prices */}
                 <div className="bg-secondary/30 p-4 rounded-2xl border border-border space-y-3">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                    Cantidad y precios (editables)
+                  </p>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    {/* Quantity with Increment Buttons */}
                     <div>
                       <label className="block text-xs font-bold text-foreground mb-1">
-                        Cantidad Recibida <span className="text-danger">*</span>
+                        Cantidad <span className="text-danger">*</span>
                       </label>
                       <div className="flex items-center gap-1.5">
                         <button
                           type="button"
                           onClick={() => setModalQty((q) => Math.max(1, q - 1))}
-                          className="w-9 h-10 rounded-xl bg-secondary hover:bg-border flex items-center justify-center font-bold text-foreground"
+                          className="w-9 h-10 rounded-xl bg-secondary hover:bg-border flex items-center justify-center font-bold"
                         >
                           <Minus size={14} />
                         </button>
@@ -605,113 +851,125 @@ export default function PurchasesPage() {
                         <button
                           type="button"
                           onClick={() => setModalQty((q) => q + 1)}
-                          className="w-9 h-10 rounded-xl bg-secondary hover:bg-border flex items-center justify-center font-bold text-foreground"
+                          className="w-9 h-10 rounded-xl bg-secondary hover:bg-border flex items-center justify-center font-bold"
                         >
                           <Plus size={14} />
                         </button>
                       </div>
-                      
-                      {/* Quantity Preset Buttons */}
                       <div className="flex items-center gap-1 mt-1.5">
                         {[1, 5, 10, 24, 50, 100].map((preset) => (
                           <button
                             key={`preset-${preset}`}
                             type="button"
                             onClick={() => setModalQty(preset)}
-                            className="flex-1 py-0.5 text-[10px] font-bold bg-card border border-border hover:bg-primary/10 hover:text-primary rounded-lg transition-colors tabular-nums"
+                            className="flex-1 py-0.5 text-[10px] font-bold bg-card border border-border hover:bg-primary/10 hover:text-primary rounded-lg tabular-nums"
                           >
-                            +{preset}
+                            {preset}
                           </button>
                         ))}
                       </div>
                     </div>
 
-                    {/* Cost Price */}
                     <div>
                       <label className="block text-xs font-bold text-foreground mb-1">
-                        Precio Costo (RD$) <span className="text-danger">*</span>
+                        Precio de compra / costo <span className="text-danger">*</span>
                       </label>
-                      <input
-                        type="number"
-                        min={0}
-                        step="0.01"
-                        value={modalPrice}
-                        onChange={(e) => setModalPrice(Number(e.target.value))}
-                        className="input-field text-base font-black text-right h-10 tabular-nums"
-                      />
-                      {selectedProduct && selectedProduct.costPrice > 0 && (
-                        <span className="text-[10px] text-muted-foreground mt-1 block text-right font-medium">
-                          Anterior: RD$ {selectedProduct.costPrice.toLocaleString()}
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-muted-foreground">
+                          RD$
+                        </span>
+                        <input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          value={modalPrice || ''}
+                          onChange={(e) => setModalPrice(Number(e.target.value))}
+                          placeholder="0.00"
+                          className="input-field text-base font-black text-right h-10 tabular-nums pl-12"
+                        />
+                      </div>
+                      {selectedProduct && (
+                        <span className="text-[10px] text-muted-foreground mt-1 block text-right">
+                          Catálogo: RD$ {(selectedProduct.costPrice || 0).toLocaleString('es-DO')}
                         </span>
                       )}
                     </div>
 
-                    {/* Sale Price */}
                     <div>
                       <label className="block text-xs font-bold text-emerald-600 dark:text-emerald-400 mb-1">
-                        Precio de Venta (RD$) <span className="text-danger">*</span>
+                        Precio de venta <span className="text-danger">*</span>
                       </label>
-                      <input
-                        type="number"
-                        min={0}
-                        step="0.01"
-                        value={modalSalePrice}
-                        onChange={(e) => setModalSalePrice(Number(e.target.value))}
-                        className="input-field text-base font-black text-right h-10 tabular-nums border-emerald-500/50 focus:border-emerald-500 text-emerald-600 dark:text-emerald-400"
-                      />
-                      {selectedProduct && selectedProduct.salePrice > 0 && (
-                        <span className="text-[10px] text-muted-foreground mt-1 block text-right font-medium">
-                          Actual tienda: RD$ {selectedProduct.salePrice.toLocaleString()}
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-emerald-600/70">
+                          RD$
+                        </span>
+                        <input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          value={modalSalePrice || ''}
+                          onChange={(e) => setModalSalePrice(Number(e.target.value))}
+                          placeholder="0.00"
+                          className="input-field text-base font-black text-right h-10 tabular-nums pl-12 border-emerald-500/40 text-emerald-600 dark:text-emerald-400"
+                        />
+                      </div>
+                      {selectedProduct && (
+                        <span className="text-[10px] text-muted-foreground mt-1 block text-right">
+                          Catálogo: RD$ {(selectedProduct.salePrice || 0).toLocaleString('es-DO')}
                         </span>
                       )}
                     </div>
                   </div>
 
-                  {/* Profit Margin Calculator & Presets */}
                   {modalPrice > 0 && (
                     <div className="bg-card p-3 rounded-xl border border-border space-y-2">
                       <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                        <span className="font-bold text-muted-foreground">Calcular Precio Venta por Margen:</span>
+                        <span className="font-bold text-muted-foreground">Sugerir venta por margen:</span>
                         <div className="flex items-center gap-1">
                           {[20, 30, 35, 40, 50].map((pct) => (
                             <button
                               key={`margin-${pct}`}
                               type="button"
                               onClick={() => setModalSalePrice(Math.round(modalPrice * (1 + pct / 100)))}
-                              className="px-2 py-0.5 text-[11px] font-extrabold bg-secondary hover:bg-emerald-500/15 hover:text-emerald-600 dark:hover:text-emerald-400 rounded-md border border-border transition-colors tabular-nums"
+                              className="px-2 py-0.5 text-[11px] font-extrabold bg-secondary hover:bg-emerald-500/15 hover:text-emerald-600 rounded-md border border-border tabular-nums"
                             >
                               +{pct}%
                             </button>
                           ))}
                         </div>
                       </div>
-
                       <div className="pt-2 border-t border-border/50 flex items-center justify-between text-xs">
-                        <div className="flex items-center gap-2">
-                          <span className="text-muted-foreground font-medium">Ganancia por unidad:</span>
-                          <span className={`font-black tabular-nums ${modalSalePrice - modalPrice >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-danger'}`}>
+                        <span className="text-muted-foreground font-medium">
+                          Ganancia/und:{' '}
+                          <strong
+                            className={
+                              modalSalePrice - modalPrice >= 0
+                                ? 'text-emerald-600'
+                                : 'text-danger'
+                            }
+                          >
                             RD$ {(modalSalePrice - modalPrice).toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-muted-foreground font-medium">Margen %:</span>
-                          <span className={`px-2 py-0.5 rounded-lg text-xs font-black tabular-nums ${
+                          </strong>
+                        </span>
+                        <span
+                          className={`px-2 py-0.5 rounded-lg text-xs font-black tabular-nums ${
                             modalSalePrice - modalPrice >= 0
-                              ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
+                              ? 'bg-emerald-500/15 text-emerald-600 border border-emerald-500/30'
                               : 'bg-danger-bg text-danger border border-danger/30'
-                          }`}>
-                            {modalPrice > 0 ? (((modalSalePrice - modalPrice) / modalPrice) * 100).toFixed(1) : 0}%
-                          </span>
-                        </div>
+                          }`}
+                        >
+                          {modalPrice > 0
+                            ? (((modalSalePrice - modalPrice) / modalPrice) * 100).toFixed(1)
+                            : 0}
+                          %
+                        </span>
                       </div>
                     </div>
                   )}
 
-                  {/* Live Item Total Preview */}
-                  {(selectedProduct || customName) && (
+                  {(selectedProduct || (modalTab === 'new' && newName.trim())) && modalPrice > 0 && (
                     <div className="bg-primary/10 border border-primary/20 rounded-xl p-3 flex justify-between items-center text-xs">
-                      <span className="font-bold text-foreground">Importe total para esta compra:</span>
+                      <span className="font-bold text-foreground">Total línea (cantidad × costo):</span>
                       <span className="font-black text-base text-primary tabular-nums">
                         RD$ {(modalQty * modalPrice).toLocaleString('es-DO', { minimumFractionDigits: 2 })}
                       </span>
@@ -720,7 +978,6 @@ export default function PurchasesPage() {
                 </div>
               </div>
 
-              {/* Action Buttons */}
               <div className="p-4 border-t border-border flex flex-wrap items-center justify-between gap-3 bg-secondary/20">
                 <button
                   type="button"
@@ -733,11 +990,15 @@ export default function PurchasesPage() {
                 <button
                   type="button"
                   onClick={() => handleAddProductToPurchase(false)}
-                  disabled={!selectedProduct && !customName.trim()}
+                  disabled={
+                    modalTab === 'catalog'
+                      ? !selectedProduct
+                      : !newName.trim() || !newSku.trim() || modalPrice <= 0 || modalSalePrice <= 0
+                  }
                   className="btn-primary text-xs px-5 py-2.5 font-black flex items-center gap-1.5 shadow-md disabled:opacity-50"
                 >
                   <Plus size={16} />
-                  Añadir y seguir agregando
+                  {modalTab === 'new' ? 'Crear y añadir a la compra' : 'Añadir y seguir agregando'}
                 </button>
               </div>
             </div>

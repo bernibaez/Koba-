@@ -26,6 +26,41 @@ export function saveStoredProducts(products: ProductItem[]): void {
   }
 }
 
+export function addProductToStore(
+  input: Omit<ProductItem, 'id' | 'stockStatus'> & { id?: string }
+): ProductItem {
+  const products = getStoredProducts();
+  const stock = Math.max(0, input.currentStock ?? 0);
+  let stockStatus: ProductItem['stockStatus'] = 'normal';
+  if (stock === 0) stockStatus = 'out';
+  else if (stock <= (input.minStock ?? 10)) stockStatus = 'low';
+
+  const product: ProductItem = {
+    id: input.id ?? `prod-${Date.now()}`,
+    barcode: input.barcode || `GEN-${Date.now().toString().slice(-8)}`,
+    sku: input.sku,
+    name: input.name,
+    category: input.category || 'General',
+    brand: input.brand || '',
+    unit: input.unit || 'Unidad',
+    supplier: input.supplier || '',
+    costPrice: input.costPrice ?? 0,
+    salePrice: input.salePrice ?? 0,
+    wholesalePrice: input.wholesalePrice ?? input.salePrice ?? 0,
+    tax: input.tax ?? 0,
+    minStock: input.minStock ?? 10,
+    currentStock: stock,
+    image: input.image || '',
+    expiryDate: input.expiryDate ?? null,
+    warranty: input.warranty || 'N/A',
+    status: input.status ?? 'active',
+    stockStatus,
+  };
+
+  saveStoredProducts([product, ...products]);
+  return product;
+}
+
 export function updateProductStockInStore(productIdOrSku: string, deltaQty: number): ProductItem[] {
   return updateProductPurchaseDataInStore(productIdOrSku, deltaQty);
 }
