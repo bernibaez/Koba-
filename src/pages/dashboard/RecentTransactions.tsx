@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Eye, ExternalLink, Printer } from 'lucide-react';
+import { Eye, Printer, ExternalLink } from 'lucide-react';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { Link } from 'react-router-dom';
 
@@ -106,13 +106,13 @@ export default function RecentTransactions() {
 
   return (
     <div className="card overflow-hidden">
-      <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+      <div className="flex items-center justify-between px-5 py-3.5 border-b border-border">
         <div>
-          <h3 className="text-base font-semibold text-foreground">Últimas Transacciones</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">Ventas del día — actualizando en tiempo real</p>
+          <h3 className="text-sm font-bold text-foreground">Movimientos de Hoy</h3>
+          <p className="text-[11px] text-muted-foreground mt-0.5">Actualizando en tiempo real</p>
         </div>
         <Link to="/point-of-sale-pos" className="btn-primary text-xs py-1.5 px-3">
-          Nueva Venta
+          + Nueva Venta
         </Link>
       </div>
 
@@ -123,7 +123,7 @@ export default function RecentTransactions() {
               {['Referencia', 'Cliente', 'Cajero', 'Items', 'Total', 'Método', 'Estado', 'Hora', ''].map((col) => (
                 <th
                   key={`col-txn-${col || 'actions'}`}
-                  className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground whitespace-nowrap"
+                  className="text-left px-4 py-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap"
                 >
                   {col}
                 </th>
@@ -140,21 +140,21 @@ export default function RecentTransactions() {
                   onMouseLeave={() => setHoveredRow(null)}
                   className="border-b border-border/50 hover:bg-muted/40 transition-colors"
                 >
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-2.5">
                     <span className="font-mono text-xs font-semibold text-primary">{txn.ref}</span>
                   </td>
-                  <td className="px-4 py-3 text-foreground font-medium whitespace-nowrap">{txn.customer}</td>
-                  <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{txn.cashier}</td>
-                  <td className="px-4 py-3 tabular-nums text-center text-foreground">{txn.items}</td>
-                  <td className="px-4 py-3 tabular-nums font-semibold text-foreground whitespace-nowrap">{txn.total}</td>
-                  <td className="px-4 py-3">
-                    <span className="badge-neutral">{txn.method}</span>
+                  <td className="px-4 py-2.5 text-foreground font-medium whitespace-nowrap text-sm">{txn.customer}</td>
+                  <td className="px-4 py-2.5 text-muted-foreground whitespace-nowrap text-xs">{txn.cashier}</td>
+                  <td className="px-4 py-2.5 tabular-nums text-center text-foreground text-sm">{txn.items}</td>
+                  <td className="px-4 py-2.5 tabular-nums font-semibold text-foreground whitespace-nowrap text-sm">{txn.total}</td>
+                  <td className="px-4 py-2.5">
+                    <span className="badge-neutral text-xs">{txn.method}</span>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-2.5">
                     <StatusBadge variant={s.variant} label={s.label} />
                   </td>
-                  <td className="px-4 py-3 tabular-nums text-muted-foreground text-xs">{txn.time}</td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-2.5 tabular-nums text-muted-foreground text-xs">{txn.time}</td>
+                  <td className="px-4 py-2.5">
                     <div
                       className={`flex items-center gap-1 transition-opacity duration-150 ${
                         hoveredRow === txn.id ? 'opacity-100' : 'opacity-0'
@@ -164,13 +164,13 @@ export default function RecentTransactions() {
                         className="p-1.5 rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
                         title="Ver detalle de factura"
                       >
-                        <Eye size={14} />
+                        <Eye size={13} />
                       </button>
                       <button
                         className="p-1.5 rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
                         title="Imprimir factura"
                       >
-                        <Printer size={14} />
+                        <Printer size={13} />
                       </button>
                     </div>
                   </td>
@@ -182,10 +182,13 @@ export default function RecentTransactions() {
       </div>
 
       <div className="px-5 py-3 border-t border-border flex items-center justify-between">
-        <p className="text-xs text-muted-foreground">Mostrando 8 de 318 transacciones hoy</p>
-        <button className="text-xs text-primary font-medium hover:underline flex items-center gap-1">
-          Ver todas <ExternalLink size={12} />
-        </button>
+        <p className="text-xs text-muted-foreground">Mostrando 8 de 318 movimientos hoy</p>
+        <Link
+          to="/sales"
+          className="text-xs text-primary font-semibold hover:underline flex items-center gap-1"
+        >
+          Ver todos <ExternalLink size={11} />
+        </Link>
       </div>
     </div>
   );
