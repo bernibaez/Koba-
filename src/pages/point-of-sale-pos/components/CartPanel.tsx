@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Minus, Plus, Trash2, User, Search, PlusCircle, CreditCard, Info } from 'lucide-react';
 import type { CartItem, Customer } from './POSTerminal';
-import { getPosCustomers } from '@/lib/posCustomers';
+import { useClientes } from '@/hooks/useClientes';
 import PosAddCustomerModal from './PosAddCustomerModal';
 
 interface CartPanelProps {
@@ -37,8 +37,20 @@ export default function CartPanel({
   searchQuery = '',
   onSearchChange,
 }: CartPanelProps) {
-  const [customers, setCustomers] = useState<Customer[]>(() => getPosCustomers());
+  const { clientes, refetch } = useClientes('');
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [addCustomerOpen, setAddCustomerOpen] = useState(false);
+
+  useEffect(() => {
+    setCustomers(
+      clientes.map((c) => ({
+        id: c.id,
+        name: c.nombre,
+        phone: c.telefono ?? '',
+        credit: Number(c.limite_credito ?? 0),
+      }))
+    );
+  }, [clientes]);
 
   const fmt = (v: number) =>
     `RD$ ${v.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -253,8 +265,8 @@ export default function CartPanel({
       {addCustomerOpen && (
         <PosAddCustomerModal
           onClose={() => setAddCustomerOpen(false)}
-          onCreated={(c) => {
-            setCustomers(getPosCustomers());
+          onCreated={async (c) => {
+            await refetch();
             onSetCustomer(c);
           }}
         />

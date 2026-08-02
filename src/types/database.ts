@@ -418,6 +418,17 @@ export interface Auditoria {
   creado_en: string;
 }
 
+export interface AgenteComercial {
+  id: string;
+  perfil_id: string | null;
+  nombre: string;
+  correo: string | null;
+  telefono: string | null;
+  porcentaje_comision: number;
+  activo: boolean;
+  creado_en?: string;
+}
+
 export const COMPRA_COLUMNS =
   'id, codigo, proveedor_id, sucursal_id, responsable_id, subtotal, monto_impuesto, monto_total, metodo_pago, estado, notas, creado_en, recibido_en' as const;
 
@@ -435,3 +446,6 @@ export const GASTO_COLUMNS =
 
 export const AUDITORIA_COLUMNS =
   'id, usuario_id, nombre_usuario, rol, accion, modulo, detalle, datos_antes, datos_despues, ip, creado_en' as const;
+
+export const AGENTE_COLUMNS =
+  'id, perfil_id, nombre, correo, telefono, porcentaje_comision, activo, creado_en' as const;

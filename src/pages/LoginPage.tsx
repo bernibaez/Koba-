@@ -15,6 +15,7 @@ import {
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 import { ROLE_HOME } from '@/lib/auth';
+import { isSupabaseConfigured } from '@/services/clienteSupabase';
 
 const features = [
   { icon: ShoppingCart, label: 'Ventas rápidas' },
@@ -266,11 +267,13 @@ export default function LoginPage() {
             Acceder con código
           </button>
 
-          <p className="mt-6 text-[11px] text-center text-gray-400 leading-relaxed">
-            Demo: admin/admin123 · maria/maria123 · carlos/carlos123 · pedro/pedro123
-            <br />
-            Códigos: 1001 · 2002 · 3003 · 4004
-          </p>
+          {!isSupabaseConfigured() && (
+            <p className="mt-6 text-[11px] text-center text-gray-400 leading-relaxed">
+              Demo local: admin/admin123 · maria/maria123 · carlos/carlos123 · pedro/pedro123
+              <br />
+              Códigos: 1001 · 2002 · 3003 · 4004
+            </p>
+          )}
         </div>
       </div>
 

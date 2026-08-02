@@ -14,10 +14,11 @@ import {
   Download,
   Eye,
 } from 'lucide-react';
-import { exportTableToPdf, formatMoneyPdf } from '@/lib/exportPdf';
+import { exportTableToPdf } from '@/lib/exportPdf';
 import { useUsuarios } from '@/hooks/useUsuarios';
+import { useAgentes } from '@/hooks/useAgentes';
 import { ROL_DB_A_UI, ROL_UI_A_DB } from '@/services/auth.service';
-import type { RolDb } from '@/types/database';
+import type { AgenteComercial, RolDb } from '@/types/database';
 import type { UserRole } from '@/lib/auth';
 import { toast } from 'sonner';
 import { isSupabaseConfigured } from '@/services/clienteSupabase';
@@ -29,15 +30,6 @@ interface Role {
   users: number;
   description: string;
 }
-interface Agent {
-  id: number;
-  name: string;
-  email: string;
-  phone: string;
-  sales: number;
-  commission: number;
-  status: 'active' | 'inactive';
-}
 
 const mockRoles: Role[] = [
   { id: 1, name: 'Administrador', permissions: 48, users: 1, description: 'Acceso total al sistema' },
@@ -47,26 +39,53 @@ const mockRoles: Role[] = [
   { id: 5, name: 'Contador', permissions: 15, users: 1, description: 'Acceso a informes y finanzas' },
 ];
 
-const mockAgents: Agent[] = [
-  { id: 1, name: 'Roberto Díaz', email: 'roberto@marketerp.do', phone: '809-555-0010', sales: 145, commission: 8500, status: 'active' },
-  { id: 2, name: 'Luisa Fernández', email: 'luisa@marketerp.do', phone: '809-555-0011', sales: 98, commission: 5200, status: 'active' },
-  { id: 3, name: 'Miguel Torres', email: 'miguel@marketerp.do', phone: '809-555-0012', sales: 67, commission: 3100, status: 'inactive' },
-];
-
 type Tab = 'users' | 'roles' | 'agents';
 
 export default function UsersPage() {
   const [tab, setTab] = useState<Tab>('users');
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
+  const [editingAgent, setEditingAgent] = useState<AgenteComercial | null>(null);
   const [formNombre, setFormNombre] = useState('');
   const [formCorreo, setFormCorreo] = useState('');
   const [formTelefono, setFormTelefono] = useState('');
   const [formPassword, setFormPassword] = useState('');
+  const [formComision, setFormComision] = useState('5');
   const [formRol, setFormRol] = useState<UserRole>('Cajero');
   const [saving, setSaving] = useState(false);
 
   const { usuarios, loading, crear, alternarActivo } = useUsuarios(search);
+  const {
+    agentes,
+    loading: loadingAgentes,
+    crear: crearAgente,
+    actualizar: actualizarAgente,
+    alternarActivo: alternarActivoAgente,
+    eliminar: eliminarAgente,
+  } = useAgentes(search);
+
+  const resetForm = () => {
+    setFormNombre('');
+    setFormCorreo('');
+    setFormTelefono('');
+    setFormPassword('');
+    setFormComision('5');
+    setEditingAgent(null);
+  };
+
+  const openNewModal = () => {
+    resetForm();
+    setShowModal(true);
+  };
+
+  const openEditAgent = (agent: AgenteComercial) => {
+    setEditingAgent(agent);
+    setFormNombre(agent.nombre);
+    setFormCorreo(agent.correo ?? '');
+    setFormTelefono(agent.telefono ?? '');
+    setFormComision(String(agent.porcentaje_comision ?? 0));
+    setShowModal(true);
+  };
 
   const tabs = [
     { id: 'users' as Tab, label: 'Usuarios', icon: <Users size={16} /> },
@@ -102,14 +121,13 @@ export default function UsersPage() {
     exportTableToPdf({
       title: 'Agentes Comerciales',
       filename: 'agentes',
-      headers: ['Nombre', 'Email', 'Teléfono', 'Ventas', 'Comisión', 'Estado'],
-      rows: mockAgents.map((a) => [
-        a.name,
-        a.email,
-        a.phone,
-        a.sales,
-        formatMoneyPdf(a.commission),
-        a.status === 'active' ? 'Activo' : 'Inactivo',
+      headers: ['Nombre', 'Email', 'Teléfono', 'Comisión %', 'Estado'],
+      rows: agentes.map((a) => [
+        a.nombre,
+        a.correo ?? '',
+        a.telefono ?? '',
+        `${Number(a.porcentaje_comision).toFixed(2)}%`,
+        a.activo ? 'Activo' : 'Inactivo',
       ]),
     });
   };
@@ -130,12 +148,38 @@ export default function UsersPage() {
       });
       toast.success('Usuario creado');
       setShowModal(false);
-      setFormNombre('');
-      setFormCorreo('');
-      setFormTelefono('');
-      setFormPassword('');
+      resetForm();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Error al crear usuario');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveAgent = async () => {
+    if (!formNombre.trim()) {
+      toast.error('Escribe el nombre del agente');
+      return;
+    }
+    setSaving(true);
+    try {
+      const payload = {
+        nombre: formNombre.trim(),
+        correo: formCorreo.trim() || null,
+        telefono: formTelefono.trim() || null,
+        porcentaje_comision: Number(formComision) || 0,
+      };
+      if (editingAgent) {
+        await actualizarAgente(editingAgent.id, payload);
+        toast.success('Agente actualizado en Supabase');
+      } else {
+        await crearAgente(payload);
+        toast.success('Agente creado en Supabase');
+      }
+      setShowModal(false);
+      resetForm();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Error al guardar agente');
     } finally {
       setSaving(false);
     }
@@ -152,7 +196,11 @@ export default function UsersPage() {
               {!isSupabaseConfigured() && ' (modo local — configura Supabase para altas reales)'}
             </p>
           </div>
-          <button onClick={() => setShowModal(true)} className="btn-primary flex items-center gap-2 w-fit">
+          <button
+            onClick={openNewModal}
+            className="btn-primary flex items-center gap-2 w-fit"
+            disabled={tab === 'roles'}
+          >
             <Plus size={16} /> Nuevo {tab === 'users' ? 'Usuario' : tab === 'roles' ? 'Rol' : 'Agente'}
           </button>
         </div>
@@ -342,55 +390,99 @@ export default function UsersPage() {
                   <tr className="border-b border-border bg-secondary/50">
                     <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Agente</th>
                     <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden md:table-cell">Teléfono</th>
-                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden md:table-cell">Ventas</th>
-                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden lg:table-cell">Comisión</th>
+                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden lg:table-cell">Comisión %</th>
                     <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Estado</th>
                     <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {mockAgents.map((agent, i) => (
-                    <tr
-                      key={agent.id}
-                      className={`border-b border-border hover:bg-secondary/30 transition-colors ${
-                        i % 2 === 0 ? '' : 'bg-secondary/10'
-                      }`}
-                    >
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center text-accent font-bold text-sm">
-                            {agent.name.charAt(0)}
-                          </div>
-                          <div>
-                            <p className="font-medium text-foreground">{agent.name}</p>
-                            <p className="text-xs text-muted-foreground">{agent.email}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">{agent.phone}</td>
-                      <td className="px-4 py-3 hidden md:table-cell">
-                        <span className="font-semibold text-foreground">{agent.sales}</span>
-                      </td>
-                      <td className="px-4 py-3 hidden lg:table-cell text-success font-semibold">
-                        RD$ {agent.commission.toLocaleString()}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className={agent.status === 'active' ? 'badge-success' : 'badge-danger'}>
-                          {agent.status === 'active' ? 'Activo' : 'Inactivo'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-end gap-1">
-                          <button className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors">
-                            <Edit2 size={14} />
-                          </button>
-                          <button className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-danger transition-colors">
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
+                  {loadingAgentes && (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
+                        Cargando agentes…
                       </td>
                     </tr>
-                  ))}
+                  )}
+                  {!loadingAgentes && agentes.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
+                        No hay agentes en Supabase. Crea el primero con “Nuevo Agente”.
+                      </td>
+                    </tr>
+                  )}
+                  {!loadingAgentes &&
+                    agentes.map((agent, i) => (
+                      <tr
+                        key={agent.id}
+                        className={`border-b border-border hover:bg-secondary/30 transition-colors ${
+                          i % 2 === 0 ? '' : 'bg-secondary/10'
+                        }`}
+                      >
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center text-accent font-bold text-sm">
+                              {agent.nombre.charAt(0)}
+                            </div>
+                            <div>
+                              <p className="font-medium text-foreground">{agent.nombre}</p>
+                              <p className="text-xs text-muted-foreground">{agent.correo || 'Sin correo'}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">
+                          {agent.telefono || '—'}
+                        </td>
+                        <td className="px-4 py-3 hidden lg:table-cell text-success font-semibold">
+                          {Number(agent.porcentaje_comision).toFixed(2)}%
+                        </td>
+                        <td className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void alternarActivoAgente(agent.id, !agent.activo).then(() =>
+                                toast.success(agent.activo ? 'Agente desactivado' : 'Agente activado')
+                              )
+                            }
+                            className="inline-flex items-center gap-1"
+                            title={agent.activo ? 'Desactivar' : 'Activar'}
+                          >
+                            {agent.activo ? (
+                              <ToggleRight size={22} className="text-success" />
+                            ) : (
+                              <ToggleLeft size={22} className="text-muted-foreground" />
+                            )}
+                            <span className={agent.activo ? 'badge-success' : 'badge-danger'}>
+                              {agent.activo ? 'Activo' : 'Inactivo'}
+                            </span>
+                          </button>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              type="button"
+                              onClick={() => openEditAgent(agent)}
+                              className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+                            >
+                              <Edit2 size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!confirm(`¿Eliminar agente "${agent.nombre}"?`)) return;
+                                void eliminarAgente(agent.id)
+                                  .then(() => toast.success('Agente eliminado'))
+                                  .catch((e) =>
+                                    toast.error(e instanceof Error ? e.message : 'No se pudo eliminar')
+                                  );
+                              }}
+                              className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-danger transition-colors"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
                 </tbody>
               </table>
             </div>
@@ -401,11 +493,20 @@ export default function UsersPage() {
       {showModal && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 fade-in"
-          onClick={() => setShowModal(false)}
+          onClick={() => {
+            setShowModal(false);
+            resetForm();
+          }}
         >
           <div className="card p-6 w-full max-w-md mx-4 slide-up" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-bold text-foreground mb-4">
-              {tab === 'users' ? 'Nuevo Usuario' : tab === 'roles' ? 'Nuevo Rol' : 'Nuevo Agente'}
+              {tab === 'users'
+                ? 'Nuevo Usuario'
+                : tab === 'roles'
+                  ? 'Nuevo Rol'
+                  : editingAgent
+                    ? 'Editar Agente'
+                    : 'Nuevo Agente'}
             </h2>
             <div className="space-y-3">
               <input
@@ -428,6 +529,22 @@ export default function UsersPage() {
                   value={formTelefono}
                   onChange={(e) => setFormTelefono(e.target.value)}
                 />
+              )}
+              {tab === 'agents' && (
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                    Comisión (%)
+                  </label>
+                  <input
+                    className="input-field"
+                    type="number"
+                    min={0}
+                    max={100}
+                    step="0.01"
+                    value={formComision}
+                    onChange={(e) => setFormComision(e.target.value)}
+                  />
+                </div>
               )}
               {tab === 'users' && (
                 <select
@@ -454,7 +571,13 @@ export default function UsersPage() {
               {tab === 'roles' && <textarea className="input-field" placeholder="Descripción del rol" rows={3} />}
             </div>
             <div className="flex gap-3 mt-6">
-              <button className="btn-secondary flex-1" onClick={() => setShowModal(false)}>
+              <button
+                className="btn-secondary flex-1"
+                onClick={() => {
+                  setShowModal(false);
+                  resetForm();
+                }}
+              >
                 Cancelar
               </button>
               <button
@@ -462,6 +585,7 @@ export default function UsersPage() {
                 disabled={saving}
                 onClick={() => {
                   if (tab === 'users') void handleCreateUser();
+                  else if (tab === 'agents') void handleSaveAgent();
                   else setShowModal(false);
                 }}
               >

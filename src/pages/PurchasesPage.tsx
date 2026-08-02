@@ -1,17 +1,15 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { ShoppingBag, RotateCcw, Plus, Search, Filter, Download, Eye, Edit2, Trash2, X, PackagePlus, Check, CheckCircle2, ShoppingCart, Minus, Package } from 'lucide-react';
 import { exportTableToPdf, formatMoneyPdf } from '@/lib/exportPdf';
-import {
-  addProductToStore,
-  getStoredProducts,
-  updateProductPurchaseDataInStore,
-  ProductItem,
-} from '@/lib/productStore';
+import type { ProductItem } from '@/lib/productStore';
+import { useProductos } from '@/hooks/useProductos';
+import { crearProducto, uiAProductoInsert } from '@/services/productos.service';
+import { crearCompra, obtenerCompras } from '@/services/compras.service';
 import { toast } from 'sonner';
 
 interface Purchase {
-  id: number;
+  id: string;
   code: string;
   supplier: string;
   date: string;
@@ -45,19 +43,6 @@ export interface PurchaseLineItem {
   taxPercent: number;
 }
 
-const mockPurchases: Purchase[] = [
-  { id: 1, code: 'OC-001', supplier: 'Distribuidora Nacional S.A.', date: '2024-01-15', items: 12, subtotal: 45000, tax: 8100, total: 53100, status: 'received', payment: 'Transferencia' },
-  { id: 2, code: 'OC-002', supplier: 'Importadora del Caribe', date: '2024-01-14', items: 5, subtotal: 18500, tax: 3330, total: 21830, status: 'pending', payment: 'Crédito' },
-  { id: 3, code: 'OC-003', supplier: 'Alimentos Frescos RD', date: '2024-01-13', items: 28, subtotal: 32000, tax: 5760, total: 37760, status: 'received', payment: 'Efectivo' },
-  { id: 4, code: 'OC-004', supplier: 'Bebidas y Más', date: '2024-01-12', items: 8, subtotal: 12000, tax: 2160, total: 14160, status: 'partial', payment: 'Cheque' },
-  { id: 5, code: 'OC-005', supplier: 'Distribuidora Nacional S.A.', date: '2024-01-10', items: 20, subtotal: 67000, tax: 12060, total: 79060, status: 'received', payment: 'Transferencia' },
-];
-
-const mockReturns: ReturnItem[] = [
-  { id: 1, code: 'DEV-001', purchaseCode: 'OC-001', supplier: 'Distribuidora Nacional S.A.', date: '2024-01-16', total: 3500, reason: 'Productos dañados', status: 'approved' },
-  { id: 2, code: 'DEV-002', purchaseCode: 'OC-003', supplier: 'Alimentos Frescos RD', date: '2024-01-14', total: 1200, reason: 'Fecha de vencimiento próxima', status: 'pending' },
-];
-
 type Tab = 'list' | 'returns';
 
 const statusMap = {
@@ -67,6 +52,12 @@ const statusMap = {
   approved: { label: 'Aprobado', cls: 'badge-success' },
 };
 
+function mapEstadoUi(estado: string): Purchase['status'] {
+  if (estado === 'recibida') return 'received';
+  if (estado === 'parcial') return 'partial';
+  return 'pending';
+}
+
 function nextPurchaseInvoice() {
   const seq = String(Date.now()).slice(-3);
   return `FAC-COMP-${seq}`;
@@ -74,33 +65,28 @@ function nextPurchaseInvoice() {
 
 export default function PurchasesPage() {
   const [tab, setTab] = useState<Tab>('list');
-  const [purchasesList, setPurchasesList] = useState<Purchase[]>(mockPurchases);
+  const [purchasesList, setPurchasesList] = useState<Purchase[]>([]);
+  const [returnsList] = useState<ReturnItem[]>([]);
+  const [loadingList, setLoadingList] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
   const [invoiceNumber, setInvoiceNumber] = useState(() => nextPurchaseInvoice());
-  const [supplier, setSupplier] = useState('Distribuidora Nacional S.A.');
+  const [supplier, setSupplier] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('Transferencia');
   const [purchaseDate, setPurchaseDate] = useState(() => new Date().toISOString().split('T')[0]);
 
-  // Dynamic Purchase Items State
-  const [purchaseItems, setPurchaseItems] = useState<PurchaseLineItem[]>([
-    { id: '1', productId: 'prod-001', name: 'Arroz Selecto 5lb', sku: 'ARR-SEL-5LB', qty: 50, price: 210, salePrice: 285, taxPercent: 0 },
-    { id: '2', productId: 'prod-002', name: 'Aceite Vegetal 1L', sku: 'ACE-VEG-1L', qty: 24, price: 140, salePrice: 195, taxPercent: 18 },
-    { id: '3', productId: 'prod-005', name: 'Azúcar Blanca 5lb', sku: 'AZU-BLA-5LB', qty: 36, price: 128, salePrice: 175, taxPercent: 0 },
-  ]);
+  const [purchaseItems, setPurchaseItems] = useState<PurchaseLineItem[]>([]);
 
-  // Modal for Adding Products
   const [showProductModal, setShowProductModal] = useState(false);
   const [modalTab, setModalTab] = useState<'catalog' | 'new'>('catalog');
   const [modalSearch, setModalSearch] = useState('');
   const [selectedProduct, setSelectedProduct] = useState<ProductItem | null>(null);
   const [modalQty, setModalQty] = useState<number>(1);
-  const [modalPrice, setModalPrice] = useState<number>(0); // Precio Costo
-  const [modalSalePrice, setModalSalePrice] = useState<number>(0); // Precio Venta
+  const [modalPrice, setModalPrice] = useState<number>(0);
+  const [modalSalePrice, setModalSalePrice] = useState<number>(0);
   const [lastAddedNotice, setLastAddedNotice] = useState<string | null>(null);
-  const [catalogVersion, setCatalogVersion] = useState(0);
 
-  // Formulario producto nuevo
   const [newName, setNewName] = useState('');
   const [newSku, setNewSku] = useState('');
   const [newBarcode, setNewBarcode] = useState('');
@@ -108,11 +94,49 @@ export default function PurchasesPage() {
   const [newUnit, setNewUnit] = useState('Unidad');
   const [newTax, setNewTax] = useState(18);
 
-  const systemProducts = useMemo(() => getStoredProducts(), [catalogVersion, showProductModal]);
+  const { productosUi, refetch: refetchProductos } = useProductos({
+    pagina: 1,
+    limite: 500,
+    busqueda: modalSearch,
+    estado: 'activo',
+  });
+  const systemProducts = productosUi as ProductItem[];
   const categories = useMemo(
     () => Array.from(new Set(systemProducts.map((p) => p.category).filter(Boolean))).sort(),
     [systemProducts]
   );
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      setLoadingList(true);
+      try {
+        const rows = await obtenerCompras();
+        if (!alive) return;
+        setPurchasesList(
+          rows.map((r) => ({
+            id: r.id,
+            code: r.codigo,
+            supplier: r.proveedor,
+            date: r.fecha,
+            items: r.items,
+            subtotal: r.subtotal,
+            tax: r.impuesto,
+            total: r.total,
+            status: mapEstadoUi(r.estado),
+            payment: r.metodo_pago,
+          }))
+        );
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Error al cargar compras');
+      } finally {
+        if (alive) setLoadingList(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const filteredPurchases = purchasesList.filter(p =>
     p.code.toLowerCase().includes(search.toLowerCase()) ||
@@ -167,7 +191,7 @@ export default function PurchasesPage() {
     setNewTax(18);
   };
 
-  const handleAddProductToPurchase = (shouldCloseModal = false) => {
+  const handleAddProductToPurchase = async (shouldCloseModal = false) => {
     if (modalQty <= 0) {
       toast.error('Ingresa una cantidad válida mayor a 0');
       return;
@@ -176,53 +200,79 @@ export default function PurchasesPage() {
     let product: ProductItem | null = selectedProduct;
     let createdNew = false;
 
-    if (modalTab === 'new' || (!product && modalTab === 'catalog')) {
-      if (modalTab === 'new') {
-        if (!newName.trim()) {
-          toast.error('Escribe el nombre del producto');
-          return;
-        }
-        if (!newSku.trim()) {
-          toast.error('Escribe un SKU para el producto');
-          return;
-        }
-        if (modalPrice <= 0) {
-          toast.error('Ingresa el precio de compra (costo)');
-          return;
-        }
-        if (modalSalePrice <= 0) {
-          toast.error('Ingresa el precio de venta');
-          return;
-        }
-        const skuExists = systemProducts.some(
-          (p) => p.sku.toLowerCase() === newSku.trim().toLowerCase()
-        );
-        if (skuExists) {
-          toast.error('Ya existe un producto con ese SKU');
-          return;
-        }
+    if (modalTab === 'new') {
+      if (!newName.trim()) {
+        toast.error('Escribe el nombre del producto');
+        return;
+      }
+      if (!newSku.trim()) {
+        toast.error('Escribe un SKU para el producto');
+        return;
+      }
+      if (modalPrice <= 0) {
+        toast.error('Ingresa el precio de compra (costo)');
+        return;
+      }
+      if (modalSalePrice <= 0) {
+        toast.error('Ingresa el precio de venta');
+        return;
+      }
+      const skuExists = systemProducts.some(
+        (p) => p.sku.toLowerCase() === newSku.trim().toLowerCase()
+      );
+      if (skuExists) {
+        toast.error('Ya existe un producto con ese SKU');
+        return;
+      }
 
-        product = addProductToStore({
-          name: newName.trim(),
-          sku: newSku.trim().toUpperCase(),
-          barcode: newBarcode.trim() || `GEN-${Date.now().toString().slice(-8)}`,
-          category: newCategory.trim() || 'General',
-          brand: '',
-          unit: newUnit.trim() || 'Unidad',
-          supplier,
-          costPrice: modalPrice,
-          salePrice: modalSalePrice,
-          wholesalePrice: modalSalePrice,
-          tax: newTax,
-          minStock: 10,
-          currentStock: 0,
-          image: '',
-          expiryDate: null,
-          warranty: 'N/A',
+      try {
+        const created = await crearProducto(
+          uiAProductoInsert({
+            name: newName.trim(),
+            sku: newSku.trim().toUpperCase(),
+            barcode: newBarcode.trim() || `GEN-${Date.now().toString().slice(-8)}`,
+            category: newCategory.trim() || 'General',
+            brand: '',
+            unit: newUnit.trim() || 'Unidad',
+            supplier,
+            costPrice: modalPrice,
+            salePrice: modalSalePrice,
+            wholesalePrice: modalSalePrice,
+            tax: newTax,
+            minStock: 10,
+            currentStock: 0,
+            image: '',
+            expiryDate: null,
+            warranty: 'N/A',
+            status: 'active',
+          })
+        );
+        product = {
+          id: created.id,
+          barcode: created.codigo_barras,
+          sku: created.sku,
+          name: created.nombre,
+          category: created.categoria,
+          brand: created.marca ?? '',
+          unit: created.unidad,
+          supplier: supplier || '',
+          costPrice: Number(created.precio_costo),
+          salePrice: Number(created.precio_venta),
+          wholesalePrice: Number(created.precio_mayorista),
+          tax: Number(created.porcentaje_impuesto),
+          minStock: created.stock_minimo,
+          currentStock: created.stock_actual,
+          image: created.imagen_url ?? '',
+          expiryDate: created.fecha_vencimiento,
+          warranty: created.garantia ?? 'N/A',
           status: 'active',
-        });
+          stockStatus: 'out',
+        };
         createdNew = true;
-        setCatalogVersion((v) => v + 1);
+        await refetchProductos();
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'No se pudo crear el producto');
+        return;
       }
     }
 
@@ -272,37 +322,57 @@ export default function PurchasesPage() {
     }
   };
 
-  const handleSavePurchase = () => {
+  const handleSavePurchase = async () => {
     if (purchaseItems.length === 0) {
       toast.error('Agrega al menos un producto a la compra');
       return;
     }
+    if (!supplier.trim()) {
+      toast.error('Indica el proveedor');
+      return;
+    }
 
-    // 1. Update Inventory Stock and Prices in catalog
-    purchaseItems.forEach((item) => {
-      if (item.productId) {
-        updateProductPurchaseDataInStore(item.productId, item.qty, item.price, item.salePrice);
-      }
-    });
-    setCatalogVersion((v) => v + 1);
+    setSaving(true);
+    try {
+      const created = await crearCompra({
+        codigo: invoiceNumber,
+        proveedor_nombre: supplier.trim(),
+        metodo_pago: paymentMethod,
+        estado: 'recibida',
+        lineas: purchaseItems.map((item) => ({
+          producto_id: item.productId || null,
+          nombre: item.name,
+          cantidad: item.qty,
+          precio_costo: item.price,
+          precio_venta: item.salePrice,
+          porcentaje_impuesto: item.taxPercent,
+        })),
+      });
 
-    // 2. Add to purchases list
-    const newPurchase: Purchase = {
-      id: Date.now(),
-      code: `OC-${String(purchasesList.length + 1).padStart(3, '0')}`,
-      supplier,
-      date: purchaseDate,
-      items: purchaseItems.reduce((sum, i) => sum + i.qty, 0),
-      subtotal,
-      tax: taxTotal,
-      total: grandTotal,
-      status: 'received',
-      payment: paymentMethod,
-    };
-
-    setPurchasesList(prev => [newPurchase, ...prev]);
-    toast.success('Compra guardada exitosamente. Stock, precio de costo y precio de venta actualizados en catálogo.');
-    setShowAddForm(false);
+      setPurchasesList((prev) => [
+        {
+          id: created.id,
+          code: created.codigo,
+          supplier: created.proveedor,
+          date: created.fecha || purchaseDate,
+          items: created.items,
+          subtotal: created.subtotal,
+          tax: created.impuesto,
+          total: created.total,
+          status: mapEstadoUi(created.estado),
+          payment: paymentMethod,
+        },
+        ...prev,
+      ]);
+      await refetchProductos();
+      toast.success('Compra guardada en Supabase. Stock y precios actualizados.');
+      setShowAddForm(false);
+      setPurchaseItems([]);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Error al guardar la compra');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleExportPdf = () => {
@@ -330,7 +400,7 @@ export default function PurchasesPage() {
       title: 'Devoluciones de Compra',
       filename: 'devoluciones-compra',
       headers: ['Código', 'Orden', 'Proveedor', 'Fecha', 'Total', 'Motivo', 'Estado'],
-      rows: mockReturns.map((r) => [
+      rows: returnsList.map((r) => [
         r.code,
         r.purchaseCode,
         r.supplier,
@@ -564,11 +634,12 @@ export default function PurchasesPage() {
 
               <button
                 type="button"
-                onClick={handleSavePurchase}
-                className="btn-primary w-full py-3 text-base font-bold shadow-md flex items-center justify-center gap-2"
+                onClick={() => void handleSavePurchase()}
+                disabled={saving || purchaseItems.length === 0}
+                className="btn-primary w-full py-3 text-base font-bold shadow-md flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 <Check size={18} />
-                Guardar Compra
+                {saving ? 'Guardando…' : 'Guardar Compra'}
               </button>
             </div>
           </div>
@@ -1020,10 +1091,8 @@ export default function PurchasesPage() {
             type="button"
             onClick={() => {
               setInvoiceNumber(nextPurchaseInvoice());
-              setPurchaseItems([
-                { id: '1', productId: 'prod-001', name: 'Arroz Selecto 5lb', sku: 'ARR-SEL-5LB', qty: 50, price: 210, salePrice: 285, taxPercent: 0 },
-                { id: '2', productId: 'prod-002', name: 'Aceite Vegetal 1L', sku: 'ACE-VEG-1L', qty: 24, price: 140, salePrice: 195, taxPercent: 18 },
-              ]);
+              setPurchaseItems([]);
+              setSupplier('');
               setShowAddForm(true);
             }}
             className="btn-primary flex items-center gap-2 w-fit shadow-md"
@@ -1034,9 +1103,9 @@ export default function PurchasesPage() {
 
         {/* Stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="card p-4"><p className="text-xs text-muted-foreground">Compras del mes</p><p className="text-2xl font-bold text-foreground mt-1">RD$ 205.9K</p></div>
-          <div className="card p-4"><p className="text-xs text-muted-foreground">Órdenes totales</p><p className="text-2xl font-bold text-info mt-1">{purchasesList.length}</p></div>
-          <div className="card p-4"><p className="text-xs text-muted-foreground">Pendientes</p><p className="text-2xl font-bold text-warning mt-1">5</p></div>
+          <div className="card p-4"><p className="text-xs text-muted-foreground">Total compras</p><p className="text-2xl font-bold text-foreground mt-1">RD$ {purchasesList.reduce((s, p) => s + p.total, 0).toLocaleString('es-DO')}</p></div>
+          <div className="card p-4"><p className="text-xs text-muted-foreground">Órdenes totales</p><p className="text-2xl font-bold text-info mt-1">{loadingList ? '…' : purchasesList.length}</p></div>
+          <div className="card p-4"><p className="text-xs text-muted-foreground">Pendientes</p><p className="text-2xl font-bold text-warning mt-1">{purchasesList.filter((p) => p.status === 'pending').length}</p></div>
           <div className="card p-4"><p className="text-xs text-muted-foreground">Devoluciones</p><p className="text-2xl font-bold text-danger mt-1">2</p></div>
         </div>
 
@@ -1126,7 +1195,14 @@ export default function PurchasesPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {mockReturns.map((r, i) => (
+                  {returnsList.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="py-8 text-center text-muted-foreground text-sm">
+                        No hay devoluciones registradas en Supabase
+                      </td>
+                    </tr>
+                  )}
+                  {returnsList.map((r, i) => (
                     <tr key={r.id} className={`border-b border-border hover:bg-secondary/30 transition-colors ${i % 2 === 0 ? '' : 'bg-secondary/10'}`}>
                       <td className="px-4 py-3 font-mono text-danger font-medium">{r.code}</td>
                       <td className="px-4 py-3 font-mono text-primary">{r.purchaseCode}</td>

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
-import { addPosCustomer } from '@/lib/posCustomers';
+import { crearCliente } from '@/services/clientes.service';
 import type { Customer } from './POSTerminal';
 
 interface Props {
@@ -13,8 +13,9 @@ export default function PosAddCustomerModal({ onClose, onCreated }: Props) {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [credit, setCredit] = useState('0');
+  const [saving, setSaving] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
       toast.error('Ingresa el nombre del cliente');
@@ -24,14 +25,28 @@ export default function PosAddCustomerModal({ onClose, onCreated }: Props) {
       toast.error('Ingresa el teléfono del cliente');
       return;
     }
-    const customer = addPosCustomer({
-      name,
-      phone,
-      credit: Number(credit) || 0,
-    });
-    toast.success(`Cliente agregado: ${customer.name}`);
-    onCreated(customer);
-    onClose();
+    setSaving(true);
+    try {
+      const created = await crearCliente({
+        nombre: name.trim(),
+        telefono: phone.trim(),
+        limite_credito: Number(credit) || 0,
+        tipo_cliente: Number(credit) > 0 ? 'credito' : 'final',
+      });
+      const customer: Customer = {
+        id: created.id,
+        name: created.nombre,
+        phone: created.telefono ?? '',
+        credit: Number(created.limite_credito ?? 0),
+      };
+      toast.success(`Cliente agregado: ${customer.name}`);
+      onCreated(customer);
+      onClose();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'No se pudo crear el cliente');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -47,7 +62,7 @@ export default function PosAddCustomerModal({ onClose, onCreated }: Props) {
               Nuevo cliente
             </h3>
             <p className="text-xs text-muted-foreground mt-1">
-              Se agregará a la lista del punto de venta
+              Se guardará en Supabase y estará disponible en el POS
             </p>
           </div>
           <button type="button" onClick={onClose} className="p-1 text-muted-foreground hover:text-foreground">
@@ -80,22 +95,16 @@ export default function PosAddCustomerModal({ onClose, onCreated }: Props) {
               Límite de crédito (RD$)
             </label>
             <input
+              className="input-field"
               type="number"
               min={0}
-              className="input-field"
-              placeholder="0"
               value={credit}
               onChange={(e) => setCredit(e.target.value)}
             />
           </div>
-          <div className="flex gap-2 pt-1">
-            <button type="button" className="btn-secondary flex-1" onClick={onClose}>
-              Cancelar
-            </button>
-            <button type="submit" className="btn-primary flex-1">
-              Guardar cliente
-            </button>
-          </div>
+          <button type="submit" className="btn-primary w-full" disabled={saving}>
+            {saving ? 'Guardando…' : 'Guardar cliente'}
+          </button>
         </form>
       </div>
     </div>
