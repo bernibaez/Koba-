@@ -13,40 +13,40 @@ import {
   type NuevoGastoInput,
 } from '@/services/gastos.service';
 import type { EstadoGasto } from '@/types/database';
+import { isAbortError } from '@/lib/isAbortError';
 
 export function useGastos() {
   const [gastos, setGastos] = useState<GastoUi[]>([]);
   const [categorias, setCategorias] = useState<CategoriaGastoUi[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
+  const reqIdRef = useRef(0);
+  const mountedRef = useRef(true);
 
   const refetch = useCallback(async () => {
-    abortRef.current?.abort();
-    const ac = new AbortController();
-    abortRef.current = ac;
+    const reqId = ++reqIdRef.current;
     setLoading(true);
     setError(null);
     try {
-      const [g, c] = await Promise.all([
-        obtenerGastos(ac.signal),
-        obtenerCategoriasGasto(ac.signal),
-      ]);
-      if (!ac.signal.aborted) {
-        setGastos(g);
-        setCategorias(c);
-      }
+      const [g, c] = await Promise.all([obtenerGastos(), obtenerCategoriasGasto()]);
+      if (!mountedRef.current || reqId !== reqIdRef.current) return;
+      setGastos(g);
+      setCategorias(c);
     } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
+      if (isAbortError(e) || !mountedRef.current || reqId !== reqIdRef.current) return;
       setError(e instanceof Error ? e.message : 'Error al cargar gastos');
     } finally {
-      if (!ac.signal.aborted) setLoading(false);
+      if (mountedRef.current && reqId === reqIdRef.current) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    refetch();
-    return () => abortRef.current?.abort();
+    mountedRef.current = true;
+    void refetch();
+    return () => {
+      mountedRef.current = false;
+      reqIdRef.current += 1;
+    };
   }, [refetch]);
 
   const crear = useCallback(

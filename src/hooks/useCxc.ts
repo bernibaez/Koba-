@@ -7,33 +7,38 @@ import {
   type NuevaCxcInput,
   type NuevoPagoCxcInput,
 } from '@/services/cxc.service';
+import { isAbortError } from '@/lib/isAbortError';
 
 export function useCxc() {
   const [cuentas, setCuentas] = useState<CuentaCobrarUi[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
+  const reqIdRef = useRef(0);
+  const mountedRef = useRef(true);
 
   const refetch = useCallback(async () => {
-    abortRef.current?.abort();
-    const ac = new AbortController();
-    abortRef.current = ac;
+    const reqId = ++reqIdRef.current;
     setLoading(true);
     setError(null);
     try {
-      const data = await obtenerCuentasPorCobrar(ac.signal);
-      if (!ac.signal.aborted) setCuentas(data);
+      const data = await obtenerCuentasPorCobrar();
+      if (!mountedRef.current || reqId !== reqIdRef.current) return;
+      setCuentas(data);
     } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
+      if (isAbortError(e) || !mountedRef.current || reqId !== reqIdRef.current) return;
       setError(e instanceof Error ? e.message : 'Error al cargar cuentas por cobrar');
     } finally {
-      if (!ac.signal.aborted) setLoading(false);
+      if (mountedRef.current && reqId === reqIdRef.current) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    refetch();
-    return () => abortRef.current?.abort();
+    mountedRef.current = true;
+    void refetch();
+    return () => {
+      mountedRef.current = false;
+      reqIdRef.current += 1;
+    };
   }, [refetch]);
 
   const crear = useCallback(
