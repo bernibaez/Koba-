@@ -103,7 +103,24 @@ export async function procesarVenta(payload: PayloadVenta): Promise<ResultadoVen
   const sb = getSupabase();
   const { data, error } = await sb.rpc('procesar_venta_pos', { p_payload: payload });
   if (error) throw error;
-  return data as ResultadoVenta;
+  const resultado = data as ResultadoVenta;
+
+  const credito = Number(payload.monto_credito ?? 0);
+  if (credito > 0 || payload.metodo_pago === 'credito') {
+    try {
+      const { crearCxcDesdeVenta } = await import('./cxc.service');
+      await crearCxcDesdeVenta({
+        venta_id: resultado.venta_id,
+        numero_factura: resultado.numero_factura,
+        cliente_id: payload.cliente_id,
+        monto_credito: credito > 0 ? credito : payload.monto_total,
+      });
+    } catch {
+      // No bloquear la venta si CxC falla (tabla ausente, etc.)
+    }
+  }
+
+  return resultado;
 }
 
 export async function obtenerHistorialVentas(params: {

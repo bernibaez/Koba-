@@ -173,6 +173,20 @@ export async function crearCompra(input: NuevaCompraInput): Promise<CompraLista>
     });
   }
 
+  const metodo = mapMetodoPago(input.metodo_pago);
+  if (metodo === 'credito' && compra.proveedor_id) {
+    try {
+      const { crearCxpDesdeCompra } = await import('./cxp.service');
+      await crearCxpDesdeCompra({
+        compra_id: compra.id,
+        proveedor_id: compra.proveedor_id,
+        monto_total: Number(compra.monto_total),
+      });
+    } catch {
+      // No bloquear la compra si CxP falla
+    }
+  }
+
   return {
     id: compra.id,
     codigo: compra.codigo,
