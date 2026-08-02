@@ -19,7 +19,7 @@ ALTER TABLE roles ENABLE ROW LEVEL SECURITY;
 -- Políticas de RLS
 DROP POLICY IF EXISTS roles_select ON roles;
 CREATE POLICY roles_select ON roles
-  FOR SELECT TO authenticated
+  FOR SELECT TO authenticated, anon
   USING (TRUE);
 
 DROP POLICY IF EXISTS roles_insert ON roles;

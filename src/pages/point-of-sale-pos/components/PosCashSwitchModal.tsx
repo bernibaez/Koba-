@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { X, Monitor, Shield, User, ArrowRight, DollarSign, Ticket, Clock, Lock, Check, Info } from 'lucide-react';
 import { toast } from 'sonner';
-import { CASH_REGISTERS, type CashRegisterId, type CashRegisterSession } from '@/lib/cashRegisters';
+import { type CashRegisterId, type CashRegisterSession } from '@/lib/cashRegisters';
 import { useAuth } from '@/context/AuthContext';
+import { useCashRegisters } from '@/hooks/useCashRegisters';
 import PosCashOpenModal from './PosCashOpenModal';
 
 interface Props {
@@ -13,14 +14,19 @@ interface Props {
 
 export default function PosCashSwitchModal({ currentId, onSelect, onClose }: Props) {
   const { user } = useAuth();
-  const isAdmin = user?.role === 'Administrador' || true;
+  const { registers, refetch } = useCashRegisters();
+  const isAdmin = user?.role === 'Administrador';
   const [openTargetId, setOpenTargetId] = useState<string | null>(null);
 
-  // Admin Box (id '1') and current selected box state
-  const adminBox = CASH_REGISTERS.find((c) => c.isAdminBox || c.id === '1')!;
+  const adminBox = registers.find((c) => c.isAdminBox || c.id === '1') || registers[0];
   const [selectedBox, setSelectedBox] = useState<CashRegisterSession>(
-    () => CASH_REGISTERS.find((c) => c.id === currentId) || adminBox
+    () => registers.find((c) => c.id === currentId) || adminBox
   );
+
+  useEffect(() => {
+    const matched = registers.find((c) => c.id === selectedBox.id);
+    if (matched) setSelectedBox(matched);
+  }, [registers, selectedBox.id]);
 
   const handleEnterBox = (reg: CashRegisterSession) => {
     if (!reg.open) {
@@ -158,13 +164,13 @@ export default function PosCashSwitchModal({ currentId, onSelect, onClose }: Pro
                 ¿A cuál caja quieres entrar? (Cajas disponibles)
               </h3>
               <span className="text-xs text-slate-400 font-medium">
-                {CASH_REGISTERS.length} cajas registradas
+                {registers.length} cajas registradas
               </span>
             </div>
 
             {/* 2x2 Grid of Cash Register Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {CASH_REGISTERS.map((reg) => {
+              {registers.map((reg) => {
                 const isSelected = selectedBox.id === reg.id;
                 const isActiveCurrent = currentId === reg.id;
 
@@ -295,8 +301,7 @@ export default function PosCashSwitchModal({ currentId, onSelect, onClose }: Pro
         <PosCashOpenModal
           initialCajaId={openTargetId}
           onSuccess={() => {
-            const target = CASH_REGISTERS.find((c) => c.id === openTargetId);
-            if (target) target.open = true;
+            void refetch();
             onSelect(openTargetId as CashRegisterId);
             onClose();
           }}

@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
-import { X, PlayCircle, DollarSign, Monitor, Info, Check, AlertCircle } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { X, PlayCircle, DollarSign, Monitor, Info, Check, AlertCircle, User } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
-import { CASH_REGISTERS } from '@/lib/cashRegisters';
+import { useCashRegisters } from '@/hooks/useCashRegisters';
 import { iniciarCaja } from '@/services/cierresCaja.service';
+import { ROL_DB_A_UI } from '@/services/auth.service';
 import type { CierreCaja } from '@/types/database';
 import { logAuditEvent } from '@/lib/auditStore';
 
@@ -19,12 +20,23 @@ export default function PosCashOpenModal({
   onClose,
 }: PosCashOpenModalProps) {
   const { user } = useAuth();
+  const { registers, dbUsers } = useCashRegisters();
   const [selectedCajaId, setSelectedCajaId] = useState(initialCajaId);
+  const [selectedCajeroId, setSelectedCajeroId] = useState<string>(user?.id || '');
   const [montoApertura, setMontoApertura] = useState('5000');
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const selectedCaja = CASH_REGISTERS.find((c) => c.id === selectedCajaId) || CASH_REGISTERS[0];
+  const isAdmin = user?.role === 'Administrador';
+  const selectedCaja = registers.find((c) => c.id === selectedCajaId) || registers[0];
+  const selectedUser = isAdmin ? dbUsers.find((u) => u.id === selectedCajeroId) : null;
+
+  useEffect(() => {
+    if (isAdmin && !selectedCajeroId && dbUsers.length > 0) {
+      const match = dbUsers.find((u) => u.id === user?.id) || dbUsers[0];
+      if (match) setSelectedCajeroId(match.id);
+    }
+  }, [isAdmin, dbUsers, user, selectedCajeroId]);
 
   const handleStart = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,26 +48,36 @@ export default function PosCashOpenModal({
 
     setLoading(true);
     try {
+      const cajeroNombre = isAdmin
+        ? (selectedUser?.nombre_completo || user?.name || 'Cajero Activo')
+        : (user?.name || 'Cajero Activo');
+      const cajeroUsername = isAdmin
+        ? (selectedUser?.correo || user?.username || '')
+        : (user?.username || '');
+      const cajeroId = isAdmin
+        ? (selectedUser?.id || user?.id || null)
+        : (user?.id || null);
+
       const result = await iniciarCaja({
         caja_id: selectedCajaId,
         caja_label: selectedCaja.label,
-        cajero_id: user?.id ?? null,
-        cajero_nombre: user?.name ?? 'Cajero Activo',
-        cajero_username: user?.username ?? '',
+        cajero_id: cajeroId,
+        cajero_nombre: cajeroNombre,
+        cajero_username: cajeroUsername,
         monto_apertura: monto,
         notes: notes.trim() || undefined,
       });
 
       logAuditEvent({
-        user: user?.name ?? 'Usuario',
-        role: user?.role ?? 'Cajero',
+        user: cajeroNombre,
+        role: isAdmin && selectedUser ? (ROL_DB_A_UI[selectedUser.rol] || 'Cajero') : (user?.role || 'Cajero'),
         action: 'Inicio de caja',
         module: 'Caja',
-        details: `Inicio de caja ${selectedCaja.label} con fondo inicial de RD$ ${monto.toLocaleString('es-DO', { minimumFractionDigits: 2 })}`,
-        after: { caja_id: selectedCajaId, monto_apertura: monto },
+        details: `Inicio de caja ${selectedCaja.label} asignada a ${cajeroNombre} con fondo de RD$ ${monto.toLocaleString('es-DO', { minimumFractionDigits: 2 })}`,
+        after: { caja_id: selectedCajaId, cajero_id: cajeroId, monto_apertura: monto },
       });
 
-      toast.success(`Caja ${selectedCaja.label} iniciada exitosamente con RD$ ${monto.toLocaleString('es-DO', { minimumFractionDigits: 2 })}`);
+      toast.success(`Caja ${selectedCaja.label} iniciada exitosamente para ${cajeroNombre}`);
       if (onSuccess) onSuccess(result);
       onClose();
     } catch (err) {
@@ -105,13 +127,50 @@ export default function PosCashOpenModal({
 
         {/* Form Body */}
         <form onSubmit={handleStart} className="p-6 space-y-5">
+          {/* Cajero Responsable */}
+          <div>
+            <label className="block text-xs font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5 flex items-center gap-1.5">
+              <User size={14} className="text-emerald-600 dark:text-emerald-400" />
+              <span>Cajero Responsable</span>
+            </label>
+            {isAdmin ? (
+              <select
+                value={selectedCajeroId}
+                onChange={(e) => setSelectedCajeroId(e.target.value)}
+                className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 rounded-2xl text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              >
+                {dbUsers.length > 0 ? (
+                  dbUsers.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.nombre_completo} ({ROL_DB_A_UI[u.rol] || u.rol}) — {u.correo}
+                    </option>
+                  ))
+                ) : (
+                  <option value={user?.id || ''}>
+                    {user?.name || 'Usuario Activo'} ({user?.role || 'Cajero'})
+                  </option>
+                )}
+              </select>
+            ) : (
+              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white font-black text-sm flex items-center justify-center flex-shrink-0">
+                  {(user?.name || 'U').charAt(0)}
+                </div>
+                <div>
+                  <p className="text-xs font-black text-slate-900 dark:text-white">{user?.name || 'Usuario Activo'}</p>
+                  <p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">{user?.role || 'Cajero'}</p>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Caja Selector */}
           <div>
             <label className="block text-xs font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">
               Seleccionar Caja Registradora
             </label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              {CASH_REGISTERS.map((caja) => {
+              {registers.map((caja) => {
                 const isSelected = selectedCajaId === caja.id;
                 return (
                   <button
@@ -135,7 +194,7 @@ export default function PosCashOpenModal({
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="text-xs font-bold truncate">{caja.label}</p>
-                      <p className="text-[10px] text-slate-400 truncate">{caja.role}</p>
+                      <p className="text-[10px] text-slate-400 truncate">{caja.cashier} • {caja.role}</p>
                     </div>
                     {isSelected && <Check size={16} className="text-emerald-600 dark:text-emerald-400 flex-shrink-0" />}
                   </button>

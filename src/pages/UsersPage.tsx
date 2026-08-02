@@ -15,6 +15,7 @@ import {
   Download,
   Eye,
   Sliders,
+  AlertTriangle,
 } from 'lucide-react';
 import { exportTableToPdf } from '@/lib/exportPdf';
 import { useUsuarios } from '@/hooks/useUsuarios';
@@ -25,6 +26,7 @@ import type { AgenteComercial, Rol, RolDb } from '@/types/database';
 import type { UserRole } from '@/lib/auth';
 import { toast } from 'sonner';
 import { isSupabaseConfigured } from '@/services/clienteSupabase';
+import { isMissingRolesTableError } from '@/services/roles.service';
 
 type Tab = 'users' | 'roles' | 'agents';
 
@@ -413,6 +415,21 @@ export default function UsersPage() {
 
         {tab === 'roles' && (
           <div className="space-y-4">
+            {rolesError && isMissingRolesTableError(rolesError) && (
+              <div className="card border-amber-500/40 bg-amber-500/10 p-4 text-xs text-amber-800 dark:text-amber-200 flex flex-col gap-1.5">
+                <div className="flex items-center gap-2 font-bold text-sm text-amber-900 dark:text-amber-100">
+                  <AlertTriangle size={16} className="text-amber-600 flex-shrink-0" />
+                  <span>Sincronización remota pendiente — Tabla "roles" en Supabase</span>
+                </div>
+                <p>
+                  {rolesError}
+                </p>
+                <p className="font-medium">
+                  💡 <strong>Instrucciones:</strong> Abre tu panel de Supabase → <strong>SQL Editor</strong>, pega el contenido de <code className="bg-amber-500/20 px-1 py-0.5 rounded font-mono">supabase/migrations/008_crear_tabla_roles.sql</code> y haz clic en <strong>Run</strong>.
+                </p>
+              </div>
+            )}
+
             <div className="card p-4 flex flex-col sm:flex-row items-center justify-between gap-3 bg-secondary/30">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold">

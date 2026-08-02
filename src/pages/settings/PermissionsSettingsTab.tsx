@@ -11,6 +11,7 @@ import {
   ChevronRight,
   Info,
   Sparkles,
+  AlertTriangle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { UserRole } from '@/types/roles';
@@ -32,6 +33,7 @@ import {
   savePermissionsMatrix,
 } from '@/lib/permissionsStore';
 import { isSupabaseConfigured } from '@/services/clienteSupabase';
+import { isMissingRolesTableError } from '@/services/roles.service';
 
 const ROLES: UserRole[] = ['Administrador', 'Cajero', 'Vendedor', 'Almacenista', 'Contador'];
 
@@ -212,29 +214,26 @@ export default function PermissionsSettingsTab() {
     );
   }
 
-  if (loadError || getPermissionsLoadError()) {
-    return (
-      <div className="card p-8 space-y-3">
-        <h2 className="text-lg font-bold text-foreground">No se pudieron cargar los permisos</h2>
-        <p className="text-sm text-danger">{loadError || getPermissionsLoadError()}</p>
-        <p className="text-sm text-muted-foreground">
-          En Supabase → SQL Editor ejecuta el archivo{' '}
-          <code className="text-xs bg-secondary px-1.5 py-0.5 rounded">008_crear_tabla_roles.sql</code> y vuelve a
-          entrar aquí.
-        </p>
-        <button
-          type="button"
-          className="btn-primary w-fit"
-          onClick={() => window.location.reload()}
-        >
-          Reintentar
-        </button>
-      </div>
-    );
-  }
+  const loadErr = loadError || getPermissionsLoadError();
+  const isMissingRolesTable = loadErr ? isMissingRolesTableError(loadErr) : false;
 
   return (
     <div className="space-y-4">
+      {(isMissingRolesTable || (loadErr && !isMissingRolesTable)) && (
+        <div className="card border-amber-500/40 bg-amber-500/10 p-4 space-y-2 text-xs text-amber-800 dark:text-amber-200">
+          <div className="flex items-center gap-2 font-bold text-sm text-amber-900 dark:text-amber-100">
+            <AlertTriangle size={18} className="text-amber-600 flex-shrink-0" />
+            <span>Sincronización remota pendiente — Tabla "roles" en Supabase</span>
+          </div>
+          <p>
+            {loadErr}
+          </p>
+          <p className="font-medium">
+            💡 <strong>Instrucciones:</strong> Abre tu panel de Supabase → <strong>SQL Editor</strong>, abre o pega el contenido del archivo <code className="bg-amber-500/20 px-1.5 py-0.5 rounded font-mono">supabase/migrations/008_crear_tabla_roles.sql</code> y haz clic en <strong>Run</strong>.
+          </p>
+        </div>
+      )}
+
       <div className="card p-5 sm:p-6 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
           <div>
@@ -242,9 +241,6 @@ export default function PermissionsSettingsTab() {
             <p className="text-sm text-muted-foreground mt-1 max-w-lg">
               Configura a qué módulos puede entrar cada rol. La acción <strong>Ver</strong> controla
               el menú y las rutas; el resto define qué puede hacer dentro del módulo.
-              <span className="block mt-1 text-primary font-medium">
-                Solo datos de Supabase (tabla roles) — sin simulaciones locales.
-              </span>
             </p>
           </div>
           <div className="flex flex-wrap gap-2 flex-shrink-0">

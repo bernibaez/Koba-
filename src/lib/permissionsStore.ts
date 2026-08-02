@@ -47,9 +47,7 @@ export async function loadPermissionsMatrix(force = false): Promise<PermissionsM
       return remote;
     } catch (e) {
       lastError = e instanceof Error ? e.message : 'Error al cargar permisos';
-      console.warn('[permisos]', lastError);
-      // No relanzar: el login/app deben seguir; Permisos mostrará el error.
-      cachedMatrix = emptyPermissionsMatrix();
+      cachedMatrix = buildDefaultMatrix();
       return cachedMatrix;
     } finally {
       loadPromise = null;
