@@ -7,6 +7,8 @@ export type AuditActionType =
   | 'Cambio de precio'
   | 'Eliminación'
   | 'Cierre de caja'
+  | 'Apertura de caja'
+  | 'Inicio de caja'
   | 'Compra'
   | 'Pago';
 

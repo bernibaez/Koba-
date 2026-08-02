@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import AppLayout from '@/components/AppLayout';
 import {
   Users,
@@ -13,13 +14,14 @@ import {
   ToggleRight,
   Download,
   Eye,
+  Sliders,
 } from 'lucide-react';
 import { exportTableToPdf } from '@/lib/exportPdf';
 import { useUsuarios } from '@/hooks/useUsuarios';
 import { useAgentes } from '@/hooks/useAgentes';
 import { useRoles } from '@/hooks/useRoles';
 import { ROL_DB_A_UI, ROL_UI_A_DB } from '@/services/auth.service';
-import type { AgenteComercial, RolDb } from '@/types/database';
+import type { AgenteComercial, Rol, RolDb } from '@/types/database';
 import type { UserRole } from '@/lib/auth';
 import { toast } from 'sonner';
 import { isSupabaseConfigured } from '@/services/clienteSupabase';
@@ -48,12 +50,15 @@ export default function UsersPage() {
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingAgent, setEditingAgent] = useState<AgenteComercial | null>(null);
+  const [editingRole, setEditingRole] = useState<Rol | null>(null);
   const [formNombre, setFormNombre] = useState('');
   const [formCorreo, setFormCorreo] = useState('');
   const [formTelefono, setFormTelefono] = useState('');
   const [formPassword, setFormPassword] = useState('');
   const [formComision, setFormComision] = useState('5');
   const [formRol, setFormRol] = useState<UserRole>('Cajero');
+  const [formDescRol, setFormDescRol] = useState('');
+  const [formCodigoRol, setFormCodigoRol] = useState('');
   const [saving, setSaving] = useState(false);
 
   const { usuarios, loading, crear, alternarActivo } = useUsuarios(search);
@@ -65,7 +70,13 @@ export default function UsersPage() {
     alternarActivo: alternarActivoAgente,
     eliminar: eliminarAgente,
   } = useAgentes(search);
-  const { roles, loading: loadingRoles } = useRoles(search);
+  const {
+    roles,
+    loading: loadingRoles,
+    crear: crearRol,
+    actualizar: actualizarRol,
+    eliminar: eliminarRol,
+  } = useRoles(search);
 
   const countPermissions = (permisos: Record<string, Record<string, boolean>> | null | undefined): number => {
     if (!permisos) return 0;
@@ -79,14 +90,16 @@ export default function UsersPage() {
     return count;
   };
 
-
   const resetForm = () => {
     setFormNombre('');
     setFormCorreo('');
     setFormTelefono('');
     setFormPassword('');
     setFormComision('5');
+    setFormDescRol('');
+    setFormCodigoRol('');
     setEditingAgent(null);
+    setEditingRole(null);
   };
 
   const openNewModal = () => {
@@ -101,6 +114,58 @@ export default function UsersPage() {
     setFormTelefono(agent.telefono ?? '');
     setFormComision(String(agent.porcentaje_comision ?? 0));
     setShowModal(true);
+  };
+
+  const openEditRole = (role: Rol) => {
+    setEditingRole(role);
+    setFormNombre(role.nombre);
+    setFormDescRol(role.descripcion ?? '');
+    setFormCodigoRol(role.codigo);
+    setShowModal(true);
+  };
+
+  const handleSaveRole = async () => {
+    if (!formNombre.trim()) {
+      toast.error('Ingresa el nombre del rol');
+      return;
+    }
+    setSaving(true);
+    try {
+      if (editingRole) {
+        await actualizarRol(editingRole.id, {
+          nombre: formNombre.trim(),
+          descripcion: formDescRol.trim() || null,
+        });
+        toast.success(`Rol "${formNombre.trim()}" actualizado correctamente`);
+      } else {
+        const codigo = formCodigoRol.trim()
+          ? formCodigoRol.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_')
+          : formNombre.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_');
+        await crearRol({
+          codigo,
+          nombre: formNombre.trim(),
+          descripcion: formDescRol.trim() || null,
+          permisos: {},
+        });
+        toast.success(`Rol "${formNombre.trim()}" creado exitosamente`);
+      }
+      setShowModal(false);
+      resetForm();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Error al guardar rol');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteRole = async (role: Rol) => {
+    if (!confirm(`¿Estás seguro de eliminar el rol "${role.nombre}"?`)) return;
+    try {
+      await eliminarRol(role.id);
+      toast.success(`Rol "${role.nombre}" eliminado`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'No se pudo eliminar el rol');
+    }
   };
 
   const tabs = [
@@ -215,7 +280,6 @@ export default function UsersPage() {
           <button
             onClick={openNewModal}
             className="btn-primary flex items-center gap-2 w-fit"
-            disabled={tab === 'roles'}
           >
             <Plus size={16} /> Nuevo {tab === 'users' ? 'Usuario' : tab === 'roles' ? 'Rol' : 'Agente'}
           </button>
@@ -354,8 +418,28 @@ export default function UsersPage() {
         )}
 
         {tab === 'roles' && (
-          <div className="card overflow-hidden">
-            <div className="overflow-x-auto">
+          <div className="space-y-4">
+            <div className="card p-4 flex flex-col sm:flex-row items-center justify-between gap-3 bg-secondary/30">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold">
+                  <Shield size={20} />
+                </div>
+                <div>
+                  <p className="font-bold text-foreground text-sm">Matriz de Permisos de Acceso</p>
+                  <p className="text-xs text-muted-foreground">Configura los accesos y permisos por módulo para todos los usuarios y roles del sistema.</p>
+                </div>
+              </div>
+              <Link
+                to="/settings?section=permissions"
+                className="btn-primary text-xs flex items-center gap-1.5 whitespace-nowrap"
+              >
+                <Sliders size={14} />
+                <span>Configurar Permisos de Accesos</span>
+              </Link>
+            </div>
+
+            <div className="card overflow-hidden">
+              <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border bg-secondary/50">
@@ -399,10 +483,20 @@ export default function UsersPage() {
                         <td className="px-4 py-3 hidden md:table-cell text-muted-foreground">{activeUsersCount} usuarios</td>
                         <td className="px-4 py-3">
                           <div className="flex items-center justify-end gap-1">
-                            <button className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors">
+                            <button
+                              type="button"
+                              onClick={() => openEditRole(role)}
+                              className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+                              title="Editar rol"
+                            >
                               <Edit2 size={14} />
                             </button>
-                            <button className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-danger transition-colors">
+                            <button
+                              type="button"
+                              onClick={() => void handleDeleteRole(role)}
+                              className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-danger transition-colors"
+                              title="Eliminar rol"
+                            >
                               <Trash2 size={14} />
                             </button>
                           </div>
@@ -414,6 +508,7 @@ export default function UsersPage() {
               </table>
             </div>
           </div>
+        </div>
         )}
 
         {tab === 'agents' && (
@@ -537,7 +632,9 @@ export default function UsersPage() {
               {tab === 'users'
                 ? 'Nuevo Usuario'
                 : tab === 'roles'
-                  ? 'Nuevo Rol'
+                  ? editingRole
+                    ? 'Editar Rol'
+                    : 'Nuevo Rol'
                   : editingAgent
                     ? 'Editar Agente'
                     : 'Nuevo Agente'}
@@ -545,17 +642,19 @@ export default function UsersPage() {
             <div className="space-y-3">
               <input
                 className="input-field"
-                placeholder="Nombre completo"
+                placeholder={tab === 'roles' ? 'Nombre del rol (ej: Cajero Nocturno)' : 'Nombre completo'}
                 value={formNombre}
                 onChange={(e) => setFormNombre(e.target.value)}
               />
-              <input
-                className="input-field"
-                placeholder="Correo electrónico"
-                type="email"
-                value={formCorreo}
-                onChange={(e) => setFormCorreo(e.target.value)}
-              />
+              {tab !== 'roles' && (
+                <input
+                  className="input-field"
+                  placeholder="Correo electrónico"
+                  type="email"
+                  value={formCorreo}
+                  onChange={(e) => setFormCorreo(e.target.value)}
+                />
+              )}
               {tab !== 'roles' && (
                 <input
                   className="input-field"
@@ -581,17 +680,28 @@ export default function UsersPage() {
                 </div>
               )}
               {tab === 'users' && (
-                <select
-                  className="input-field"
-                  value={formRol}
-                  onChange={(e) => setFormRol(e.target.value as UserRole)}
-                >
-                  {mockRoles.map((r) => (
-                    <option key={r.id} value={r.name}>
-                      {r.name}
-                    </option>
-                  ))}
-                </select>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                    Rol del usuario
+                  </label>
+                  <select
+                    className="input-field"
+                    value={formRol}
+                    onChange={(e) => setFormRol(e.target.value as UserRole)}
+                  >
+                    {roles.length > 0
+                      ? roles.map((r) => (
+                          <option key={r.id} value={(ROL_DB_A_UI[r.codigo as keyof typeof ROL_DB_A_UI] || r.nombre) as UserRole}>
+                            {r.nombre} ({r.codigo})
+                          </option>
+                        ))
+                      : ['Administrador', 'Cajero', 'Vendedor', 'Almacenista', 'Contador'].map((r) => (
+                          <option key={r} value={r as UserRole}>
+                            {r}
+                          </option>
+                        ))}
+                  </select>
+                </div>
               )}
               {tab === 'users' && (
                 <input
@@ -602,7 +712,24 @@ export default function UsersPage() {
                   onChange={(e) => setFormPassword(e.target.value)}
                 />
               )}
-              {tab === 'roles' && <textarea className="input-field" placeholder="Descripción del rol" rows={3} />}
+              {tab === 'roles' && (
+                <>
+                  <input
+                    className="input-field font-mono text-xs"
+                    placeholder="Código identificador (ej: cajero_nocturno - opcional)"
+                    disabled={!!editingRole}
+                    value={formCodigoRol}
+                    onChange={(e) => setFormCodigoRol(e.target.value)}
+                  />
+                  <textarea
+                    className="input-field"
+                    placeholder="Descripción de funciones y nivel de acceso del rol"
+                    rows={3}
+                    value={formDescRol}
+                    onChange={(e) => setFormDescRol(e.target.value)}
+                  />
+                </>
+              )}
             </div>
             <div className="flex gap-3 mt-6">
               <button
@@ -620,7 +747,7 @@ export default function UsersPage() {
                 onClick={() => {
                   if (tab === 'users') void handleCreateUser();
                   else if (tab === 'agents') void handleSaveAgent();
-                  else setShowModal(false);
+                  else if (tab === 'roles') void handleSaveRole();
                 }}
               >
                 {saving ? 'Guardando…' : 'Guardar'}

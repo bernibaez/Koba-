@@ -5,11 +5,12 @@ import type { CashClosure } from '@/lib/cashClosureStore';
 import { exportTableToPdf, exportTableToExcel, formatMoneyPdf } from '@/lib/exportPdf';
 import { logAuditEvent } from '@/lib/auditStore';
 import {
-  Lock, Plus, Download, Search, Filter, Calendar, DollarSign, CreditCard, Smartphone, CheckCircle, AlertTriangle, Printer, FileSpreadsheet, Eye, User, X
+  Lock, Plus, Download, Search, Filter, Calendar, DollarSign, CreditCard, Smartphone, CheckCircle, AlertTriangle, Printer, FileSpreadsheet, Eye, User, X, PlayCircle
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { guardarCierreCaja, obtenerCierresCaja } from '@/services/cierresCaja.service';
 import { obtenerHistorialVentas } from '@/services/ventas.service';
+import PosCashOpenModal from '@/pages/point-of-sale-pos/components/PosCashOpenModal';
 
 export default function CashClosurePage() {
   const { user } = useAuth();
@@ -17,7 +18,9 @@ export default function CashClosurePage() {
 
   const [closures, setClosures] = useState<CashClosure[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showOpenModal, setShowOpenModal] = useState(false);
   const [viewingClosure, setViewingClosure] = useState<CashClosure | null>(null);
+
 
   const [searchUser, setSearchUser] = useState('');
   const [singleDate, setSingleDate] = useState('');
@@ -97,6 +100,7 @@ export default function CashClosurePage() {
           if (Number(v.monto_tarjeta) > 0) cardCount += 1;
           if (Number(v.monto_transferencia) > 0) transferCount += 1;
         }
+        const openSession = rows.find((r) => r.estado === 'abierta');
         setCurrentSession((s) => ({
           ...s,
           totalSales,
@@ -105,6 +109,8 @@ export default function CashClosurePage() {
           cardCount,
           totalTransfer,
           transferCount,
+          baseCash: openSession ? Number(openSession.monto_apertura) : s.baseCash,
+          openedAt: openSession?.abierta_en ? openSession.abierta_en : s.openedAt,
         }));
       } catch (e) {
         toast.error(e instanceof Error ? e.message : 'Error al cargar cierres');
@@ -291,7 +297,15 @@ export default function CashClosurePage() {
             </p>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setShowOpenModal(true)}
+              className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm flex items-center gap-2 shadow-sm transition-all active:scale-95"
+            >
+              <PlayCircle size={16} />
+              Iniciar / Abrir Caja
+            </button>
             <button
               type="button"
               onClick={() => setShowCreateModal(true)}
@@ -721,6 +735,19 @@ export default function CashClosurePage() {
               </div>
             </div>
           </div>
+        )}
+
+        {showOpenModal && (
+          <PosCashOpenModal
+            onSuccess={(cierre) => {
+              setCurrentSession((s) => ({
+                ...s,
+                baseCash: Number(cierre.monto_apertura),
+                openedAt: cierre.abierta_en,
+              }));
+            }}
+            onClose={() => setShowOpenModal(false)}
+          />
         )}
       </div>
     </AppLayout>

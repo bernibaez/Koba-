@@ -1,4 +1,5 @@
 import React, { useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import AppLayout from '@/components/AppLayout';
 import {
   Building2, MapPin, FileText, Printer, Tag, DollarSign, Globe, Bell, Shield, Mail, Upload, Save, ChevronRight, Trash2, ImageIcon, ShieldCheck
@@ -28,7 +29,9 @@ const settingsSections = [
 ];
 
 export default function SettingsPage() {
-  const [activeSection, setActiveSection] = useState('company');
+  const [searchParams] = useSearchParams();
+  const initialSection = searchParams.get('section') || searchParams.get('tab') || 'company';
+  const [activeSection, setActiveSection] = useState(initialSection);
   const [logoPreview, setLogoPreview] = useState<string | null>(() => getCompanyLogo());
   const [logoError, setLogoError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);

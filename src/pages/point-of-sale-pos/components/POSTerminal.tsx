@@ -11,6 +11,7 @@ import PosScaleModal from './PosScaleModal';
 import PosReturnModal from './PosReturnModal';
 import PosCashSwitchModal from './PosCashSwitchModal';
 import RegisterDetailsModal from './RegisterDetailsModal';
+import PosCashOpenModal from './PosCashOpenModal';
 import FiscalInvoiceModal from '@/components/FiscalInvoiceModal';
 import { getCashRegister, type CashRegisterId } from '@/lib/cashRegisters';
 import {
@@ -80,6 +81,7 @@ export default function POSTerminal() {
   const [awaitingDeleteScan, setAwaitingDeleteScan] = useState(false);
   const [activeCashId, setActiveCashId] = useState<CashRegisterId>(ADMIN_OWN_CASH);
   const [cashSwitchOpen, setCashSwitchOpen] = useState(false);
+  const [openCashModalOpen, setOpenCashModalOpen] = useState(false);
 
   const activeCash = getCashRegister(activeCashId);
   const isRemoteAdmin = activeCashId !== ADMIN_OWN_CASH;
@@ -318,6 +320,7 @@ export default function POSTerminal() {
         onCancelDelete={() => setAwaitingDeleteScan(false)}
         onSwitchCash={() => setCashSwitchOpen(true)}
         onOpenRegisterDetails={() => setRegisterDetailsOpen(true)}
+        onOpenCash={() => setOpenCashModalOpen(true)}
       />
 
       {/* Main Grid: Left Panel (Cart) & Right Panel (Products Catalog) */}
@@ -501,6 +504,15 @@ export default function POSTerminal() {
         <FiscalInvoiceModal
           invoice={lastFiscalInvoice}
           onClose={() => setLastFiscalInvoice(null)}
+        />
+      )}
+      {openCashModalOpen && (
+        <PosCashOpenModal
+          initialCajaId={String(activeCashId)}
+          onSuccess={() => {
+            activeCash.open = true;
+          }}
+          onClose={() => setOpenCashModalOpen(false)}
         />
       )}
     </div>

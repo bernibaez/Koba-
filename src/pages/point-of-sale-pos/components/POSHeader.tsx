@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  Home, RotateCcw, XCircle, Briefcase, Scale, Undo2, Pause, PlusCircle, Calendar, Monitor
+  Home, RotateCcw, XCircle, Briefcase, Scale, Undo2, Pause, PlusCircle, Calendar, Monitor, PlayCircle
 } from 'lucide-react';
 
 interface POSHeaderProps {
@@ -20,6 +20,7 @@ interface POSHeaderProps {
   onCancelDelete: () => void;
   onSwitchCash: () => void;
   onOpenRegisterDetails?: () => void;
+  onOpenCash?: () => void;
 }
 
 export default function POSHeader({
@@ -38,6 +39,7 @@ export default function POSHeader({
   onCancelDelete,
   onSwitchCash,
   onOpenRegisterDetails,
+  onOpenCash,
 }: POSHeaderProps) {
   const [timeStr, setTimeStr] = useState('');
 
@@ -153,15 +155,29 @@ export default function POSHeader({
           </button>
         </div>
 
-        {/* Right: Agregar gasto button */}
-        <button
-          type="button"
-          onClick={onExpense}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 text-xs font-black hover:bg-slate-50 transition-all shadow-2xs"
-        >
-          <PlusCircle size={15} className="text-slate-900 dark:text-white" />
-          <span>Agregar gasto</span>
-        </button>
+        {/* Right: Iniciar caja + Agregar gasto */}
+        <div className="flex items-center gap-2">
+          {onOpenCash && (
+            <button
+              type="button"
+              onClick={onOpenCash}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black transition-all shadow-sm active:scale-95 border border-emerald-500"
+              title="Iniciar o abrir turno de caja con fondo inicial"
+            >
+              <PlayCircle size={15} />
+              <span>Iniciar Caja</span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={onExpense}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 text-xs font-black hover:bg-slate-50 transition-all shadow-2xs"
+          >
+            <PlusCircle size={15} className="text-slate-900 dark:text-white" />
+            <span>Agregar gasto</span>
+          </button>
+        </div>
       </div>
     </div>
   );

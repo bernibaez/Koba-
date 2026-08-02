@@ -211,14 +211,13 @@ export function buildDefaultMatrix(): PermissionsMatrix {
   }
 
   const cajero = empty();
-  for (const id of ['pos', 'ventas', 'combos', 'devoluciones', 'cierre_caja', 'contactos', 'configuracion']) {
+  for (const id of ['pos', 'cierre_caja']) {
     const mod = PERMISSION_MODULES.find((m) => m.id === id)!;
     cajero[id] = {
       ...Object.fromEntries(mod.actions.map((a) => [a, false])),
       ver: true,
-      crear: ['pos', 'ventas', 'devoluciones', 'contactos'].includes(id),
-      editar: id === 'pos' || id === 'contactos',
-      exportar: id === 'ventas',
+      crear: id === 'pos' || id === 'cierre_caja',
+      editar: id === 'pos',
       aprobar: id === 'cierre_caja',
     };
   }
@@ -301,7 +300,7 @@ export const ROLE_META: Record<
     accent: 'border-emerald-500/40',
   },
   Cajero: {
-    description: 'POS, ventas rápidas y cierre de caja',
+    description: 'Acceso exclusivo al Punto de Venta (POS) y Cierre de Caja',
     color: 'bg-sky-500/15 text-sky-700 dark:text-sky-400',
     accent: 'border-sky-500/40',
   },
