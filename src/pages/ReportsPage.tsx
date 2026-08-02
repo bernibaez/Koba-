@@ -69,45 +69,54 @@ const reportTypes: { id: ReportId; label: string; icon: React.ReactNode; color: 
   { id: 'cashier', label: 'Informe de Caja', icon: <Wallet size={18} />, color: 'text-success' },
 ];
 
-function renderReport(id: ReportId) {
+function renderReport(id: ReportId, dateFrom: string, dateTo: string) {
+  const period = { dateFrom, dateTo };
   switch (id) {
     case 'profit-loss':
-      return <ProfitLossReport />;
+      return <ProfitLossReport {...period} />;
     case 'product-profit':
-      return <ProductProfitReport />;
+      return <ProductProfitReport {...period} />;
     case 'combos':
-      return <CombosReport />;
+      return <CombosReport {...period} />;
     case 'sales':
-      return <SalesReport />;
+      return <SalesReport {...period} />;
     case 'purchases':
-      return <PurchasesReport />;
+      return <PurchasesReport {...period} />;
     case 'stock':
-      return <InventoryReport />;
+      return <InventoryReport {...period} />;
     case 'stock-detail':
-      return <StockDetailReport />;
+      return <StockDetailReport {...period} />;
     case 'adjustments':
-      return <AdjustmentsReport />;
+      return <AdjustmentsReport {...period} />;
     case 'expenses':
-      return <ExpensesReport />;
+      return <ExpensesReport {...period} />;
     case 'customers':
-      return <CustomersReport />;
+      return <CustomersReport {...period} />;
     case 'suppliers':
-      return <SuppliersReport />;
+      return <SuppliersReport {...period} />;
     case 'agents':
-      return <AgentsReport />;
+      return <AgentsReport {...period} />;
     case 'fiscal':
-      return <FiscalDGIIReport />;
+      return <FiscalDGIIReport {...period} />;
     case 'cashier':
-      return <CashierReport />;
+      return <CashierReport {...period} />;
     default:
-      return <ProfitLossReport />;
+      return <ProfitLossReport {...period} />;
   }
 }
 
+function defaultDateRange() {
+  const now = new Date();
+  const hasta = now.toISOString().slice(0, 10);
+  const desde = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+  return { desde, hasta };
+}
+
 export default function ReportsPage() {
+  const defaults = defaultDateRange();
   const [activeReport, setActiveReport] = useState<ReportId>('profit-loss');
-  const [dateFrom, setDateFrom] = useState('2026-07-01');
-  const [dateTo, setDateTo] = useState('2026-07-26');
+  const [dateFrom, setDateFrom] = useState(defaults.desde);
+  const [dateTo, setDateTo] = useState(defaults.hasta);
   const [branch, setBranch] = useState('all');
   const [generated, setGenerated] = useState(true);
 
@@ -132,7 +141,13 @@ export default function ReportsPage() {
               <Printer size={16} />
               Imprimir
             </button>
-            <button type="button" className="btn-primary flex items-center gap-2" onClick={() => exportReportPdf(activeReport as any, activeLabel, dateFrom, dateTo)}>
+            <button
+              type="button"
+              className="btn-primary flex items-center gap-2"
+              onClick={() => {
+                void exportReportPdf(activeReport, activeLabel, dateFrom, dateTo);
+              }}
+            >
               <Download size={16} />
               Exportar PDF
             </button>
@@ -192,9 +207,6 @@ export default function ReportsPage() {
                   onChange={(e) => setBranch(e.target.value)}
                 >
                   <option value="all">Todas las sucursales</option>
-                  <option value="main">Sucursal Principal</option>
-                  <option value="north">Sucursal Norte</option>
-                  <option value="east">Sucursal Este</option>
                 </select>
               </div>
               <button type="button" className="btn-primary flex items-center gap-2" onClick={handleGenerate}>
@@ -205,21 +217,11 @@ export default function ReportsPage() {
 
             <div className="flex items-center gap-2 text-xs text-muted-foreground px-1">
               <BarChart2 size={14} />
-              Periodo: {dateFrom} → {dateTo}
-              {branch !== 'all' && (
-                <span>
-                  ·{' '}
-                  {branch === 'main'
-                    ? 'Sucursal Principal'
-                    : branch === 'north'
-                      ? 'Sucursal Norte'
-                      : 'Sucursal Este'}
-                </span>
-              )}
+              Periodo: {dateFrom} → {dateTo} · Datos en vivo desde Supabase
             </div>
 
             {generated ? (
-              renderReport(activeReport)
+              renderReport(activeReport, dateFrom, dateTo)
             ) : (
               <div className="card p-12 text-center text-muted-foreground">
                 Selecciona un periodo y pulsa <strong>Generar</strong> para ver el informe.
