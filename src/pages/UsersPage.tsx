@@ -56,12 +56,9 @@ export default function UsersPage() {
   const {
     roles,
     loading: loadingRoles,
-<<<<<<< HEAD
     error: rolesError,
-=======
     crear: crearRol,
     actualizar: actualizarRol,
->>>>>>> c7ac6d074dca84bd6fc392ffa15cb2ed64c4b6de
     eliminar: eliminarRol,
   } = useRoles(search);
 
@@ -146,6 +143,10 @@ export default function UsersPage() {
   };
 
   const handleDeleteRole = async (role: Rol) => {
+    if (role.codigo === 'admin') {
+      toast.error('No se puede eliminar el rol Administrador');
+      return;
+    }
     if (!confirm(`¿Estás seguro de eliminar el rol "${role.nombre}"?`)) return;
     try {
       await eliminarRol(role.id);
@@ -490,39 +491,18 @@ export default function UsersPage() {
                           <div className="flex items-center justify-end gap-1">
                             <button
                               type="button"
-<<<<<<< HEAD
-                              title="Editar permisos en Configuración"
-                              onClick={() => {
-                                window.location.href = '/settings';
-                              }}
-                              className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
-=======
                               onClick={() => openEditRole(role)}
                               className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
                               title="Editar rol"
->>>>>>> c7ac6d074dca84bd6fc392ffa15cb2ed64c4b6de
                             >
                               <Edit2 size={14} />
                             </button>
                             <button
                               type="button"
-<<<<<<< HEAD
                               disabled={role.codigo === 'admin'}
-                              onClick={() => {
-                                if (role.codigo === 'admin') return;
-                                if (!confirm(`¿Eliminar rol "${role.nombre}"?`)) return;
-                                void eliminarRol(role.id)
-                                  .then(() => toast.success('Rol eliminado'))
-                                  .catch((e) =>
-                                    toast.error(e instanceof Error ? e.message : 'No se pudo eliminar')
-                                  );
-                              }}
-                              className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-danger transition-colors disabled:opacity-30"
-=======
                               onClick={() => void handleDeleteRole(role)}
-                              className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-danger transition-colors"
+                              className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-danger transition-colors disabled:opacity-30"
                               title="Eliminar rol"
->>>>>>> c7ac6d074dca84bd6fc392ffa15cb2ed64c4b6de
                             >
                               <Trash2 size={14} />
                             </button>
@@ -707,31 +687,6 @@ export default function UsersPage() {
                 </div>
               )}
               {tab === 'users' && (
-<<<<<<< HEAD
-                <select
-                  className="input-field"
-                  value={formRol}
-                  onChange={(e) => setFormRol(e.target.value as UserRole)}
-                >
-                  {(roles.length > 0
-                    ? roles.map((r) => ({
-                        value: (ROL_DB_A_UI[r.codigo as RolDb] ?? r.nombre) as UserRole,
-                        label: r.nombre,
-                      }))
-                    : ([
-                        'Administrador',
-                        'Cajero',
-                        'Vendedor',
-                        'Almacenista',
-                        'Contador',
-                      ] as UserRole[]).map((r) => ({ value: r, label: r }))
-                  ).map((r) => (
-                    <option key={r.label} value={r.value}>
-                      {r.label}
-                    </option>
-                  ))}
-                </select>
-=======
                 <div>
                   <label className="text-xs font-medium text-muted-foreground mb-1 block">
                     Rol del usuario
@@ -743,18 +698,22 @@ export default function UsersPage() {
                   >
                     {roles.length > 0
                       ? roles.map((r) => (
-                          <option key={r.id} value={(ROL_DB_A_UI[r.codigo as keyof typeof ROL_DB_A_UI] || r.nombre) as UserRole}>
+                          <option
+                            key={r.id}
+                            value={(ROL_DB_A_UI[r.codigo as RolDb] || r.nombre) as UserRole}
+                          >
                             {r.nombre} ({r.codigo})
                           </option>
                         ))
-                      : ['Administrador', 'Cajero', 'Vendedor', 'Almacenista', 'Contador'].map((r) => (
-                          <option key={r} value={r as UserRole}>
+                      : (
+                          ['Administrador', 'Cajero', 'Vendedor', 'Almacenista', 'Contador'] as UserRole[]
+                        ).map((r) => (
+                          <option key={r} value={r}>
                             {r}
                           </option>
                         ))}
                   </select>
                 </div>
->>>>>>> c7ac6d074dca84bd6fc392ffa15cb2ed64c4b6de
               )}
               {tab === 'users' && (
                 <input
@@ -766,11 +725,6 @@ export default function UsersPage() {
                 />
               )}
               {tab === 'roles' && (
-<<<<<<< HEAD
-                <p className="text-sm text-muted-foreground">
-                  Los permisos de cada rol se editan en <strong>Configuración → Permisos</strong> (Supabase).
-                </p>
-=======
                 <>
                   <input
                     className="input-field font-mono text-xs"
@@ -786,8 +740,14 @@ export default function UsersPage() {
                     value={formDescRol}
                     onChange={(e) => setFormDescRol(e.target.value)}
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Los permisos detallados se configuran en{' '}
+                    <Link to="/settings" className="text-primary font-semibold hover:underline">
+                      Configuración → Permisos
+                    </Link>
+                    .
+                  </p>
                 </>
->>>>>>> c7ac6d074dca84bd6fc392ffa15cb2ed64c4b6de
               )}
             </div>
             <div className="flex gap-3 mt-6">
