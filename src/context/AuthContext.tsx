@@ -1,6 +1,10 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { getStoredUser, storeUser, type AuthUser } from '@/lib/auth';
 import {
+  clearPermissionsCache,
+  loadPermissionsMatrix,
+} from '@/lib/permissionsStore';
+import {
   cerrarSesion,
   iniciarSesion,
   iniciarSesionConCodigo,
@@ -33,11 +37,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     async function hydrate() {
       if (!isSupabaseConfigured()) {
+        await loadPermissionsMatrix();
         setIsLoading(false);
         return;
       }
       try {
         const sessionUser = await obtenerSesionActual();
+        await loadPermissionsMatrix(true);
         if (!cancelled) {
           setUser(sessionUser);
           storeUser(sessionUser);
@@ -79,6 +85,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = useCallback(async (username: string, password: string) => {
     const result = await iniciarSesion(username, password);
     if (!result.ok) return result;
+    await loadPermissionsMatrix(true);
     storeUser(result.user);
     setUser(result.user);
     return { ok: true as const, user: result.user };
@@ -87,6 +94,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const loginWithCode = useCallback(async (code: string) => {
     const result = await iniciarSesionConCodigo(code);
     if (!result.ok) return result;
+    await loadPermissionsMatrix(true);
     storeUser(result.user);
     setUser(result.user);
     return { ok: true as const, user: result.user };
@@ -94,6 +102,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = useCallback(async () => {
     await cerrarSesion();
+    clearPermissionsCache();
     storeUser(null);
     setUser(null);
   }, []);

@@ -26,9 +26,11 @@ import {
   countEnabled,
   countModuleEnabled,
   getPermissionsMatrix,
+  loadPermissionsMatrix,
   resetPermissionsMatrix,
   savePermissionsMatrix,
 } from '@/lib/permissionsStore';
+import { isSupabaseConfigured } from '@/services/clienteSupabase';
 
 const ROLES: UserRole[] = ['Administrador', 'Cajero', 'Vendedor', 'Almacenista', 'Contador'];
 
@@ -76,6 +78,25 @@ export default function PermissionsSettingsTab() {
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    loadPermissionsMatrix(true)
+      .then((m) => {
+        if (alive) setMatrix(m);
+      })
+      .catch((e) => {
+        toast.error(e instanceof Error ? e.message : 'No se pudieron cargar permisos');
+      })
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const isAdminLocked = selectedRole === 'Administrador';
   const roleMap = matrix[selectedRole];
@@ -129,22 +150,35 @@ export default function PermissionsSettingsTab() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await new Promise((r) => setTimeout(r, 280));
-      savePermissionsMatrix(matrix);
+      await savePermissionsMatrix(matrix);
       setDirty(false);
       setSavedFlash(true);
-      toast.success('Accesos actualizados. El menú lateral reflejará estos cambios.');
+      toast.success(
+        isSupabaseConfigured()
+          ? 'Permisos guardados en Supabase. El menú reflejará estos cambios.'
+          : 'Accesos actualizados localmente.'
+      );
       setTimeout(() => setSavedFlash(false), 1800);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'No se pudieron guardar los permisos');
     } finally {
       setSaving(false);
     }
   };
 
-  const handleReset = () => {
-    const defaults = resetPermissionsMatrix();
-    setMatrix(defaults);
-    setDirty(false);
-    toast.info('Permisos restaurados a valores por defecto');
+  const handleReset = async () => {
+    try {
+      const defaults = await resetPermissionsMatrix();
+      setMatrix(defaults);
+      setDirty(false);
+      toast.info(
+        isSupabaseConfigured()
+          ? 'Permisos restaurados y sincronizados con Supabase'
+          : 'Permisos restaurados a valores por defecto'
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'No se pudieron restaurar los permisos');
+    }
   };
 
   useEffect(() => {
@@ -158,6 +192,14 @@ export default function PermissionsSettingsTab() {
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, [dirty]);
 
+  if (loading) {
+    return (
+      <div className="card p-12 text-center text-sm text-muted-foreground">
+        Cargando permisos desde {isSupabaseConfigured() ? 'Supabase' : 'almacenamiento local'}…
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <div className="card p-5 sm:p-6 space-y-4">
@@ -167,6 +209,9 @@ export default function PermissionsSettingsTab() {
             <p className="text-sm text-muted-foreground mt-1 max-w-lg">
               Configura a qué módulos puede entrar cada rol. La acción <strong>Ver</strong> controla
               el menú y las rutas; el resto define qué puede hacer dentro del módulo.
+              {isSupabaseConfigured() && (
+                <span className="block mt-1 text-primary font-medium">Sincronizado con Supabase (tabla roles).</span>
+              )}
             </p>
           </div>
           <div className="flex flex-wrap gap-2 flex-shrink-0">

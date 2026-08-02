@@ -1,5 +1,8 @@
 import { getSupabase, isSupabaseConfigured, tryGetSupabase } from './clienteSupabase';
 import { ROL_COLUMNS, type Rol } from '@/types/database';
+import type { UserRole } from '@/types/roles';
+import { buildDefaultMatrix, type PermissionsMatrix, type RolePermissionMap } from '@/lib/permissionsCatalog';
+import { ROL_DB_A_UI, ROL_UI_A_DB } from './auth.service';
 
 function errorSupabase(error: unknown): Error {
   if (error && typeof error === 'object') {
@@ -12,43 +15,23 @@ function errorSupabase(error: unknown): Error {
 
 const LOCAL_ROLES_KEY = 'market_erp_local_roles';
 
-const MOCK_DEFAULT_ROLES: Rol[] = [
-  {
-    id: '1',
-    codigo: 'admin',
-    nombre: 'Administrador',
-    descripcion: 'Acceso total al sistema y configuración',
-    permisos: {},
-  },
-  {
-    id: '2',
-    codigo: 'cajero',
-    nombre: 'Cajero',
-    descripcion: 'POS, ventas rápidas y cierre de caja',
-    permisos: {},
-  },
-  {
-    id: '3',
-    codigo: 'vendedor',
-    nombre: 'Vendedor',
-    descripcion: 'Ventas, clientes y cuentas por cobrar',
-    permisos: {},
-  },
-  {
-    id: '4',
-    codigo: 'almacen',
-    nombre: 'Almacenista',
-    descripcion: 'Inventario, compras y transferencias',
-    permisos: {},
-  },
-  {
-    id: '5',
-    codigo: 'contable',
-    nombre: 'Contador / Finanzas',
-    descripcion: 'Finanzas, informes y auditoría',
-    permisos: {},
-  },
-];
+const ROLE_CODES = ['admin', 'cajero', 'vendedor', 'almacen', 'contable'] as const;
+
+function defaultRolesFromMatrix(): Rol[] {
+  const matrix = buildDefaultMatrix();
+  return ROLE_CODES.map((codigo, i) => {
+    const ui = ROL_DB_A_UI[codigo];
+    return {
+      id: `local-${i + 1}`,
+      codigo,
+      nombre: ui,
+      descripcion: null,
+      permisos: (matrix[ui] ?? {}) as RolePermissionMap,
+    };
+  });
+}
+
+const MOCK_DEFAULT_ROLES: Rol[] = defaultRolesFromMatrix();
 
 function getLocalRoles(): Rol[] {
   const data = localStorage.getItem(LOCAL_ROLES_KEY);
@@ -172,4 +155,85 @@ export async function eliminarRol(id: string): Promise<void> {
   const sb = getSupabase();
   const { error } = await sb.from('roles').delete().eq('id', id);
   if (error) throw errorSupabase(error);
+}
+
+/** Si la tabla está vacía, inserta roles con matriz por defecto. */
+export async function sincronizarRolesPorDefecto(): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  const sb = getSupabase();
+  const { data, error } = await sb.from('roles').select('id').limit(1);
+  if (error) throw errorSupabase(error);
+  if ((data ?? []).length > 0) return;
+
+  const matrix = buildDefaultMatrix();
+  const rows = ROLE_CODES.map((codigo) => {
+    const ui = ROL_DB_A_UI[codigo];
+    return {
+      codigo,
+      nombre: ui,
+      descripcion:
+        codigo === 'admin'
+          ? 'Acceso total al sistema y configuración'
+          : codigo === 'cajero'
+            ? 'POS, ventas rápidas y cierre de caja'
+            : codigo === 'vendedor'
+              ? 'Ventas, clientes y cuentas por cobrar'
+              : codigo === 'almacen'
+                ? 'Inventario, compras y transferencias'
+                : 'Finanzas, informes y auditoría',
+      permisos: matrix[ui] ?? {},
+    };
+  });
+
+  const { error: insErr } = await sb.from('roles').insert(rows);
+  if (insErr) throw errorSupabase(insErr);
+}
+
+/** Convierte filas de `roles` a la matriz UI. */
+export async function obtenerMatrizPermisos(): Promise<PermissionsMatrix> {
+  const roles = await obtenerRoles();
+  const defaults = buildDefaultMatrix();
+  const matrix: PermissionsMatrix = { ...defaults };
+
+  for (const rol of roles) {
+    const ui = ROL_DB_A_UI[rol.codigo as keyof typeof ROL_DB_A_UI];
+    if (!ui) continue;
+    matrix[ui] = {
+      ...defaults[ui],
+      ...(rol.permisos as RolePermissionMap),
+    };
+  }
+  return matrix;
+}
+
+/** Persiste cada rol de la matriz en Supabase (upsert por codigo). */
+export async function guardarMatrizPermisos(matrix: PermissionsMatrix): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  const sb = getSupabase();
+  const existentes = await obtenerRoles();
+  const byCodigo = new Map(existentes.map((r) => [r.codigo, r]));
+
+  const rolesUi = Object.keys(matrix) as UserRole[];
+  for (const uiRole of rolesUi) {
+    const codigo = ROL_UI_A_DB[uiRole];
+    if (!codigo || codigo === 'super_admin') continue;
+    const permisos = matrix[uiRole] ?? {};
+    const existing = byCodigo.get(codigo);
+
+    if (existing) {
+      const { error } = await sb
+        .from('roles')
+        .update({ permisos, actualizado_en: new Date().toISOString() })
+        .eq('id', existing.id);
+      if (error) throw errorSupabase(error);
+    } else {
+      const { error } = await sb.from('roles').insert({
+        codigo,
+        nombre: uiRole,
+        descripcion: null,
+        permisos,
+      });
+      if (error) throw errorSupabase(error);
+    }
+  }
 }

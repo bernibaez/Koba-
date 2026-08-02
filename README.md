@@ -20,6 +20,7 @@ VITE_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
    - `005_seed_opcional.sql`
    - `006_tablas_faltantes.sql` (compras, CxC/CxP, gastos, devoluciones, transferencias, cajas, fiscal, auditoría, etc.)
    - `007_productos_permisos_y_columnas.sql` (si `/productos` da 400: columnas, GRANT y reload schema)
+   - `008_crear_tabla_roles.sql` (permisos por rol en JSONB; Configuración → Permisos)
 
 4. Crea el primer admin (opción A: Dashboard Auth → Users, luego inserta en `perfiles`; opción B: RPC `crear_usuario_sistema` sin perfiles previos).
 

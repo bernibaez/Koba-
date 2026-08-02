@@ -6,23 +6,18 @@ import {
   type PermissionsMatrix,
   type RolePermissionMap,
 } from './permissionsCatalog';
+import { isSupabaseConfigured } from '@/services/clienteSupabase';
+import {
+  guardarMatrizPermisos,
+  obtenerMatrizPermisos,
+  sincronizarRolesPorDefecto,
+} from '@/services/roles.service';
 
 const STORAGE_KEY = 'marketerp_permissions_matrix';
 
-export function getPermissionsMatrix(): PermissionsMatrix {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      const defaults = buildDefaultMatrix();
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(defaults));
-      return defaults;
-    }
-    const parsed = JSON.parse(raw) as PermissionsMatrix;
-    return mergeWithDefaults(parsed);
-  } catch {
-    return buildDefaultMatrix();
-  }
-}
+/** Caché en memoria para lecturas síncronas (menú / rutas). */
+let cachedMatrix: PermissionsMatrix | null = null;
+let loadPromise: Promise<PermissionsMatrix> | null = null;
 
 function mergeWithDefaults(stored: PermissionsMatrix): PermissionsMatrix {
   const defaults = buildDefaultMatrix();
@@ -40,13 +35,81 @@ function mergeWithDefaults(stored: PermissionsMatrix): PermissionsMatrix {
   return merged;
 }
 
-export function savePermissionsMatrix(matrix: PermissionsMatrix): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(matrix));
+function readLocalMatrix(): PermissionsMatrix {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) {
+      const defaults = buildDefaultMatrix();
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(defaults));
+      return defaults;
+    }
+    return mergeWithDefaults(JSON.parse(raw) as PermissionsMatrix);
+  } catch {
+    return buildDefaultMatrix();
+  }
 }
 
-export function resetPermissionsMatrix(): PermissionsMatrix {
+function writeLocalMatrix(matrix: PermissionsMatrix): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(matrix));
+  } catch {
+    /* ignore quota */
+  }
+}
+
+/** Lectura síncrona: usa caché (Supabase) o localStorage. */
+export function getPermissionsMatrix(): PermissionsMatrix {
+  if (cachedMatrix) return cachedMatrix;
+  const local = readLocalMatrix();
+  cachedMatrix = local;
+  return local;
+}
+
+/** Carga matriz desde Supabase (o local si no hay env). Llama al iniciar sesión. */
+export async function loadPermissionsMatrix(force = false): Promise<PermissionsMatrix> {
+  if (!force && cachedMatrix && isSupabaseConfigured()) {
+    return cachedMatrix;
+  }
+  if (!force && loadPromise) return loadPromise;
+
+  loadPromise = (async () => {
+    if (!isSupabaseConfigured()) {
+      const local = readLocalMatrix();
+      cachedMatrix = local;
+      return local;
+    }
+    try {
+      await sincronizarRolesPorDefecto();
+      const remote = await obtenerMatrizPermisos();
+      const merged = mergeWithDefaults(remote);
+      cachedMatrix = merged;
+      writeLocalMatrix(merged);
+      return merged;
+    } catch (e) {
+      console.warn('[permisos] No se pudo cargar desde Supabase, usando caché local:', e);
+      const local = readLocalMatrix();
+      cachedMatrix = local;
+      return local;
+    } finally {
+      loadPromise = null;
+    }
+  })();
+
+  return loadPromise;
+}
+
+export async function savePermissionsMatrix(matrix: PermissionsMatrix): Promise<void> {
+  cachedMatrix = matrix;
+  writeLocalMatrix(matrix);
+
+  if (!isSupabaseConfigured()) return;
+
+  await guardarMatrizPermisos(matrix);
+}
+
+export async function resetPermissionsMatrix(): Promise<PermissionsMatrix> {
   const defaults = buildDefaultMatrix();
-  savePermissionsMatrix(defaults);
+  await savePermissionsMatrix(defaults);
   return defaults;
 }
 
@@ -75,7 +138,7 @@ export function hasPermission(
   return !!matrix[role]?.[moduleId]?.[action];
 }
 
-/** Rutas con acceso de lectura según la matriz guardada */
+/** Rutas con acceso de lectura según la matriz (caché Supabase / local). */
 export function routesFromPermissions(role: UserRole): string[] | '*' {
   if (role === 'Administrador') return '*';
   const matrix = getPermissionsMatrix();
@@ -89,4 +152,10 @@ export function routesFromPermissions(role: UserRole): string[] | '*' {
     routes.push('/settings');
   }
   return routes;
+}
+
+/** Invalida caché (tras logout). */
+export function clearPermissionsCache(): void {
+  cachedMatrix = null;
+  loadPromise = null;
 }
