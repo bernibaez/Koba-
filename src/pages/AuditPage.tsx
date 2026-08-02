@@ -11,12 +11,14 @@ const actionBadgeMap: Record<AuditActionType, string> = {
   'Cambio de precio': 'badge-warning',
   Eliminación: 'badge-danger',
   'Cierre de caja': 'badge-primary',
+  'Apertura de caja': 'badge-success',
+  'Inicio de caja': 'badge-success',
   Compra: 'badge-info',
   Pago: 'badge-success',
 };
 
 const actionTypes: AuditActionType[] = [
-  'Venta', 'Devolución', 'Edición de producto', 'Cambio de precio', 'Eliminación', 'Cierre de caja', 'Compra', 'Pago'
+  'Venta', 'Devolución', 'Edición de producto', 'Cambio de precio', 'Eliminación', 'Cierre de caja', 'Apertura de caja', 'Inicio de caja', 'Compra', 'Pago'
 ];
 
 export default function AuditPage() {

@@ -31,6 +31,8 @@ export type CashClosure = {
   countedCash: number;
   difference: number; // countedCash - expectedCash
   
+  baseCash?: number;
+  status?: 'abierta' | 'cerrada';
   notes?: string;
 };
 

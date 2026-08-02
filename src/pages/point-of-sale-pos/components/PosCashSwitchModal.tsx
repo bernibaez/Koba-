@@ -3,6 +3,7 @@ import { X, Monitor, Shield, User, ArrowRight, DollarSign, Ticket, Clock, Lock, 
 import { toast } from 'sonner';
 import { CASH_REGISTERS, type CashRegisterId, type CashRegisterSession } from '@/lib/cashRegisters';
 import { useAuth } from '@/context/AuthContext';
+import PosCashOpenModal from './PosCashOpenModal';
 
 interface Props {
   currentId: CashRegisterId;
@@ -13,6 +14,7 @@ interface Props {
 export default function PosCashSwitchModal({ currentId, onSelect, onClose }: Props) {
   const { user } = useAuth();
   const isAdmin = user?.role === 'Administrador' || true;
+  const [openTargetId, setOpenTargetId] = useState<string | null>(null);
 
   // Admin Box (id '1') and current selected box state
   const adminBox = CASH_REGISTERS.find((c) => c.isAdminBox || c.id === '1')!;
@@ -22,7 +24,7 @@ export default function PosCashSwitchModal({ currentId, onSelect, onClose }: Pro
 
   const handleEnterBox = (reg: CashRegisterSession) => {
     if (!reg.open) {
-      toast.error(`${reg.label} se encuentra cerrada en este momento.`);
+      setOpenTargetId(reg.id);
       return;
     }
     onSelect(reg.id);
@@ -272,11 +274,10 @@ export default function PosCashSwitchModal({ currentId, onSelect, onClose }: Pro
             <button
               type="button"
               onClick={() => handleEnterBox(selectedBox)}
-              disabled={!selectedBox.open}
-              className="px-6 py-2.5 rounded-full bg-slate-950 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-950 font-bold text-xs transition-all shadow-md active:scale-95 flex items-center justify-center gap-2 border border-slate-900 dark:border-white disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-6 py-2.5 rounded-full bg-slate-950 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-950 font-bold text-xs transition-all shadow-md active:scale-95 flex items-center justify-center gap-2 border border-slate-900 dark:border-white"
             >
               <Monitor size={15} />
-              <span>Entrar a caja</span>
+              <span>{selectedBox.open ? 'Entrar a caja' : 'Abrir / Iniciar esta Caja'}</span>
             </button>
 
             <button
@@ -289,6 +290,19 @@ export default function PosCashSwitchModal({ currentId, onSelect, onClose }: Pro
           </div>
         </div>
       </div>
+
+      {openTargetId && (
+        <PosCashOpenModal
+          initialCajaId={openTargetId}
+          onSuccess={() => {
+            const target = CASH_REGISTERS.find((c) => c.id === openTargetId);
+            if (target) target.open = true;
+            onSelect(openTargetId as CashRegisterId);
+            onClose();
+          }}
+          onClose={() => setOpenTargetId(null)}
+        />
+      )}
     </div>
   );
 }
