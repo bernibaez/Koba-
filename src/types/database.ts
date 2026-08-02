@@ -260,8 +260,13 @@ export interface Caja {
   id: string;
   codigo: string;
   nombre: string;
-  sucursal_id: string | null;
-  activo: boolean;
+  descripcion?: string | null;
+  sucursal_id?: string | null;
+  es_caja_principal?: boolean;
+  activa?: boolean;
+  activo?: boolean;
+  creado_en?: string;
+  actualizado_en?: string;
 }
 
 export interface Compra {
@@ -462,4 +467,7 @@ export interface Rol {
 
 export const ROL_COLUMNS =
   'id, codigo, nombre, descripcion, permisos, creado_en, actualizado_en' as const;
+
+export const CAJA_COLUMNS =
+  'id, codigo, nombre, descripcion, sucursal_id, es_caja_principal, activa, creado_en, actualizado_en' as const;
 

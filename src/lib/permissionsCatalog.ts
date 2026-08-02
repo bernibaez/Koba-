@@ -94,12 +94,12 @@ export const PERMISSION_MODULES: PermissionModule[] = [
     actions: ['ver', 'crear', 'aprobar', 'exportar'],
   },
   {
-    id: 'balanzas',
-    label: 'Balanzas',
-    group: 'Inventario',
-    href: '/scales',
-    description: 'Dispositivos de pesaje',
-    actions: ['ver', 'editar'],
+    id: 'cajas',
+    label: 'Cajas Registradoras',
+    group: 'Finanzas',
+    href: '/cajas',
+    description: 'Registro y administración de cajas del POS',
+    actions: ['ver', 'crear', 'editar', 'eliminar'],
   },
   {
     id: 'contactos',

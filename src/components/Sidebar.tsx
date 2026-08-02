@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import AppLogo from './ui/AppLogo';
 import {
   LayoutDashboard, ShoppingCart, Package, Users, UserCheck, ShoppingBag, ArrowLeftRight, Sliders,
-  BarChart2, Settings, ChevronRight, ChevronDown, Store, FileText, DollarSign, HandCoins, Wallet, Scale,
+  BarChart2, Settings, ChevronRight, ChevronDown, Store, FileText, DollarSign, HandCoins, Wallet, Monitor,
   RotateCcw, Briefcase, Lock, ShieldCheck, Filter, Boxes
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
@@ -28,7 +28,7 @@ const navItems: NavItem[] = [
   { id: 'nav-combos', label: 'Combos', icon: <Boxes size={20} />, href: '/combos', group: 'Inventario' },
   { id: 'nav-stock-transfer', label: 'Transferencias', icon: <ArrowLeftRight size={20} />, href: '/stock-transfers', group: 'Inventario' },
   { id: 'nav-stock-adjust', label: 'Ajustes Stock', icon: <Sliders size={20} />, href: '/stock-adjustments', group: 'Inventario' },
-  { id: 'nav-scales', label: 'Balanzas', icon: <Scale size={20} />, href: '/scales', group: 'Inventario' },
+  { id: 'nav-cajas', label: 'Cajas Registradoras', icon: <Monitor size={20} />, href: '/cajas', group: 'Finanzas' },
   { id: 'nav-contacts', label: 'Contactos', icon: <Users size={20} />, href: '/contacts', group: 'CRM' },
   { id: 'nav-cash-closure', label: 'Cierre de Caja', icon: <Lock size={20} />, href: '/cash-closure', group: 'Finanzas' },
   { id: 'nav-maleta', label: 'Maleta / Detalles', icon: <Briefcase size={20} />, href: '/maleta', group: 'Finanzas' },

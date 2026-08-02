@@ -10,7 +10,7 @@ import ProductManagementPage from './pages/product-management/ProductManagementP
 import CombosPage from './pages/combos/CombosPage';
 import StockTransfersPage from './pages/StockTransfersPage';
 import StockAdjustmentsPage from './pages/StockAdjustmentsPage';
-import ScalesPage from './pages/ScalesPage';
+import CajasPage from './pages/CajasPage';
 import ReturnsHistoryPage from './pages/ReturnsHistoryPage';
 import CashClosurePage from './pages/CashClosurePage';
 import MaletaPage from './pages/MaletaPage';
@@ -40,7 +40,7 @@ export default function App() {
       <Route path="/combos" element={<Guard><CombosPage /></Guard>} />
       <Route path="/stock-transfers" element={<Guard><StockTransfersPage /></Guard>} />
       <Route path="/stock-adjustments" element={<Guard><StockAdjustmentsPage /></Guard>} />
-      <Route path="/scales" element={<Guard><ScalesPage /></Guard>} />
+      <Route path="/cajas" element={<Guard><CajasPage /></Guard>} />
       <Route path="/returns-history" element={<Guard><ReturnsHistoryPage /></Guard>} />
       <Route path="/cash-closure" element={<Guard><CashClosurePage /></Guard>} />
       <Route path="/maleta" element={<Guard><MaletaPage /></Guard>} />
