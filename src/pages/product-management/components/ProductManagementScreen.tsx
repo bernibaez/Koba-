@@ -121,11 +121,16 @@ export default function ProductManagementScreen() {
 
   const handleSaveProduct = async (product: Product) => {
     try {
-      if (products.find((p) => p.id === product.id)) {
+      const existsRemote = products.some((p) => p.id === product.id);
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        product.id
+      );
+      if (existsRemote && isUuid) {
         await actualizar(product.id, product);
         toast.success(`Producto "${product.name}" actualizado correctamente`);
       } else {
-        await crear(product);
+        const { id: _localId, ...rest } = product;
+        await crear(rest);
         toast.success(`Producto "${product.name}" creado correctamente`);
       }
       setAddModalOpen(false);

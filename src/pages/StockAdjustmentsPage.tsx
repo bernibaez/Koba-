@@ -18,12 +18,10 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { exportTableToPdf } from '@/lib/exportPdf';
-import { getStoredProducts, ProductItem } from '@/lib/productStore';
-import {
-  getStoredAdjustments,
-  StockAdjustmentItem,
-} from '@/lib/stockAdjustmentStore';
-import { procesarAjusteStockBloque } from '@/services/inventario.service';
+import type { ProductItem } from '@/lib/productStore';
+import type { StockAdjustmentItem } from '@/lib/stockAdjustmentStore';
+import { obtenerHistorialAjustes, procesarAjusteStockBloque } from '@/services/inventario.service';
+import { useProductos } from '@/hooks/useProductos';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 
@@ -40,30 +38,59 @@ export default function StockAdjustmentsPage() {
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
 
-  // Modal State for Block Adjustment
   const [showModal, setShowModal] = useState(false);
-  const [blockSearch, setBlockSearch] = useState('arroz'); // Default search prefilled with "arroz" for demonstration!
+  const [blockSearch, setBlockSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [blockReason, setBlockReason] = useState('Conteo físico de inventario');
   const [detailItem, setDetailItem] = useState<StockAdjustmentItem | null>(null);
 
-  // Products from Store
-  const [catalogProducts, setCatalogProducts] = useState<ProductItem[]>([]);
+  const { productosUi, refetch: refetchProductos } = useProductos({
+    pagina: 1,
+    limite: 500,
+    estado: 'activo',
+  });
+  const catalogProducts = productosUi as ProductItem[];
 
-  // State for physical stock inputs in the block modal: map of productId -> number
   const [physicalCounts, setPhysicalCounts] = useState<{ [productId: string]: number }>({});
   const [itemReasons, setItemReasons] = useState<{ [productId: string]: string }>({});
 
-  const refreshData = () => {
-    const storedProds = getStoredProducts();
-    setCatalogProducts(storedProds);
-    const storedAdjs = getStoredAdjustments();
-    setAdjustments(storedAdjs);
+  const refreshData = async () => {
+    await refetchProductos();
+    try {
+      const hist = await obtenerHistorialAjustes({ pagina: 1, limite: 200 });
+      const byId = new Map(catalogProducts.map((p) => [p.id, p]));
+      setAdjustments(
+        hist.datos.map((a) => {
+          const prod = byId.get(a.producto_id);
+          const created = new Date(a.creado_en);
+          return {
+            id: a.id,
+            code: a.codigo,
+            productId: a.producto_id,
+            productName: prod?.name ?? 'Producto',
+            sku: prod?.sku ?? '',
+            category: prod?.category ?? '',
+            type: a.tipo_ajuste,
+            qty: Math.abs(a.cantidad_variacion),
+            previousQty: a.cantidad_anterior,
+            newQty: a.cantidad_nueva,
+            reason: a.motivo,
+            date: created.toISOString().slice(0, 10),
+            time: created.toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit' }),
+            responsible: user?.name ?? 'Sistema',
+          } as StockAdjustmentItem;
+        })
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Error al cargar historial');
+      setAdjustments([]);
+    }
   };
 
   useEffect(() => {
-    refreshData();
-  }, []);
+    void refreshData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productosUi.length]);
 
   // When opening modal or searching, initialize physical counts
   useEffect(() => {
@@ -195,7 +222,7 @@ export default function StockAdjustmentsPage() {
           </div>
           <button
             onClick={() => {
-              setBlockSearch('arroz');
+              setBlockSearch('');
               setSelectedCategory('all');
               setShowModal(true);
             }}

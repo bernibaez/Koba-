@@ -1,10 +1,14 @@
 import { Product as PMProduct, initialProducts } from '@/pages/product-management/components/ProductManagementScreen';
+import { isSupabaseConfigured } from '@/services/clienteSupabase';
 
 export type ProductItem = PMProduct;
 
 const STORAGE_KEY = 'marketerp_products_store';
 
 export function getStoredProducts(): ProductItem[] {
+  // Con Supabase activo no devolvemos catálogo demo local.
+  if (isSupabaseConfigured()) return [];
+
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) {
@@ -14,7 +18,7 @@ export function getStoredProducts(): ProductItem[] {
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) && parsed.length > 0 ? parsed : initialProducts;
   } catch {
-    return initialProducts;
+    return [];
   }
 }
 

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { crearCliente, obtenerClientes } from '@/services/clientes.service';
 import type { Cliente } from '@/types/database';
 
-export function useClientes(busqueda = '') {
+export function useClientes(busqueda = '', limite = 200) {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -15,7 +15,7 @@ export function useClientes(busqueda = '') {
     setLoading(true);
     setError(null);
     try {
-      const res = await obtenerClientes({ busqueda, limite: 50, signal: ac.signal });
+      const res = await obtenerClientes({ busqueda, limite, signal: ac.signal });
       if (!ac.signal.aborted) setClientes(res.datos);
     } catch (e) {
       if ((e as Error)?.name === 'AbortError') return;
@@ -23,7 +23,7 @@ export function useClientes(busqueda = '') {
     } finally {
       if (!ac.signal.aborted) setLoading(false);
     }
-  }, [busqueda]);
+  }, [busqueda, limite]);
 
   useEffect(() => {
     refetch();

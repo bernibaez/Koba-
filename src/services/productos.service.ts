@@ -1,9 +1,5 @@
 import { tryGetSupabase, isSupabaseConfigured, getSupabase } from './clienteSupabase';
-import {
-  PRODUCTO_COLUMNS,
-  type EstadoProducto,
-  type Producto,
-} from '@/types/database';
+import { type EstadoProducto, type Producto } from '@/types/database';
 import { getStoredProducts, saveStoredProducts } from '@/lib/productStore';
 import type { Product } from '@/pages/product-management/components/ProductManagementScreen';
 
@@ -23,6 +19,20 @@ export type ProductosResultado = {
   limite: number;
 };
 
+/** Evita 400 de PostgREST por caracteres especiales en filtros `.or()`. */
+function sanitizarBusquedaPostgrest(raw: string): string {
+  return raw.replace(/[%_,.()"'\\*]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function errorSupabase(error: unknown): Error {
+  if (error && typeof error === 'object') {
+    const e = error as { message?: string; details?: string; hint?: string; code?: string };
+    const parts = [e.message, e.details, e.hint].filter(Boolean);
+    return new Error(parts.join(' — ') || 'Error de Supabase');
+  }
+  return error instanceof Error ? error : new Error('Error de Supabase');
+}
+
 /** Mapeo DB → UI Product Management / POS */
 export function productoAUi(p: Producto): Product {
   let stockStatus: Product['stockStatus'] = 'normal';
@@ -37,25 +47,32 @@ export function productoAUi(p: Producto): Product {
 
   return {
     id: p.id,
-    barcode: p.codigo_barras,
-    sku: p.sku,
-    name: p.nombre,
-    category: p.categoria,
+    barcode: p.codigo_barras ?? '',
+    sku: p.sku ?? '',
+    name: p.nombre ?? '',
+    category: p.categoria ?? 'General',
     brand: p.marca ?? '',
-    unit: p.unidad,
+    unit: p.unidad ?? 'Unidad',
     supplier: '',
-    costPrice: Number(p.precio_costo),
-    salePrice: Number(p.precio_venta),
-    wholesalePrice: Number(p.precio_mayorista),
-    tax: Number(p.porcentaje_impuesto),
-    minStock: p.stock_minimo,
-    currentStock: p.stock_actual,
+    costPrice: Number(p.precio_costo ?? 0),
+    salePrice: Number(p.precio_venta ?? 0),
+    wholesalePrice: Number(p.precio_mayorista ?? 0),
+    tax: Number(p.porcentaje_impuesto ?? 0),
+    minStock: p.stock_minimo ?? 10,
+    currentStock: p.stock_actual ?? 0,
     image: p.imagen_url ?? '',
-    expiryDate: p.fecha_vencimiento,
+    expiryDate: p.fecha_vencimiento ?? null,
     warranty: p.garantia ?? 'N/A',
     status: estadoMap[p.estado] ?? 'active',
     stockStatus,
   };
+}
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function esUuid(value: string | undefined | null): value is string {
+  return !!value && UUID_RE.test(value);
 }
 
 export function uiAProductoInsert(p: Omit<Product, 'id' | 'stockStatus'> & { id?: string }): Partial<Producto> {
@@ -64,23 +81,24 @@ export function uiAProductoInsert(p: Omit<Product, 'id' | 'stockStatus'> & { id?
     inactive: 'inactivo',
     discontinued: 'descontinuado',
   };
+  // Supabase usa UUID; los ids locales tipo prod-001 provocan 400 si se envían.
   return {
-    ...(p.id ? { id: p.id } : {}),
+    ...(esUuid(p.id) ? { id: p.id } : {}),
     codigo_barras: p.barcode,
     sku: p.sku,
     nombre: p.name,
     categoria: p.category,
-    marca: p.brand?.trim() || null,
-    unidad: p.unit?.trim() || 'Unidad',
-    precio_costo: p.costPrice || 0,
-    precio_venta: p.salePrice || 0,
-    precio_mayorista: p.wholesalePrice || 0,
-    porcentaje_impuesto: p.tax || 0,
-    stock_minimo: p.minStock || 0,
-    stock_actual: p.currentStock || 0,
-    fecha_vencimiento: p.expiryDate?.trim() || null,
-    garantia: p.warranty?.trim() || null,
-    imagen_url: p.image?.trim() || null,
+    marca: p.brand || null,
+    unidad: p.unit || 'Unidad',
+    precio_costo: p.costPrice,
+    precio_venta: p.salePrice,
+    precio_mayorista: p.wholesalePrice,
+    porcentaje_impuesto: p.tax,
+    stock_minimo: p.minStock,
+    stock_actual: p.currentStock,
+    fecha_vencimiento: p.expiryDate,
+    garantia: p.warranty,
+    imagen_url: p.image || null,
     estado: estadoMap[p.status],
   };
 }
@@ -139,12 +157,12 @@ export async function obtenerProductos(params: ProductosFiltro = {}): Promise<Pr
 
   let query = sb
     .from('productos')
-    .select(PRODUCTO_COLUMNS, { count: 'exact' })
+    .select('*', { count: 'exact' })
     .order('nombre')
     .range(desde, hasta);
 
-  if (params.busqueda?.trim()) {
-    const q = params.busqueda.trim();
+  const q = params.busqueda?.trim() ? sanitizarBusquedaPostgrest(params.busqueda) : '';
+  if (q) {
     query = query.or(`nombre.ilike.%${q}%,sku.ilike.%${q}%,codigo_barras.ilike.%${q}%`);
   }
   if (params.categoria && params.categoria !== 'Todas') {
@@ -156,7 +174,7 @@ export async function obtenerProductos(params: ProductosFiltro = {}): Promise<Pr
   if (params.signal) query = query.abortSignal(params.signal);
 
   const { data, error, count } = await query;
-  if (error) throw error;
+  if (error) throw errorSupabase(error);
   return { datos: (data ?? []) as Producto[], total: count ?? 0, pagina, limite };
 }
 
@@ -189,12 +207,27 @@ export async function crearProducto(datos: Partial<Producto>): Promise<Producto>
   }
 
   const sb = getSupabase();
-  const { data, error } = await sb
-    .from('productos')
-    .insert(datos)
-    .select(PRODUCTO_COLUMNS)
-    .single();
-  if (error) throw error;
+  const { id, creado_en, actualizado_en, ...rest } = datos;
+  const payload = {
+    ...rest,
+    ...(esUuid(id) ? { id } : {}),
+    codigo_barras: rest.codigo_barras || `GEN-${Date.now()}`,
+    sku: rest.sku || `SKU-${Date.now()}`,
+    nombre: rest.nombre || 'Sin nombre',
+    categoria: rest.categoria || 'General',
+    unidad: rest.unidad || 'Unidad',
+    precio_costo: Number(rest.precio_costo ?? 0),
+    precio_venta: Number(rest.precio_venta ?? 0),
+    precio_mayorista: Number(rest.precio_mayorista ?? 0),
+    porcentaje_impuesto: Number(rest.porcentaje_impuesto ?? 0),
+    stock_minimo: rest.stock_minimo ?? 10,
+    stock_actual: rest.stock_actual ?? 0,
+    es_pesado: rest.es_pesado ?? false,
+    fecha_vencimiento: rest.fecha_vencimiento || null,
+    estado: rest.estado ?? 'activo',
+  };
+  const { data, error } = await sb.from('productos').insert(payload).select('*').single();
+  if (error) throw errorSupabase(error);
   return data as Producto;
 }
 
@@ -239,14 +272,22 @@ export async function actualizarProducto(id: string, datos: Partial<Producto>): 
     return localAsProductos().find((p) => p.id === id)!;
   }
 
+  if (!esUuid(id)) {
+    throw new Error('Este producto aún no está en Supabase (id local). Créalo de nuevo para sincronizarlo.');
+  }
   const sb = getSupabase();
+  const { id: _omitId, creado_en: _c, ...rest } = datos;
   const { data, error } = await sb
     .from('productos')
-    .update({ ...datos, actualizado_en: new Date().toISOString() })
+    .update({
+      ...rest,
+      fecha_vencimiento: rest.fecha_vencimiento || null,
+      actualizado_en: new Date().toISOString(),
+    })
     .eq('id', id)
-    .select(PRODUCTO_COLUMNS)
+    .select('*')
     .single();
-  if (error) throw error;
+  if (error) throw errorSupabase(error);
   return data as Producto;
 }
 
@@ -257,7 +298,7 @@ export async function eliminarProducto(id: string): Promise<void> {
   }
   const sb = getSupabase();
   const { error } = await sb.from('productos').delete().eq('id', id);
-  if (error) throw error;
+  if (error) throw errorSupabase(error);
 }
 
 export async function obtenerProductoPorCodigoBarras(
@@ -268,9 +309,9 @@ export async function obtenerProductoPorCodigoBarras(
   if (!sb) {
     return localAsProductos().find((p) => p.codigo_barras === codigo) ?? null;
   }
-  let query = sb.from('productos').select(PRODUCTO_COLUMNS).eq('codigo_barras', codigo);
+  let query = sb.from('productos').select('*').eq('codigo_barras', codigo);
   if (signal) query = query.abortSignal(signal);
   const { data, error } = await query.maybeSingle();
-  if (error) throw error;
+  if (error) throw errorSupabase(error);
   return data as Producto | null;
 }

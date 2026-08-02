@@ -1,47 +1,121 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/context/AuthContext';
-import { getCashClosures, saveCashClosure, type CashClosure } from '@/lib/cashClosureStore';
+import type { CashClosure } from '@/lib/cashClosureStore';
 import { exportTableToPdf, exportTableToExcel, formatMoneyPdf } from '@/lib/exportPdf';
 import { logAuditEvent } from '@/lib/auditStore';
 import {
   Lock, Plus, Download, Search, Filter, Calendar, DollarSign, CreditCard, Smartphone, CheckCircle, AlertTriangle, Printer, FileSpreadsheet, Eye, User, X
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { guardarCierreCaja, obtenerCierresCaja } from '@/services/cierresCaja.service';
+import { obtenerHistorialVentas } from '@/services/ventas.service';
 
 export default function CashClosurePage() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'Administrador';
 
-  const [closures, setClosures] = useState<CashClosure[]>(() => getCashClosures());
+  const [closures, setClosures] = useState<CashClosure[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [viewingClosure, setViewingClosure] = useState<CashClosure | null>(null);
 
-  // Filters
   const [searchUser, setSearchUser] = useState('');
   const [singleDate, setSingleDate] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
 
-  // New closure state
   const [countedCash, setCountedCash] = useState('');
   const [notes, setNotes] = useState('');
+  const [saving, setSaving] = useState(false);
 
-  // Mock live totals for today's open session
-  const mockCurrentSession = {
-    totalSales: 38450.00,
-    totalCash: 19500.00,
-    totalCard: 11200.00,
-    cardCount: 14,
-    totalTransfer: 5750.00,
-    transferCount: 4,
-    totalCheque: 2000.00,
-    chequeCount: 1,
-    baseCash: 5000.00,
+  const [currentSession, setCurrentSession] = useState({
+    totalSales: 0,
+    totalCash: 0,
+    totalCard: 0,
+    cardCount: 0,
+    totalTransfer: 0,
+    transferCount: 0,
+    totalCheque: 0,
+    chequeCount: 0,
+    baseCash: 0,
     openedAt: `${new Date().toISOString().slice(0, 10)} 08:00`,
-  };
+  });
 
-  const expectedCash = mockCurrentSession.baseCash + mockCurrentSession.totalCash;
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const rows = await obtenerCierresCaja();
+        if (!alive) return;
+        setClosures(
+          rows.map((c) => ({
+            id: c.id,
+            code: c.codigo,
+            userId: c.cajero_id ?? '',
+            username: '',
+            userName: '',
+            openedAt: c.abierta_en,
+            closedAt: c.cerrada_en ?? '',
+            date: (c.cerrada_en ?? c.abierta_en).slice(0, 10),
+            cashRegisterId: c.caja_id,
+            cashRegisterLabel: `Caja ${c.caja_id}`,
+            totalSales: Number(c.total_ventas),
+            totalCash: Number(c.total_efectivo),
+            totalCard: Number(c.total_tarjeta),
+            cardCount: 0,
+            totalTransfer: Number(c.total_transferencia),
+            transferCount: 0,
+            totalCheque: 0,
+            chequeCount: 0,
+            totalCredit: 0,
+            creditCount: 0,
+            expectedCash: Number(c.monto_esperado),
+            countedCash: Number(c.monto_real),
+            difference: Number(c.monto_diferencia),
+          }))
+        );
+
+        const hoy = new Date().toISOString().slice(0, 10);
+        const ventasHoy = await obtenerHistorialVentas({
+          pagina: 1,
+          limite: 500,
+          fechaInicio: hoy,
+          fechaFin: hoy,
+        });
+        if (!alive) return;
+        let totalSales = 0;
+        let totalCash = 0;
+        let totalCard = 0;
+        let cardCount = 0;
+        let totalTransfer = 0;
+        let transferCount = 0;
+        for (const v of ventasHoy.datos) {
+          totalSales += Number(v.monto_total);
+          totalCash += Number(v.monto_efectivo);
+          totalCard += Number(v.monto_tarjeta);
+          totalTransfer += Number(v.monto_transferencia);
+          if (Number(v.monto_tarjeta) > 0) cardCount += 1;
+          if (Number(v.monto_transferencia) > 0) transferCount += 1;
+        }
+        setCurrentSession((s) => ({
+          ...s,
+          totalSales,
+          totalCash,
+          totalCard,
+          cardCount,
+          totalTransfer,
+          transferCount,
+        }));
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Error al cargar cierres');
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const expectedCash = currentSession.baseCash + currentSession.totalCash;
   const countedNum = parseFloat(countedCash) || 0;
   const cashDiff = countedCash === '' ? 0 : countedNum - expectedCash;
 
@@ -68,7 +142,7 @@ export default function CashClosurePage() {
     });
   }, [closures, isAdmin, user, searchUser, singleDate, startDate, endDate]);
 
-  const handleSaveClosure = () => {
+  const handleSaveClosure = async () => {
     if (countedCash === '') {
       toast.error('Ingresa el monto de efectivo contado');
       return;
@@ -77,26 +151,48 @@ export default function CashClosurePage() {
     const now = new Date();
     const closedAt = `${now.toISOString().slice(0, 10)} ${now.toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit' })}`;
     const count = closures.length + 1;
+    const code = `CC-${String(count).padStart(3, '0')}`;
 
-    const newClosure: CashClosure = {
-      id: `cc-${Date.now()}`,
-      code: `CC-${String(count).padStart(3, '0')}`,
+    setSaving(true);
+    try {
+      const saved = await guardarCierreCaja({
+        codigo: code,
+        caja_id: '1',
+        cajero_id: user?.id ?? null,
+        cajero_nombre: user?.name ?? 'Usuario',
+        cajero_username: user?.username ?? '',
+        caja_label: 'Caja #1',
+        monto_apertura: currentSession.baseCash,
+        monto_esperado: expectedCash,
+        monto_real: countedNum,
+        monto_diferencia: cashDiff,
+        total_ventas: currentSession.totalSales,
+        total_efectivo: currentSession.totalCash,
+        total_tarjeta: currentSession.totalCard,
+        total_transferencia: currentSession.totalTransfer,
+        estado: 'cerrada',
+        notes: notes || undefined,
+      });
+
+      const newClosure: CashClosure = {
+      id: saved.id,
+      code: saved.codigo,
       userId: user?.id ?? '0',
       username: user?.username ?? 'usuario',
       userName: user?.name ?? 'Usuario Sistema',
-      openedAt: mockCurrentSession.openedAt,
+      openedAt: currentSession.openedAt,
       closedAt,
       date: now.toISOString().slice(0, 10),
       cashRegisterId: '1',
       cashRegisterLabel: 'Caja #1',
-      totalSales: mockCurrentSession.totalSales,
-      totalCash: mockCurrentSession.totalCash,
-      totalCard: mockCurrentSession.totalCard,
-      cardCount: mockCurrentSession.cardCount,
-      totalTransfer: mockCurrentSession.totalTransfer,
-      transferCount: mockCurrentSession.transferCount,
-      totalCheque: mockCurrentSession.totalCheque,
-      chequeCount: mockCurrentSession.chequeCount,
+      totalSales: currentSession.totalSales,
+      totalCash: currentSession.totalCash,
+      totalCard: currentSession.totalCard,
+      cardCount: currentSession.cardCount,
+      totalTransfer: currentSession.totalTransfer,
+      transferCount: currentSession.transferCount,
+      totalCheque: currentSession.totalCheque,
+      chequeCount: currentSession.chequeCount,
       totalCredit: 0,
       creditCount: 0,
       expectedCash,
@@ -105,22 +201,26 @@ export default function CashClosurePage() {
       notes: notes || undefined,
     };
 
-    const updated = saveCashClosure(newClosure);
-    setClosures(updated);
+      setClosures((prev) => [newClosure, ...prev]);
 
-    logAuditEvent({
-      user: user?.name ?? 'Usuario',
-      role: user?.role ?? 'Cajero',
-      action: 'Cierre de caja',
-      module: 'Caja',
-      details: `Cierre ${newClosure.code} realizado por RD$ ${newClosure.totalSales.toLocaleString()} (Diferencia: RD$ ${cashDiff})`,
-      after: { code: newClosure.code, totalSales: newClosure.totalSales, difference: cashDiff },
-    });
+      logAuditEvent({
+        user: user?.name ?? 'Usuario',
+        role: user?.role ?? 'Cajero',
+        action: 'Cierre de caja',
+        module: 'Caja',
+        details: `Cierre ${newClosure.code} realizado por RD$ ${newClosure.totalSales.toLocaleString()} (Diferencia: RD$ ${cashDiff})`,
+        after: { code: newClosure.code, totalSales: newClosure.totalSales, difference: cashDiff },
+      });
 
-    toast.success(`Cierre de caja ${newClosure.code} registrado correctamente`);
-    setShowCreateModal(false);
-    setCountedCash('');
-    setNotes('');
+      toast.success(`Cierre de caja ${newClosure.code} registrado en Supabase`);
+      setShowCreateModal(false);
+      setCountedCash('');
+      setNotes('');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Error al guardar cierre');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleExportPdf = () => {
@@ -416,7 +516,7 @@ export default function CashClosurePage() {
                 </div>
                 <div>
                   <span className="text-muted-foreground block">Hora de Apertura</span>
-                  <span className="font-semibold text-foreground">{mockCurrentSession.openedAt}</span>
+                  <span className="font-semibold text-foreground">{currentSession.openedAt}</span>
                 </div>
                 <div>
                   <span className="text-muted-foreground block">Hora de Cierre</span>
@@ -433,31 +533,31 @@ export default function CashClosurePage() {
                       <DollarSign size={14} className="text-success" /> Efectivo
                     </p>
                     <p className="text-base font-bold text-foreground mt-1 tabular-nums">
-                      RD$ {mockCurrentSession.totalCash.toLocaleString('es-DO')}
+                      RD$ {currentSession.totalCash.toLocaleString('es-DO')}
                     </p>
                   </div>
                   <div className="bg-card border border-border rounded-xl p-3">
                     <p className="text-xs text-muted-foreground flex items-center gap-1">
-                      <CreditCard size={14} className="text-info" /> Tarjetas ({mockCurrentSession.cardCount})
+                      <CreditCard size={14} className="text-info" /> Tarjetas ({currentSession.cardCount})
                     </p>
                     <p className="text-base font-bold text-foreground mt-1 tabular-nums">
-                      RD$ {mockCurrentSession.totalCard.toLocaleString('es-DO')}
+                      RD$ {currentSession.totalCard.toLocaleString('es-DO')}
                     </p>
                   </div>
                   <div className="bg-card border border-border rounded-xl p-3">
                     <p className="text-xs text-muted-foreground flex items-center gap-1">
-                      <Smartphone size={14} className="text-warning" /> Transfer. ({mockCurrentSession.transferCount})
+                      <Smartphone size={14} className="text-warning" /> Transfer. ({currentSession.transferCount})
                     </p>
                     <p className="text-base font-bold text-foreground mt-1 tabular-nums">
-                      RD$ {mockCurrentSession.totalTransfer.toLocaleString('es-DO')}
+                      RD$ {currentSession.totalTransfer.toLocaleString('es-DO')}
                     </p>
                   </div>
                   <div className="bg-card border border-border rounded-xl p-3">
                     <p className="text-xs text-muted-foreground flex items-center gap-1">
-                      <CheckCircle size={14} className="text-primary" /> Cheques ({mockCurrentSession.chequeCount})
+                      <CheckCircle size={14} className="text-primary" /> Cheques ({currentSession.chequeCount})
                     </p>
                     <p className="text-base font-bold text-foreground mt-1 tabular-nums">
-                      RD$ {mockCurrentSession.totalCheque.toLocaleString('es-DO')}
+                      RD$ {currentSession.totalCheque.toLocaleString('es-DO')}
                     </p>
                   </div>
                 </div>
@@ -465,7 +565,7 @@ export default function CashClosurePage() {
                 <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 flex justify-between items-center">
                   <span className="font-bold text-foreground">TOTAL VENDIDO HOY</span>
                   <span className="text-2xl font-bold text-primary tabular-nums">
-                    RD$ {mockCurrentSession.totalSales.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                    RD$ {currentSession.totalSales.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
                   </span>
                 </div>
               </div>
@@ -480,7 +580,7 @@ export default function CashClosurePage() {
                       RD$ {expectedCash.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
                     </span>
                     <p className="text-xs text-muted-foreground mt-1">
-                      (Fondo base RD$ {mockCurrentSession.baseCash.toLocaleString()} + Efectivo RD$ {mockCurrentSession.totalCash.toLocaleString()})
+                      (Fondo base RD$ {currentSession.baseCash.toLocaleString()} + Efectivo RD$ {currentSession.totalCash.toLocaleString()})
                     </p>
                   </div>
 
