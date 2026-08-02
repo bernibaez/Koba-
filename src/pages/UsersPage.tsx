@@ -24,23 +24,6 @@ import type { UserRole } from '@/lib/auth';
 import { toast } from 'sonner';
 import { isSupabaseConfigured } from '@/services/clienteSupabase';
 
-
-interface Role {
-  id: number;
-  name: string;
-  permissions: number;
-  users: number;
-  description: string;
-}
-
-const mockRoles: Role[] = [
-  { id: 1, name: 'Administrador', permissions: 48, users: 1, description: 'Acceso total al sistema' },
-  { id: 2, name: 'Cajero', permissions: 12, users: 3, description: 'Acceso al POS y ventas' },
-  { id: 3, name: 'Vendedor', permissions: 8, users: 5, description: 'Gestión de ventas y clientes' },
-  { id: 4, name: 'Almacenista', permissions: 10, users: 2, description: 'Gestión de inventario' },
-  { id: 5, name: 'Contador', permissions: 15, users: 1, description: 'Acceso a informes y finanzas' },
-];
-
 type Tab = 'users' | 'roles' | 'agents';
 
 export default function UsersPage() {
@@ -65,7 +48,12 @@ export default function UsersPage() {
     alternarActivo: alternarActivoAgente,
     eliminar: eliminarAgente,
   } = useAgentes(search);
-  const { roles, loading: loadingRoles } = useRoles(search);
+  const {
+    roles,
+    loading: loadingRoles,
+    error: rolesError,
+    eliminar: eliminarRol,
+  } = useRoles(search);
 
   const countPermissions = (permisos: Record<string, Record<string, boolean>> | null | undefined): number => {
     if (!permisos) return 0;
@@ -129,8 +117,14 @@ export default function UsersPage() {
       exportTableToPdf({
         title: 'Roles y Permisos',
         filename: 'roles',
-        headers: ['Rol', 'Permisos', 'Usuarios', 'Descripción'],
-        rows: mockRoles.map((r) => [r.name, r.permissions, r.users, r.description]),
+        headers: ['Rol', 'Código', 'Permisos', 'Usuarios', 'Descripción'],
+        rows: roles.map((r) => [
+          r.nombre,
+          r.codigo,
+          countPermissions(r.permisos),
+          usuarios.filter((u) => u.rol === r.codigo).length,
+          r.descripcion ?? '',
+        ]),
       });
       return;
     }
@@ -374,14 +368,23 @@ export default function UsersPage() {
                       </td>
                     </tr>
                   )}
-                  {!loadingRoles && roles.length === 0 && (
+                  {!loadingRoles && rolesError && (
                     <tr>
-                      <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
-                        No hay roles registrados.
+                      <td colSpan={5} className="px-4 py-8 text-center text-danger text-sm">
+                        {rolesError}
                       </td>
                     </tr>
                   )}
-                  {!loadingRoles && roles.map((role, i) => {
+                  {!loadingRoles && !rolesError && roles.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
+                        No hay roles en Supabase. Ejecuta la migración 008 o ve a Configuración → Permisos.
+                      </td>
+                    </tr>
+                  )}
+                  {!loadingRoles &&
+                    !rolesError &&
+                    roles.map((role, i) => {
                     const activeUsersCount = usuarios.filter((u) => u.rol === role.codigo).length;
                     const permissionsCount = countPermissions(role.permisos);
                     return (
@@ -391,7 +394,10 @@ export default function UsersPage() {
                           i % 2 === 0 ? '' : 'bg-secondary/10'
                         }`}
                       >
-                        <td className="px-4 py-3 font-medium text-foreground">{role.nombre}</td>
+                        <td className="px-4 py-3 font-medium text-foreground">
+                          {role.nombre}
+                          <span className="block text-[11px] text-muted-foreground font-normal">{role.codigo}</span>
+                        </td>
                         <td className="px-4 py-3 text-muted-foreground">{role.descripcion || '—'}</td>
                         <td className="px-4 py-3 hidden md:table-cell">
                           <span className="badge-info">{permissionsCount} permisos</span>
@@ -399,10 +405,30 @@ export default function UsersPage() {
                         <td className="px-4 py-3 hidden md:table-cell text-muted-foreground">{activeUsersCount} usuarios</td>
                         <td className="px-4 py-3">
                           <div className="flex items-center justify-end gap-1">
-                            <button className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors">
+                            <button
+                              type="button"
+                              title="Editar permisos en Configuración"
+                              onClick={() => {
+                                window.location.href = '/settings';
+                              }}
+                              className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+                            >
                               <Edit2 size={14} />
                             </button>
-                            <button className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-danger transition-colors">
+                            <button
+                              type="button"
+                              disabled={role.codigo === 'admin'}
+                              onClick={() => {
+                                if (role.codigo === 'admin') return;
+                                if (!confirm(`¿Eliminar rol "${role.nombre}"?`)) return;
+                                void eliminarRol(role.id)
+                                  .then(() => toast.success('Rol eliminado'))
+                                  .catch((e) =>
+                                    toast.error(e instanceof Error ? e.message : 'No se pudo eliminar')
+                                  );
+                              }}
+                              className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-danger transition-colors disabled:opacity-30"
+                            >
                               <Trash2 size={14} />
                             </button>
                           </div>
@@ -586,9 +612,21 @@ export default function UsersPage() {
                   value={formRol}
                   onChange={(e) => setFormRol(e.target.value as UserRole)}
                 >
-                  {mockRoles.map((r) => (
-                    <option key={r.id} value={r.name}>
-                      {r.name}
+                  {(roles.length > 0
+                    ? roles.map((r) => ({
+                        value: (ROL_DB_A_UI[r.codigo as RolDb] ?? r.nombre) as UserRole,
+                        label: r.nombre,
+                      }))
+                    : ([
+                        'Administrador',
+                        'Cajero',
+                        'Vendedor',
+                        'Almacenista',
+                        'Contador',
+                      ] as UserRole[]).map((r) => ({ value: r, label: r }))
+                  ).map((r) => (
+                    <option key={r.label} value={r.value}>
+                      {r.label}
                     </option>
                   ))}
                 </select>
@@ -602,7 +640,11 @@ export default function UsersPage() {
                   onChange={(e) => setFormPassword(e.target.value)}
                 />
               )}
-              {tab === 'roles' && <textarea className="input-field" placeholder="Descripción del rol" rows={3} />}
+              {tab === 'roles' && (
+                <p className="text-sm text-muted-foreground">
+                  Los permisos de cada rol se editan en <strong>Configuración → Permisos</strong> (Supabase).
+                </p>
+              )}
             </div>
             <div className="flex gap-3 mt-6">
               <button

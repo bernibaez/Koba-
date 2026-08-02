@@ -37,13 +37,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     async function hydrate() {
       if (!isSupabaseConfigured()) {
-        await loadPermissionsMatrix();
         setIsLoading(false);
         return;
       }
       try {
         const sessionUser = await obtenerSesionActual();
-        await loadPermissionsMatrix(true);
+        try {
+          await loadPermissionsMatrix(true);
+        } catch (permErr) {
+          console.warn('[auth] Permisos no cargados:', permErr);
+        }
         if (!cancelled) {
           setUser(sessionUser);
           storeUser(sessionUser);
@@ -85,7 +88,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = useCallback(async (username: string, password: string) => {
     const result = await iniciarSesion(username, password);
     if (!result.ok) return result;
-    await loadPermissionsMatrix(true);
+    try {
+      await loadPermissionsMatrix(true);
+    } catch {
+      /* permisos opcionales al login */
+    }
     storeUser(result.user);
     setUser(result.user);
     return { ok: true as const, user: result.user };
@@ -94,7 +101,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const loginWithCode = useCallback(async (code: string) => {
     const result = await iniciarSesionConCodigo(code);
     if (!result.ok) return result;
-    await loadPermissionsMatrix(true);
+    try {
+      await loadPermissionsMatrix(true);
+    } catch {
+      /* permisos opcionales al login */
+    }
     storeUser(result.user);
     setUser(result.user);
     return { ok: true as const, user: result.user };

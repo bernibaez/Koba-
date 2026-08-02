@@ -1,49 +1,67 @@
 import { getSupabase, isSupabaseConfigured, tryGetSupabase } from './clienteSupabase';
 import { ROL_COLUMNS, type Rol } from '@/types/database';
 import type { UserRole } from '@/types/roles';
-import { buildDefaultMatrix, type PermissionsMatrix, type RolePermissionMap } from '@/lib/permissionsCatalog';
+import {
+  buildDefaultMatrix,
+  PERMISSION_MODULES,
+  type PermissionsMatrix,
+  type RolePermissionMap,
+} from '@/lib/permissionsCatalog';
 import { ROL_DB_A_UI, ROL_UI_A_DB } from './auth.service';
 
 function errorSupabase(error: unknown): Error {
   if (error && typeof error === 'object') {
-    const e = error as { message?: string; details?: string; hint?: string };
+    const e = error as { message?: string; code?: string; details?: string; hint?: string };
+    if (e.code === 'PGRST205' || e.message?.includes('Could not find the table')) {
+      return new Error(
+        'La tabla "roles" no existe en Supabase. Ejecuta supabase/migrations/008_crear_tabla_roles.sql en el SQL Editor.'
+      );
+    }
     const parts = [e.message, e.details, e.hint].filter(Boolean);
     return new Error(parts.join(' — ') || 'Error de Supabase');
   }
   return error instanceof Error ? error : new Error('Error de Supabase');
 }
 
-const LOCAL_ROLES_KEY = 'market_erp_local_roles';
-
 const ROLE_CODES = ['admin', 'cajero', 'vendedor', 'almacen', 'contable'] as const;
 
-function defaultRolesFromMatrix(): Rol[] {
-  const matrix = buildDefaultMatrix();
-  return ROLE_CODES.map((codigo, i) => {
-    const ui = ROL_DB_A_UI[codigo];
-    return {
-      id: `local-${i + 1}`,
-      codigo,
-      nombre: ui,
-      descripcion: null,
-      permisos: (matrix[ui] ?? {}) as RolePermissionMap,
-    };
-  });
-}
-
-const MOCK_DEFAULT_ROLES: Rol[] = defaultRolesFromMatrix();
-
-function getLocalRoles(): Rol[] {
-  const data = localStorage.getItem(LOCAL_ROLES_KEY);
-  if (!data) {
-    localStorage.setItem(LOCAL_ROLES_KEY, JSON.stringify(MOCK_DEFAULT_ROLES));
-    return MOCK_DEFAULT_ROLES;
+function requireSupabase() {
+  if (!isSupabaseConfigured()) {
+    throw new Error('Supabase no está configurado. Configura VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY.');
   }
-  return JSON.parse(data) as Rol[];
+  return getSupabase();
 }
 
-function saveLocalRoles(roles: Rol[]) {
-  localStorage.setItem(LOCAL_ROLES_KEY, JSON.stringify(roles));
+/** Matriz vacía (todo false). Admin queda con acceso total. */
+export function emptyPermissionsMatrix(): PermissionsMatrix {
+  const emptyRole = (): RolePermissionMap =>
+    Object.fromEntries(
+      PERMISSION_MODULES.map((m) => [m.id, Object.fromEntries(m.actions.map((a) => [a, false]))])
+    );
+
+  const admin = emptyRole();
+  for (const m of PERMISSION_MODULES) {
+    admin[m.id] = Object.fromEntries(m.actions.map((a) => [a, true]));
+  }
+
+  return {
+    Administrador: admin,
+    Cajero: emptyRole(),
+    Vendedor: emptyRole(),
+    Almacenista: emptyRole(),
+    Contador: emptyRole(),
+  };
+}
+
+function mergeRolePermisos(base: RolePermissionMap, stored: RolePermissionMap | null | undefined): RolePermissionMap {
+  const next: RolePermissionMap = { ...base };
+  for (const mod of PERMISSION_MODULES) {
+    next[mod.id] = {
+      ...base[mod.id],
+      ...(stored?.[mod.id] ?? {}),
+    };
+  }
+  return next;
 }
 
 export async function obtenerRoles(params?: {
@@ -52,17 +70,7 @@ export async function obtenerRoles(params?: {
 }): Promise<Rol[]> {
   const sb = tryGetSupabase();
   if (!sb) {
-    let list = getLocalRoles();
-    const q = params?.busqueda?.trim().toLowerCase();
-    if (q) {
-      list = list.filter(
-        (r) =>
-          r.nombre.toLowerCase().includes(q) ||
-          r.codigo.toLowerCase().includes(q) ||
-          (r.descripcion && r.descripcion.toLowerCase().includes(q))
-      );
-    }
-    return list;
+    throw new Error('Supabase no está configurado.');
   }
 
   let query = sb.from('roles').select(ROL_COLUMNS).order('nombre');
@@ -79,19 +87,7 @@ export async function obtenerRoles(params?: {
 }
 
 export async function crearRol(datos: Omit<Rol, 'id' | 'creado_en' | 'actualizado_en'>): Promise<Rol> {
-  if (!isSupabaseConfigured()) {
-    const list = getLocalRoles();
-    const nuevo: Rol = {
-      ...datos,
-      id: `local-${Date.now()}`,
-      creado_en: new Date().toISOString(),
-      actualizado_en: new Date().toISOString(),
-    };
-    saveLocalRoles([...list, nuevo]);
-    return nuevo;
-  }
-
-  const sb = getSupabase();
+  const sb = requireSupabase();
   const { data, error } = await sb
     .from('roles')
     .insert({
@@ -111,21 +107,7 @@ export async function actualizarRol(
   id: string,
   datos: Partial<Omit<Rol, 'id' | 'creado_en' | 'actualizado_en'>>
 ): Promise<Rol> {
-  if (!isSupabaseConfigured()) {
-    const list = getLocalRoles();
-    const idx = list.findIndex((r) => r.id === id);
-    if (idx === -1) throw new Error('Rol no encontrado');
-    const actualizado = {
-      ...list[idx],
-      ...datos,
-      actualizado_en: new Date().toISOString(),
-    };
-    list[idx] = actualizado;
-    saveLocalRoles(list);
-    return actualizado;
-  }
-
-  const sb = getSupabase();
+  const sb = requireSupabase();
   const patch: Record<string, unknown> = {
     actualizado_en: new Date().toISOString(),
   };
@@ -146,21 +128,14 @@ export async function actualizarRol(
 }
 
 export async function eliminarRol(id: string): Promise<void> {
-  if (!isSupabaseConfigured()) {
-    const list = getLocalRoles();
-    saveLocalRoles(list.filter((r) => r.id !== id));
-    return;
-  }
-
-  const sb = getSupabase();
+  const sb = requireSupabase();
   const { error } = await sb.from('roles').delete().eq('id', id);
   if (error) throw errorSupabase(error);
 }
 
-/** Si la tabla está vacía, inserta roles con matriz por defecto. */
+/** Si la tabla existe y está vacía, inserta roles iniciales (solo en DB, no en local). */
 export async function sincronizarRolesPorDefecto(): Promise<void> {
-  if (!isSupabaseConfigured()) return;
-  const sb = getSupabase();
+  const sb = requireSupabase();
   const { data, error } = await sb.from('roles').select('id').limit(1);
   if (error) throw errorSupabase(error);
   if ((data ?? []).length > 0) return;
@@ -189,27 +164,27 @@ export async function sincronizarRolesPorDefecto(): Promise<void> {
   if (insErr) throw errorSupabase(insErr);
 }
 
-/** Convierte filas de `roles` a la matriz UI. */
+/** Matriz solo desde filas reales de Supabase (sin datos simulados locales). */
 export async function obtenerMatrizPermisos(): Promise<PermissionsMatrix> {
+  await sincronizarRolesPorDefecto();
   const roles = await obtenerRoles();
-  const defaults = buildDefaultMatrix();
-  const matrix: PermissionsMatrix = { ...defaults };
+  const matrix = emptyPermissionsMatrix();
 
   for (const rol of roles) {
     const ui = ROL_DB_A_UI[rol.codigo as keyof typeof ROL_DB_A_UI];
     if (!ui) continue;
-    matrix[ui] = {
-      ...defaults[ui],
-      ...(rol.permisos as RolePermissionMap),
-    };
+    if (ui === 'Administrador') {
+      // Admin siempre total
+      continue;
+    }
+    matrix[ui] = mergeRolePermisos(matrix[ui], rol.permisos as RolePermissionMap);
   }
   return matrix;
 }
 
-/** Persiste cada rol de la matriz en Supabase (upsert por codigo). */
+/** Persiste cada rol de la matriz en Supabase. */
 export async function guardarMatrizPermisos(matrix: PermissionsMatrix): Promise<void> {
-  if (!isSupabaseConfigured()) return;
-  const sb = getSupabase();
+  const sb = requireSupabase();
   const existentes = await obtenerRoles();
   const byCodigo = new Map(existentes.map((r) => [r.codigo, r]));
 
@@ -223,7 +198,7 @@ export async function guardarMatrizPermisos(matrix: PermissionsMatrix): Promise<
     if (existing) {
       const { error } = await sb
         .from('roles')
-        .update({ permisos, actualizado_en: new Date().toISOString() })
+        .update({ permisos, actualizado_en: new Date().toISOString(), nombre: uiRole })
         .eq('id', existing.id);
       if (error) throw errorSupabase(error);
     } else {

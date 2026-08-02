@@ -1,4 +1,7 @@
 -- MarketERP — Migración para crear la tabla de roles
+-- Ejecutar completo en: Supabase Dashboard → SQL Editor → New query → Run
+
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 CREATE TABLE IF NOT EXISTS roles (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -25,6 +25,7 @@ import {
 import {
   countEnabled,
   countModuleEnabled,
+  getPermissionsLoadError,
   getPermissionsMatrix,
   loadPermissionsMatrix,
   resetPermissionsMatrix,
@@ -79,16 +80,27 @@ export default function PermissionsSettingsTab() {
   const [saving, setSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
     setLoading(true);
+    setLoadError(null);
+    // Limpia caché local antigua de permisos simulados
+    try {
+      localStorage.removeItem('marketerp_permissions_matrix');
+      localStorage.removeItem('market_erp_local_roles');
+    } catch {
+      /* ignore */
+    }
     loadPermissionsMatrix(true)
       .then((m) => {
         if (alive) setMatrix(m);
       })
       .catch((e) => {
-        toast.error(e instanceof Error ? e.message : 'No se pudieron cargar permisos');
+        const msg = e instanceof Error ? e.message : 'No se pudieron cargar permisos';
+        if (alive) setLoadError(msg);
+        toast.error(msg);
       })
       .finally(() => {
         if (alive) setLoading(false);
@@ -195,7 +207,28 @@ export default function PermissionsSettingsTab() {
   if (loading) {
     return (
       <div className="card p-12 text-center text-sm text-muted-foreground">
-        Cargando permisos desde {isSupabaseConfigured() ? 'Supabase' : 'almacenamiento local'}…
+        Cargando permisos desde Supabase…
+      </div>
+    );
+  }
+
+  if (loadError || getPermissionsLoadError()) {
+    return (
+      <div className="card p-8 space-y-3">
+        <h2 className="text-lg font-bold text-foreground">No se pudieron cargar los permisos</h2>
+        <p className="text-sm text-danger">{loadError || getPermissionsLoadError()}</p>
+        <p className="text-sm text-muted-foreground">
+          En Supabase → SQL Editor ejecuta el archivo{' '}
+          <code className="text-xs bg-secondary px-1.5 py-0.5 rounded">008_crear_tabla_roles.sql</code> y vuelve a
+          entrar aquí.
+        </p>
+        <button
+          type="button"
+          className="btn-primary w-fit"
+          onClick={() => window.location.reload()}
+        >
+          Reintentar
+        </button>
       </div>
     );
   }
@@ -209,9 +242,9 @@ export default function PermissionsSettingsTab() {
             <p className="text-sm text-muted-foreground mt-1 max-w-lg">
               Configura a qué módulos puede entrar cada rol. La acción <strong>Ver</strong> controla
               el menú y las rutas; el resto define qué puede hacer dentro del módulo.
-              {isSupabaseConfigured() && (
-                <span className="block mt-1 text-primary font-medium">Sincronizado con Supabase (tabla roles).</span>
-              )}
+              <span className="block mt-1 text-primary font-medium">
+                Solo datos de Supabase (tabla roles) — sin simulaciones locales.
+              </span>
             </p>
           </div>
           <div className="flex flex-wrap gap-2 flex-shrink-0">
