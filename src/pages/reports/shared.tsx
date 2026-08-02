@@ -1,7 +1,24 @@
 import React from 'react';
 
+export type ReportPeriodProps = {
+  dateFrom: string;
+  dateTo: string;
+};
+
 export function formatRD(value: number) {
   return `RD$ ${value.toLocaleString('es-DO', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+}
+
+export function ReportLoading({ message = 'Cargando datos de Supabase…' }: { message?: string }) {
+  return (
+    <div className="card p-12 text-center text-muted-foreground text-sm">{message}</div>
+  );
+}
+
+export function ReportError({ error }: { error: string }) {
+  return (
+    <div className="card p-8 text-center text-danger text-sm">{error}</div>
+  );
 }
 
 export function formatCompact(value: number) {

@@ -17,11 +17,13 @@ import {
 import { exportTableToPdf } from '@/lib/exportPdf';
 import { useUsuarios } from '@/hooks/useUsuarios';
 import { useAgentes } from '@/hooks/useAgentes';
+import { useRoles } from '@/hooks/useRoles';
 import { ROL_DB_A_UI, ROL_UI_A_DB } from '@/services/auth.service';
 import type { AgenteComercial, RolDb } from '@/types/database';
 import type { UserRole } from '@/lib/auth';
 import { toast } from 'sonner';
 import { isSupabaseConfigured } from '@/services/clienteSupabase';
+
 
 interface Role {
   id: number;
@@ -63,6 +65,20 @@ export default function UsersPage() {
     alternarActivo: alternarActivoAgente,
     eliminar: eliminarAgente,
   } = useAgentes(search);
+  const { roles, loading: loadingRoles } = useRoles(search);
+
+  const countPermissions = (permisos: Record<string, Record<string, boolean>> | null | undefined): number => {
+    if (!permisos) return 0;
+    let count = 0;
+    for (const mod in permisos) {
+      const actions = permisos[mod];
+      for (const act in actions) {
+        if (actions[act]) count++;
+      }
+    }
+    return count;
+  };
+
 
   const resetForm = () => {
     setFormNombre('');
@@ -351,31 +367,49 @@ export default function UsersPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {mockRoles.map((role, i) => (
-                    <tr
-                      key={role.id}
-                      className={`border-b border-border hover:bg-secondary/30 transition-colors ${
-                        i % 2 === 0 ? '' : 'bg-secondary/10'
-                      }`}
-                    >
-                      <td className="px-4 py-3 font-medium text-foreground">{role.name}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{role.description}</td>
-                      <td className="px-4 py-3 hidden md:table-cell">
-                        <span className="badge-info">{role.permissions} permisos</span>
-                      </td>
-                      <td className="px-4 py-3 hidden md:table-cell text-muted-foreground">{role.users} usuarios</td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-end gap-1">
-                          <button className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors">
-                            <Edit2 size={14} />
-                          </button>
-                          <button className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-danger transition-colors">
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
+                  {loadingRoles && (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
+                        Cargando roles…
                       </td>
                     </tr>
-                  ))}
+                  )}
+                  {!loadingRoles && roles.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
+                        No hay roles registrados.
+                      </td>
+                    </tr>
+                  )}
+                  {!loadingRoles && roles.map((role, i) => {
+                    const activeUsersCount = usuarios.filter((u) => u.rol === role.codigo).length;
+                    const permissionsCount = countPermissions(role.permisos);
+                    return (
+                      <tr
+                        key={role.id}
+                        className={`border-b border-border hover:bg-secondary/30 transition-colors ${
+                          i % 2 === 0 ? '' : 'bg-secondary/10'
+                        }`}
+                      >
+                        <td className="px-4 py-3 font-medium text-foreground">{role.nombre}</td>
+                        <td className="px-4 py-3 text-muted-foreground">{role.descripcion || '—'}</td>
+                        <td className="px-4 py-3 hidden md:table-cell">
+                          <span className="badge-info">{permissionsCount} permisos</span>
+                        </td>
+                        <td className="px-4 py-3 hidden md:table-cell text-muted-foreground">{activeUsersCount} usuarios</td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center justify-end gap-1">
+                            <button className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors">
+                              <Edit2 size={14} />
+                            </button>
+                            <button className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-danger transition-colors">
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

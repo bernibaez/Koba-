@@ -449,3 +449,17 @@ export const AUDITORIA_COLUMNS =
 
 export const AGENTE_COLUMNS =
   'id, perfil_id, nombre, correo, telefono, porcentaje_comision, activo, creado_en' as const;
+
+export interface Rol {
+  id: string;
+  codigo: string;
+  nombre: string;
+  descripcion: string | null;
+  permisos: Record<string, Record<string, boolean>>;
+  creado_en?: string;
+  actualizado_en?: string;
+}
+
+export const ROL_COLUMNS =
+  'id, codigo, nombre, descripcion, permisos, creado_en, actualizado_en' as const;
+
