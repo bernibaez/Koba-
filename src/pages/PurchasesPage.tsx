@@ -1,12 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import AppLayout from '@/components/AppLayout';
 import { ShoppingBag, RotateCcw, Plus, Search, Filter, Download, Eye, Edit2, Trash2, X, PackagePlus, Check, CheckCircle2, ShoppingCart, Minus, Package } from 'lucide-react';
 import { exportTableToPdf, formatMoneyPdf } from '@/lib/exportPdf';
 import type { ProductItem } from '@/lib/productStore';
 import { useProductos } from '@/hooks/useProductos';
 import { crearProducto, uiAProductoInsert } from '@/services/productos.service';
-import { crearCompra, obtenerCompras } from '@/services/compras.service';
+import { crearCompra, obtenerCompras, obtenerDetalleCompra, anularCompra, type CompraDetalle } from '@/services/compras.service';
 import { toast } from 'sonner';
+import ModalShell from '@/components/ui/ModalShell';
 
 interface Purchase {
   id: string;
@@ -17,7 +19,7 @@ interface Purchase {
   subtotal: number;
   tax: number;
   total: number;
-  status: 'received' | 'pending' | 'partial';
+  status: 'received' | 'pending' | 'partial' | 'anulada';
   payment: string;
 }
 
@@ -45,16 +47,18 @@ export interface PurchaseLineItem {
 
 type Tab = 'list' | 'returns';
 
-const statusMap = {
+const statusMap: Record<string, { label: string; cls: string }> = {
   received: { label: 'Recibido', cls: 'badge-success' },
   pending: { label: 'Pendiente', cls: 'badge-warning' },
   partial: { label: 'Parcial', cls: 'badge-info' },
   approved: { label: 'Aprobado', cls: 'badge-success' },
+  anulada: { label: 'Anulada', cls: 'badge-danger' },
 };
 
 function mapEstadoUi(estado: string): Purchase['status'] {
   if (estado === 'recibida') return 'received';
   if (estado === 'parcial') return 'partial';
+  if (estado === 'anulada') return 'anulada';
   return 'pending';
 }
 
@@ -86,6 +90,10 @@ export default function PurchasesPage() {
   const [modalPrice, setModalPrice] = useState<number>(0);
   const [modalSalePrice, setModalSalePrice] = useState<number>(0);
   const [lastAddedNotice, setLastAddedNotice] = useState<string | null>(null);
+  const [viewingPurchase, setViewingPurchase] = useState<CompraDetalle | null>(null);
+  const [loadingPurchaseDetail, setLoadingPurchaseDetail] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [anulando, setAnulando] = useState(false);
 
   const [newName, setNewName] = useState('');
   const [newSku, setNewSku] = useState('');
@@ -105,6 +113,31 @@ export default function PurchasesPage() {
     () => Array.from(new Set(systemProducts.map((p) => p.category).filter(Boolean))).sort(),
     [systemProducts]
   );
+
+  const reloadPurchases = async () => {
+    setLoadingList(true);
+    try {
+      const rows = await obtenerCompras();
+      setPurchasesList(
+        rows.map((r) => ({
+          id: r.id,
+          code: r.codigo,
+          supplier: r.proveedor,
+          date: r.fecha,
+          items: r.items,
+          subtotal: r.subtotal,
+          tax: r.impuesto,
+          total: r.total,
+          status: mapEstadoUi(r.estado),
+          payment: r.metodo_pago,
+        }))
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Error al cargar compras');
+    } finally {
+      setLoadingList(false);
+    }
+  };
 
   useEffect(() => {
     let alive = true;
@@ -137,6 +170,38 @@ export default function PurchasesPage() {
       alive = false;
     };
   }, []);
+
+  const handleViewPurchase = async (id: string) => {
+    setLoadingPurchaseDetail(true);
+    setViewingPurchase(null);
+    try {
+      const detail = await obtenerDetalleCompra(id);
+      if (!detail) {
+        toast.error('No se encontró el detalle de la compra');
+        return;
+      }
+      setViewingPurchase(detail);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Error al cargar detalle');
+    } finally {
+      setLoadingPurchaseDetail(false);
+    }
+  };
+
+  const handleConfirmAnular = async () => {
+    if (!confirmDeleteId) return;
+    setAnulando(true);
+    try {
+      await anularCompra(confirmDeleteId);
+      toast.success('Compra anulada');
+      setConfirmDeleteId(null);
+      await reloadPurchases();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'No se pudo anular la compra');
+    } finally {
+      setAnulando(false);
+    }
+  };
 
   const filteredPurchases = purchasesList.filter(p =>
     p.code.toLowerCase().includes(search.toLowerCase()) ||
@@ -645,60 +710,60 @@ export default function PurchasesPage() {
           </div>
         </div>
 
-        {/* MODAL MEJORADO: Agregar Múltiples Productos Continuamente */}
-        {showProductModal && (
-          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-            <div className="w-full max-w-2xl bg-card rounded-2xl border border-border shadow-2xl overflow-hidden flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95 duration-150">
+        {/* Portal a body: evita containing block de page-enter/slide-up (transform) bajo el Topbar */}
+        {showProductModal && createPortal(
+          <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 modal-backdrop">
+            <div className="w-full max-w-3xl bg-card rounded-2xl border border-border shadow-2xl overflow-hidden flex flex-col max-h-[90vh] modal-panel">
               {/* Modal Header with Added Counter */}
-              <div className="px-5 py-4 border-b border-border flex items-center justify-between bg-primary/5">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-primary/15 text-primary flex items-center justify-center font-bold">
-                    <PackagePlus size={20} />
+              <div className="px-6 py-5 border-b border-border flex items-center justify-between gap-4 bg-primary/5">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-11 h-11 rounded-xl bg-primary/15 text-primary flex items-center justify-center font-bold flex-shrink-0">
+                    <PackagePlus size={22} />
                   </div>
-                  <div>
-                    <h3 className="font-extrabold text-foreground text-base">Agregar Productos a la Compra</h3>
-                    <p className="text-xs text-muted-foreground">Actualiza el costo y precio de venta al registrar la entrada</p>
+                  <div className="min-w-0">
+                    <h3 className="font-extrabold text-foreground text-xl">Agregar Productos a la Compra</h3>
+                    <p className="text-sm text-muted-foreground mt-0.5">Actualiza el costo y precio de venta al registrar la entrada</p>
                   </div>
                 </div>
                 
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-1.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-3 py-1 rounded-xl text-xs font-black border border-emerald-500/20">
-                    <ShoppingCart size={14} />
+                <div className="flex items-center gap-3 flex-shrink-0">
+                  <div className="flex items-center gap-2 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-3.5 py-2 rounded-xl text-sm font-black border border-emerald-500/20">
+                    <ShoppingCart size={16} />
                     <span>{purchaseItems.length} en orden</span>
                   </div>
-                  <button type="button" onClick={() => setShowProductModal(false)} className="text-muted-foreground hover:text-foreground p-1">
-                    <X size={20} />
+                  <button type="button" onClick={() => setShowProductModal(false)} className="text-muted-foreground hover:text-foreground p-2 rounded-lg hover:bg-secondary">
+                    <X size={22} />
                   </button>
                 </div>
               </div>
 
               {/* Toast/Notice Banner inside modal */}
               {lastAddedNotice && (
-                <div className="bg-emerald-500/15 border-b border-emerald-500/30 px-4 py-2.5 flex items-center justify-between text-xs text-emerald-700 dark:text-emerald-300 font-bold animate-in fade-in">
+                <div className="bg-emerald-500/15 border-b border-emerald-500/30 px-5 py-3 flex items-center justify-between text-sm text-emerald-700 dark:text-emerald-300 font-bold animate-in fade-in">
                   <div className="flex items-center gap-2">
-                    <CheckCircle2 size={16} className="text-emerald-600 flex-shrink-0" />
+                    <CheckCircle2 size={18} className="text-emerald-600 flex-shrink-0" />
                     <span>{lastAddedNotice}</span>
                   </div>
-                  <button onClick={() => setLastAddedNotice(null)} className="text-emerald-700 hover:text-emerald-900 font-black">✕</button>
+                  <button type="button" onClick={() => setLastAddedNotice(null)} className="text-emerald-700 hover:text-emerald-900 font-black p-1">✕</button>
                 </div>
               )}
 
-              <div className="p-5 space-y-4 overflow-y-auto flex-1 scrollbar-thin">
+              <div className="p-6 space-y-5 overflow-y-auto flex-1 scrollbar-thin">
                 {/* Tabs: Catálogo / Nuevo */}
-                <div className="flex gap-1 p-1 bg-secondary rounded-xl w-fit">
+                <div className="flex gap-1.5 p-1.5 bg-secondary rounded-xl w-fit">
                   <button
                     type="button"
                     onClick={() => {
                       setModalTab('catalog');
                       setSelectedProduct(null);
                     }}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all ${
                       modalTab === 'catalog'
                         ? 'bg-card text-foreground shadow-sm'
                         : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
-                    <Search size={14} />
+                    <Search size={16} />
                     Catálogo
                   </button>
                   <button
@@ -708,13 +773,13 @@ export default function PurchasesPage() {
                       setSelectedProduct(null);
                       setModalSearch('');
                     }}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all ${
                       modalTab === 'new'
                         ? 'bg-card text-foreground shadow-sm'
                         : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
-                    <Package size={14} />
+                    <Package size={16} />
                     Producto nuevo
                   </button>
                 </div>
@@ -722,38 +787,38 @@ export default function PurchasesPage() {
                 {modalTab === 'catalog' && (
                   <>
                     <div>
-                      <label className="block text-xs font-bold text-muted-foreground mb-1.5">
+                      <label className="block text-sm font-bold text-muted-foreground mb-2">
                         Buscar en catálogo
                       </label>
                       <div className="relative">
-                        <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-primary" />
+                        <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-primary" />
                         <input
                           type="text"
                           placeholder="Nombre, SKU o código de barras…"
                           value={modalSearch}
                           onChange={(e) => setModalSearch(e.target.value)}
-                          className="input-field pl-10 h-11 text-sm font-medium"
+                          className="input-field !pl-11 h-12 text-base font-medium"
                           autoFocus
                         />
                       </div>
                     </div>
 
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                           Productos ({filteredSystemProducts.length})
                         </p>
                         <button
                           type="button"
                           onClick={() => setModalTab('new')}
-                          className="text-[11px] font-bold text-primary hover:underline"
+                          className="text-sm font-bold text-primary hover:underline"
                         >
                           + Crear producto nuevo
                         </button>
                       </div>
-                      <div className="max-h-44 overflow-y-auto border border-border rounded-xl divide-y divide-border/60 bg-secondary/10 scrollbar-thin">
+                      <div className="max-h-52 overflow-y-auto border border-border rounded-xl divide-y divide-border/60 bg-secondary/10 scrollbar-thin">
                         {filteredSystemProducts.length === 0 ? (
-                          <div className="p-4 text-center text-xs text-muted-foreground space-y-2">
+                          <div className="p-5 text-center text-sm text-muted-foreground space-y-2">
                             <p>No se encontraron productos.</p>
                             <button
                               type="button"
@@ -777,24 +842,24 @@ export default function PurchasesPage() {
                                   setModalPrice(p.costPrice || 0);
                                   setModalSalePrice(p.salePrice || 0);
                                 }}
-                                className={`p-3 flex items-center justify-between cursor-pointer transition-all ${
+                                className={`px-4 py-3.5 flex items-center justify-between cursor-pointer transition-all gap-3 ${
                                   isSelected
                                     ? 'bg-primary/15 border-l-4 border-primary text-foreground'
                                     : 'hover:bg-secondary/60'
                                 }`}
                               >
                                 <div className="min-w-0 flex-1 pr-2">
-                                  <p className="text-xs font-extrabold truncate">{p.name}</p>
-                                  <p className="text-[11px] font-mono text-muted-foreground">
+                                  <p className="text-sm sm:text-base font-extrabold truncate">{p.name}</p>
+                                  <p className="text-xs font-mono text-muted-foreground mt-0.5">
                                     {p.sku} · Stock:{' '}
                                     <strong className="text-foreground">{p.currentStock}</strong> {p.unit}
                                   </p>
                                 </div>
                                 <div className="text-right flex-shrink-0 space-y-0.5">
-                                  <p className="text-xs font-black tabular-nums text-foreground">
+                                  <p className="text-sm font-black tabular-nums text-foreground">
                                     Compra: RD$ {(p.costPrice || 0).toLocaleString('es-DO')}
                                   </p>
-                                  <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold tabular-nums">
+                                  <p className="text-xs text-emerald-600 dark:text-emerald-400 font-bold tabular-nums">
                                     Venta: RD$ {(p.salePrice || 0).toLocaleString('es-DO')}
                                   </p>
                                 </div>
@@ -808,18 +873,18 @@ export default function PurchasesPage() {
                 )}
 
                 {modalTab === 'new' && (
-                  <div className="space-y-3 rounded-2xl border border-border bg-secondary/20 p-4">
-                    <div className="flex items-center gap-2 text-sm font-bold text-foreground">
-                      <Package size={16} className="text-primary" />
+                  <div className="space-y-4 rounded-2xl border border-border bg-secondary/20 p-5">
+                    <div className="flex items-center gap-2 text-base font-bold text-foreground">
+                      <Package size={18} className="text-primary" />
                       Registrar producto nuevo en catálogo
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="sm:col-span-2">
-                        <label className="block text-xs font-bold text-muted-foreground mb-1">
+                        <label className="block text-sm font-bold text-muted-foreground mb-1.5">
                           Nombre <span className="text-danger">*</span>
                         </label>
                         <input
-                          className="input-field h-10 text-sm"
+                          className="input-field h-12 text-base"
                           placeholder="Ej. Leche Evaporada 410g"
                           value={newName}
                           onChange={(e) => setNewName(e.target.value)}
@@ -827,31 +892,31 @@ export default function PurchasesPage() {
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-bold text-muted-foreground mb-1">
+                        <label className="block text-sm font-bold text-muted-foreground mb-1.5">
                           SKU <span className="text-danger">*</span>
                         </label>
                         <input
-                          className="input-field h-10 text-sm font-mono uppercase"
+                          className="input-field h-12 text-base font-mono uppercase"
                           placeholder="Ej. LEC-EVA-410"
                           value={newSku}
                           onChange={(e) => setNewSku(e.target.value)}
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-bold text-muted-foreground mb-1">
+                        <label className="block text-sm font-bold text-muted-foreground mb-1.5">
                           Código de barras
                         </label>
                         <input
-                          className="input-field h-10 text-sm font-mono"
+                          className="input-field h-12 text-base font-mono"
                           placeholder="Opcional"
                           value={newBarcode}
                           onChange={(e) => setNewBarcode(e.target.value)}
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-bold text-muted-foreground mb-1">Categoría</label>
+                        <label className="block text-sm font-bold text-muted-foreground mb-1.5">Categoría</label>
                         <input
-                          className="input-field h-10 text-sm"
+                          className="input-field h-12 text-base"
                           list="purchase-categories"
                           value={newCategory}
                           onChange={(e) => setNewCategory(e.target.value)}
@@ -862,11 +927,11 @@ export default function PurchasesPage() {
                           ))}
                         </datalist>
                       </div>
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <label className="block text-xs font-bold text-muted-foreground mb-1">Unidad</label>
+                          <label className="block text-sm font-bold text-muted-foreground mb-1.5">Unidad</label>
                           <select
-                            className="input-field h-10 text-sm"
+                            className="input-field h-12 text-base"
                             value={newUnit}
                             onChange={(e) => setNewUnit(e.target.value)}
                           >
@@ -878,9 +943,9 @@ export default function PurchasesPage() {
                           </select>
                         </div>
                         <div>
-                          <label className="block text-xs font-bold text-muted-foreground mb-1">ITBIS %</label>
+                          <label className="block text-sm font-bold text-muted-foreground mb-1.5">ITBIS %</label>
                           <select
-                            className="input-field h-10 text-sm"
+                            className="input-field h-12 text-base"
                             value={newTax}
                             onChange={(e) => setNewTax(Number(e.target.value))}
                           >
@@ -895,45 +960,45 @@ export default function PurchasesPage() {
                 )}
 
                 {/* Quantity & editable prices */}
-                <div className="bg-secondary/30 p-4 rounded-2xl border border-border space-y-3">
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                <div className="bg-secondary/30 p-5 rounded-2xl border border-border space-y-4">
+                  <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                     Cantidad y precios (editables)
                   </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
-                      <label className="block text-xs font-bold text-foreground mb-1">
+                      <label className="block text-sm font-bold text-foreground mb-1.5">
                         Cantidad <span className="text-danger">*</span>
                       </label>
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-2">
                         <button
                           type="button"
                           onClick={() => setModalQty((q) => Math.max(1, q - 1))}
-                          className="w-9 h-10 rounded-xl bg-secondary hover:bg-border flex items-center justify-center font-bold"
+                          className="w-11 h-12 rounded-xl bg-secondary hover:bg-border flex items-center justify-center font-bold"
                         >
-                          <Minus size={14} />
+                          <Minus size={16} />
                         </button>
                         <input
                           type="number"
                           min={1}
                           value={modalQty}
                           onChange={(e) => setModalQty(Number(e.target.value))}
-                          className="input-field text-base font-black text-center h-10 flex-1 tabular-nums"
+                          className="input-field text-lg font-black text-center h-12 flex-1 tabular-nums"
                         />
                         <button
                           type="button"
                           onClick={() => setModalQty((q) => q + 1)}
-                          className="w-9 h-10 rounded-xl bg-secondary hover:bg-border flex items-center justify-center font-bold"
+                          className="w-11 h-12 rounded-xl bg-secondary hover:bg-border flex items-center justify-center font-bold"
                         >
-                          <Plus size={14} />
+                          <Plus size={16} />
                         </button>
                       </div>
-                      <div className="flex items-center gap-1 mt-1.5">
+                      <div className="flex items-center gap-1.5 mt-2.5">
                         {[1, 5, 10, 24, 50, 100].map((preset) => (
                           <button
                             key={`preset-${preset}`}
                             type="button"
                             onClick={() => setModalQty(preset)}
-                            className="flex-1 py-0.5 text-[10px] font-bold bg-card border border-border hover:bg-primary/10 hover:text-primary rounded-lg tabular-nums"
+                            className="flex-1 py-2 text-xs font-bold bg-card border border-border hover:bg-primary/10 hover:text-primary rounded-lg tabular-nums"
                           >
                             {preset}
                           </button>
@@ -942,11 +1007,11 @@ export default function PurchasesPage() {
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-foreground mb-1">
+                      <label className="block text-sm font-bold text-foreground mb-1.5">
                         Precio de compra / costo <span className="text-danger">*</span>
                       </label>
                       <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-muted-foreground">
+                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold text-muted-foreground">
                           RD$
                         </span>
                         <input
@@ -956,22 +1021,22 @@ export default function PurchasesPage() {
                           value={modalPrice || ''}
                           onChange={(e) => setModalPrice(Number(e.target.value))}
                           placeholder="0.00"
-                          className="input-field text-base font-black text-right h-10 tabular-nums pl-12"
+                          className="input-field text-base font-black text-right h-12 tabular-nums pl-14"
                         />
                       </div>
                       {selectedProduct && (
-                        <span className="text-[10px] text-muted-foreground mt-1 block text-right">
+                        <span className="text-xs text-muted-foreground mt-1.5 block text-right">
                           Catálogo: RD$ {(selectedProduct.costPrice || 0).toLocaleString('es-DO')}
                         </span>
                       )}
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-emerald-600 dark:text-emerald-400 mb-1">
+                      <label className="block text-sm font-bold text-emerald-600 dark:text-emerald-400 mb-1.5">
                         Precio de venta <span className="text-danger">*</span>
                       </label>
                       <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-emerald-600/70">
+                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold text-emerald-600/70">
                           RD$
                         </span>
                         <input
@@ -981,11 +1046,11 @@ export default function PurchasesPage() {
                           value={modalSalePrice || ''}
                           onChange={(e) => setModalSalePrice(Number(e.target.value))}
                           placeholder="0.00"
-                          className="input-field text-base font-black text-right h-10 tabular-nums pl-12 border-emerald-500/40 text-emerald-600 dark:text-emerald-400"
+                          className="input-field text-base font-black text-right h-12 tabular-nums pl-14 border-emerald-500/40 text-emerald-600 dark:text-emerald-400"
                         />
                       </div>
                       {selectedProduct && (
-                        <span className="text-[10px] text-muted-foreground mt-1 block text-right">
+                        <span className="text-xs text-muted-foreground mt-1.5 block text-right">
                           Catálogo: RD$ {(selectedProduct.salePrice || 0).toLocaleString('es-DO')}
                         </span>
                       )}
@@ -993,23 +1058,23 @@ export default function PurchasesPage() {
                   </div>
 
                   {modalPrice > 0 && (
-                    <div className="bg-card p-3 rounded-xl border border-border space-y-2">
-                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <div className="bg-card p-4 rounded-xl border border-border space-y-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
                         <span className="font-bold text-muted-foreground">Sugerir venta por margen:</span>
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1.5">
                           {[20, 30, 35, 40, 50].map((pct) => (
                             <button
                               key={`margin-${pct}`}
                               type="button"
                               onClick={() => setModalSalePrice(Math.round(modalPrice * (1 + pct / 100)))}
-                              className="px-2 py-0.5 text-[11px] font-extrabold bg-secondary hover:bg-emerald-500/15 hover:text-emerald-600 rounded-md border border-border tabular-nums"
+                              className="px-2.5 py-1.5 text-xs font-extrabold bg-secondary hover:bg-emerald-500/15 hover:text-emerald-600 rounded-lg border border-border tabular-nums"
                             >
                               +{pct}%
                             </button>
                           ))}
                         </div>
                       </div>
-                      <div className="pt-2 border-t border-border/50 flex items-center justify-between text-xs">
+                      <div className="pt-2 border-t border-border/50 flex items-center justify-between text-sm">
                         <span className="text-muted-foreground font-medium">
                           Ganancia/und:{' '}
                           <strong
@@ -1023,7 +1088,7 @@ export default function PurchasesPage() {
                           </strong>
                         </span>
                         <span
-                          className={`px-2 py-0.5 rounded-lg text-xs font-black tabular-nums ${
+                          className={`px-2.5 py-1 rounded-lg text-sm font-black tabular-nums ${
                             modalSalePrice - modalPrice >= 0
                               ? 'bg-emerald-500/15 text-emerald-600 border border-emerald-500/30'
                               : 'bg-danger-bg text-danger border border-danger/30'
@@ -1039,9 +1104,9 @@ export default function PurchasesPage() {
                   )}
 
                   {(selectedProduct || (modalTab === 'new' && newName.trim())) && modalPrice > 0 && (
-                    <div className="bg-primary/10 border border-primary/20 rounded-xl p-3 flex justify-between items-center text-xs">
+                    <div className="bg-primary/10 border border-primary/20 rounded-xl p-4 flex justify-between items-center text-sm">
                       <span className="font-bold text-foreground">Total línea (cantidad × costo):</span>
-                      <span className="font-black text-base text-primary tabular-nums">
+                      <span className="font-black text-lg text-primary tabular-nums">
                         RD$ {(modalQty * modalPrice).toLocaleString('es-DO', { minimumFractionDigits: 2 })}
                       </span>
                     </div>
@@ -1049,11 +1114,11 @@ export default function PurchasesPage() {
                 </div>
               </div>
 
-              <div className="p-4 border-t border-border flex flex-wrap items-center justify-between gap-3 bg-secondary/20">
+              <div className="p-5 border-t border-border flex flex-wrap items-center justify-end gap-3 bg-secondary/20">
                 <button
                   type="button"
                   onClick={() => setShowProductModal(false)}
-                  className="btn-secondary text-xs px-4 py-2.5 font-bold"
+                  className="btn-secondary text-sm px-5 py-3 font-bold"
                 >
                   ✓ Listo / Finalizar
                 </button>
@@ -1066,14 +1131,15 @@ export default function PurchasesPage() {
                       ? !selectedProduct
                       : !newName.trim() || !newSku.trim() || modalPrice <= 0 || modalSalePrice <= 0
                   }
-                  className="btn-primary text-xs px-5 py-2.5 font-black flex items-center gap-1.5 shadow-md disabled:opacity-50"
+                  className="btn-primary text-sm px-5 py-3 font-black flex items-center gap-2 shadow-md disabled:opacity-50"
                 >
                   <Plus size={16} />
                   {modalTab === 'new' ? 'Crear y añadir a la compra' : 'Añadir y seguir agregando'}
                 </button>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         )}
       </AppLayout>
     );
@@ -1157,9 +1223,35 @@ export default function PurchasesPage() {
                       <td className="px-4 py-3 hidden md:table-cell"><span className={statusMap[p.status].cls}>{statusMap[p.status].label}</span></td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1">
-                          <button className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"><Eye size={14} /></button>
-                          <button className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"><Edit2 size={14} /></button>
-                          <button className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-danger transition-colors"><Trash2 size={14} /></button>
+                          <button
+                            type="button"
+                            className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+                            title="Ver detalle"
+                            onClick={() => void handleViewPurchase(p.id)}
+                          >
+                            <Eye size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+                            title="Editar"
+                            onClick={() =>
+                              toast.info(
+                                'Las compras recibidas no se editan; anula y crea otra'
+                              )
+                            }
+                          >
+                            <Edit2 size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-danger transition-colors"
+                            title="Anular compra"
+                            disabled={p.status === 'anulada'}
+                            onClick={() => setConfirmDeleteId(p.id)}
+                          >
+                            <Trash2 size={14} />
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -1225,6 +1317,161 @@ export default function PurchasesPage() {
           </div>
         )}
       </div>
+
+      <ModalShell
+        open={!!viewingPurchase || loadingPurchaseDetail}
+        onClose={() => {
+          setViewingPurchase(null);
+          setLoadingPurchaseDetail(false);
+        }}
+        size="xl"
+        className="p-6 space-y-4"
+        busy={loadingPurchaseDetail}
+        busyLabel="Cargando detalle…"
+      >
+        {viewingPurchase && (
+          <>
+            <div className="flex items-center justify-between border-b border-border pb-3">
+              <div>
+                <h3 className="font-bold text-foreground text-lg flex items-center gap-2">
+                  <ShoppingBag className="text-primary" size={20} />
+                  Compra {viewingPurchase.codigo}
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Estado:{' '}
+                  <span className={statusMap[mapEstadoUi(viewingPurchase.estado)]?.cls ?? 'badge-neutral'}>
+                    {statusMap[mapEstadoUi(viewingPurchase.estado)]?.label ?? viewingPurchase.estado}
+                  </span>
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setViewingPurchase(null)}
+                className="p-1 text-muted-foreground hover:text-foreground"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 bg-secondary/30 rounded-xl p-3 text-xs">
+              <div>
+                <span className="text-muted-foreground block">Proveedor</span>
+                <span className="font-bold text-foreground">{viewingPurchase.proveedor}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground block">Fecha</span>
+                <span>{viewingPurchase.fecha}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground block">Método de pago</span>
+                <span>{viewingPurchase.metodo_pago || '—'}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground block">Ítems</span>
+                <span>{viewingPurchase.items}</span>
+              </div>
+              {viewingPurchase.notas && (
+                <div className="col-span-2">
+                  <span className="text-muted-foreground block">Notas</span>
+                  <span>{viewingPurchase.notas}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-1 text-xs">
+              <p className="font-bold text-muted-foreground uppercase text-[10px] tracking-wider">
+                Líneas ({viewingPurchase.lineas.length})
+              </p>
+              <div className="bg-secondary/40 rounded-xl p-3 max-h-48 overflow-y-auto space-y-2">
+                {viewingPurchase.lineas.length === 0 ? (
+                  <p className="text-muted-foreground text-center py-2">Sin líneas</p>
+                ) : (
+                  viewingPurchase.lineas.map((line) => (
+                    <div
+                      key={line.id}
+                      className="flex justify-between items-center border-b border-border/40 pb-1.5 last:border-none"
+                    >
+                      <div>
+                        <span className="font-semibold text-foreground">{line.nombre}</span>
+                        <span className="text-[11px] text-muted-foreground block font-mono">
+                          {line.cantidad}x @ RD${' '}
+                          {line.precio_costo.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                      <span className="font-bold font-mono text-foreground">
+                        RD$ {line.subtotal.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div className="border-t border-border pt-3 space-y-1.5 text-xs">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Subtotal</span>
+                <span className="font-mono">
+                  RD$ {viewingPurchase.subtotal.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">ITBIS</span>
+                <span className="font-mono text-amber-600 dark:text-amber-400 font-bold">
+                  RD$ {viewingPurchase.impuesto.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+              <div className="flex justify-between border-t border-border pt-2 text-sm font-bold">
+                <span>Total</span>
+                <span className="text-primary font-black text-base">
+                  RD$ {viewingPurchase.total.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button type="button" className="btn-primary text-xs py-2" onClick={() => setViewingPurchase(null)}>
+                Cerrar
+              </button>
+            </div>
+          </>
+        )}
+      </ModalShell>
+
+      <ModalShell
+        open={!!confirmDeleteId}
+        onClose={() => !anulando && setConfirmDeleteId(null)}
+        size="sm"
+        busy={anulando}
+        busyLabel="Anulando…"
+        className="p-6 space-y-4"
+      >
+        <div className="flex items-center gap-2">
+          <Trash2 className="text-danger" size={20} />
+          <h3 className="font-bold text-foreground text-lg">Anular compra</h3>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          ¿Anular esta compra? Esta acción marca el documento como anulado. Para corregir,
+          anula y crea otra compra.
+        </p>
+        <div className="flex gap-3 pt-2">
+          <button
+            type="button"
+            className="btn-secondary flex-1"
+            disabled={anulando}
+            onClick={() => setConfirmDeleteId(null)}
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            className="btn-primary flex-1 bg-rose-600 hover:bg-rose-700 text-white"
+            disabled={anulando}
+            onClick={() => void handleConfirmAnular()}
+          >
+            Confirmar anulación
+          </button>
+        </div>
+      </ModalShell>
     </AppLayout>
   );
 }

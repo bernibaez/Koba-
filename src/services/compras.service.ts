@@ -201,3 +201,68 @@ export async function crearCompra(input: NuevaCompraInput): Promise<CompraLista>
     metodo_pago: compra.metodo_pago,
   };
 }
+
+export type CompraDetalle = CompraLista & {
+  notas: string | null;
+  lineas: {
+    id: string;
+    nombre: string;
+    cantidad: number;
+    precio_costo: number;
+    precio_venta: number;
+    subtotal: number;
+  }[];
+};
+
+export async function obtenerDetalleCompra(id: string): Promise<CompraDetalle | null> {
+  const sb = tryGetSupabase();
+  if (!sb) return null;
+
+  const { data, error } = await sb
+    .from('compras')
+    .select(
+      `
+      id, codigo, proveedor_id, subtotal, monto_impuesto, monto_total,
+      metodo_pago, estado, notas, creado_en,
+      proveedores ( nombre ),
+      detalle_compras ( id, nombre_item, cantidad, precio_costo, precio_venta, subtotal )
+    `
+    )
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+
+  const proveedor = data.proveedores as { nombre?: string } | null;
+  const detalle = (data.detalle_compras as Record<string, unknown>[] | null) ?? [];
+
+  return {
+    id: String(data.id),
+    codigo: String(data.codigo),
+    proveedor: proveedor?.nombre ?? 'Sin proveedor',
+    proveedor_id: data.proveedor_id ? String(data.proveedor_id) : null,
+    fecha: String(data.creado_en).slice(0, 10),
+    items: detalle.reduce((s, d) => s + Number(d.cantidad ?? 0), 0),
+    subtotal: Number(data.subtotal ?? 0),
+    impuesto: Number(data.monto_impuesto ?? 0),
+    total: Number(data.monto_total ?? 0),
+    estado: data.estado as CompraLista['estado'],
+    metodo_pago: String(data.metodo_pago ?? ''),
+    notas: data.notas ? String(data.notas) : null,
+    lineas: detalle.map((d) => ({
+      id: String(d.id),
+      nombre: String(d.nombre_item ?? ''),
+      cantidad: Number(d.cantidad ?? 0),
+      precio_costo: Number(d.precio_costo ?? 0),
+      precio_venta: Number(d.precio_venta ?? 0),
+      subtotal: Number(d.subtotal ?? 0),
+    })),
+  };
+}
+
+export async function anularCompra(id: string): Promise<void> {
+  if (!isSupabaseConfigured()) throw new Error('Supabase no configurado');
+  const sb = getSupabase();
+  const { error } = await sb.from('compras').update({ estado: 'anulada' }).eq('id', id);
+  if (error) throw error;
+}

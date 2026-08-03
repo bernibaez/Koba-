@@ -193,6 +193,46 @@ export async function crearCotizacion(payload: PayloadCotizacion): Promise<Cotiz
   };
 }
 
+export async function obtenerDetalleCotizacion(id: string): Promise<CotizacionConDetalle | null> {
+  const sb = tryGetSupabase();
+  if (!sb) {
+    return getLocalCotizaciones().find((c) => c.id === id) ?? null;
+  }
+
+  const { data, error } = await sb
+    .from('cotizaciones')
+    .select('*, clientes(nombre), perfiles(nombre_completo), detalle_cotizaciones(*)')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+
+  const items = ((data as any).detalle_cotizaciones ?? []).map((it: any) => ({
+    id: String(it.id),
+    producto_id: it.producto_id,
+    nombre_item: String(it.nombre_item),
+    cantidad: Number(it.cantidad),
+    precio_unitario: Number(it.precio_unitario),
+    subtotal: Number(it.subtotal),
+  }));
+
+  return {
+    id: data.id,
+    codigo: data.codigo,
+    cliente_id: data.cliente_id,
+    vendedor_id: data.vendedor_id,
+    subtotal: Number(data.subtotal),
+    monto_impuesto: Number(data.monto_impuesto),
+    monto_total: Number(data.monto_total),
+    estado: data.estado,
+    valida_hasta: data.valida_hasta,
+    creado_en: data.creado_en,
+    cliente_nombre: (data as any).clientes?.nombre ?? 'Cliente general',
+    vendedor_nombre: (data as any).perfiles?.nombre_completo ?? 'Sistema',
+    items,
+  };
+}
+
 export async function actualizarEstadoCotizacion(
   cotizacionId: string,
   nuevoEstado: EstadoCotizacion

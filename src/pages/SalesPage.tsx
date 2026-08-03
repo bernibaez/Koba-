@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import {
   ShoppingCart,
@@ -29,7 +29,10 @@ import { obtenerClientes } from '@/services/clientes.service';
 import { obtenerProductos } from '@/services/productos.service';
 import type { Cliente, Producto, MetodoPago } from '@/types/database';
 import type { VentaConDetalle } from '@/services/ventas.service';
-import type { CotizacionConDetalle } from '@/services/cotizaciones.service';
+import {
+  obtenerDetalleCotizacion,
+  type CotizacionConDetalle,
+} from '@/services/cotizaciones.service';
 
 type Tab = 'sales' | 'quotes' | 'returns';
 
@@ -71,10 +74,9 @@ export default function SalesPage() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
 
-  // Modals & State
-  const [showAddSaleModal, setShowAddSaleModal] = useState(false);
-  const [showAddQuoteModal, setShowAddQuoteModal] = useState(false);
-  const [showAddReturnModal, setShowAddReturnModal] = useState(false);
+  // Inline forms (reemplazan la lista, como en Compras) & modals de confirmación
+  const [showAddSaleForm, setShowAddSaleForm] = useState(false);
+  const [showAddQuoteForm, setShowAddQuoteForm] = useState(false);
 
   const [viewingSale, setViewingSale] = useState<VentaConDetalle | null>(null);
   const [loadingSaleDetail, setLoadingSaleDetail] = useState(false);
@@ -83,6 +85,7 @@ export default function SalesPage() {
   const [anularMotivo, setAnularMotivo] = useState('Anulación por error de facturación');
 
   const [viewingQuote, setViewingQuote] = useState<CotizacionConDetalle | null>(null);
+  const [loadingQuoteDetail, setLoadingQuoteDetail] = useState(false);
   const [convertQuote, setConvertQuote] = useState<CotizacionConDetalle | null>(null);
   const [convertPaymentMethod, setConvertPaymentMethod] = useState<MetodoPago>('efectivo');
 
@@ -147,11 +150,22 @@ export default function SalesPage() {
   );
   const [quoteCart, setQuoteCart] = useState<CartItem[]>([]);
 
-  // Nueva Devolución form state
-  const [returnVentaId, setReturnVentaId] = useState<string>('');
-  const [returnMotivo, setReturnMotivo] = useState('Producto defectuoso / garantía');
-  const [returnMetodo, setReturnMetodo] = useState<'efectivo' | 'tarjeta' | 'nota_credito' | 'cambio'>('efectivo');
-  const [returnProducts, setReturnProducts] = useState<{ producto_id: string; nombre: string; cant: number; precio: number }[]>([]);
+  const closeSaleForm = () => {
+    setShowAddSaleForm(false);
+    setSaleCart([]);
+    setSaleMontoPagado(0);
+    setSaleSearchProd('');
+    setSaleCustomerId('');
+    setSalePaymentMethod('efectivo');
+    setSaleTipoNcf('B02');
+  };
+
+  const closeQuoteForm = () => {
+    setShowAddQuoteForm(false);
+    setQuoteCart([]);
+    setQuoteCustomerId('');
+    setQuoteValidaHasta(new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10));
+  };
 
   // Open Sale Detail modal with live items
   const handleOpenSaleDetail = async (v: VentaConDetalle) => {
@@ -164,6 +178,19 @@ export default function SalesPage() {
       // Keep initial summary
     } finally {
       setLoadingSaleDetail(false);
+    }
+  };
+
+  const handleOpenQuoteDetail = async (q: CotizacionConDetalle) => {
+    setViewingQuote(q);
+    setLoadingQuoteDetail(true);
+    try {
+      const full = await obtenerDetalleCotizacion(q.id);
+      if (full) setViewingQuote(full);
+    } catch {
+      // Keep list summary if detail fails
+    } finally {
+      setLoadingQuoteDetail(false);
     }
   };
 
@@ -239,9 +266,7 @@ export default function SalesPage() {
 
       const res = await cobrar(payload);
       toast.success(`¡Venta procesada con éxito! Factura: ${res.numero_factura}`);
-      setShowAddSaleModal(false);
-      setSaleCart([]);
-      setSaleMontoPagado(0);
+      closeSaleForm();
     } catch (err: any) {
       toast.error(err.message || 'Error al procesar la venta');
     }
@@ -280,8 +305,7 @@ export default function SalesPage() {
       });
 
       toast.success(`Cotización ${cot.codigo} guardada exitosamente`);
-      setShowAddQuoteModal(false);
-      setQuoteCart([]);
+      closeQuoteForm();
     } catch (err: any) {
       toast.error(err.message || 'Error al crear la cotización');
     }
@@ -404,6 +428,393 @@ export default function SalesPage() {
     });
   };
 
+  if (showAddSaleForm) {
+    return (
+      <AppLayout>
+        <div className="space-y-6 slide-up">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div>
+              <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+                <ShoppingCart className="text-primary" size={26} />
+                Nueva Venta
+              </h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                Registrar factura con ITBIS 18% transparentado y actualizar inventario
+              </p>
+            </div>
+            <button type="button" onClick={closeSaleForm} className="btn-secondary">
+              ← Volver a Ventas
+            </button>
+          </div>
+
+          <form onSubmit={handleCreateSaleSubmit} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 space-y-4">
+              <div className="card p-5 space-y-4">
+                <h3 className="font-semibold text-foreground">Información de la Venta</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground mb-1 block">Cliente</label>
+                    <select
+                      className="input-field"
+                      value={saleCustomerId}
+                      onChange={(e) => setSaleCustomerId(e.target.value)}
+                    >
+                      <option value="">Cliente General (Contado)</option>
+                      {dbClientes.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.nombre} {c.rnc_cedula ? `(${c.rnc_cedula})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground mb-1 block">Tipo Comprobante (NCF)</label>
+                    <select
+                      className="input-field"
+                      value={saleTipoNcf}
+                      onChange={(e) => setSaleTipoNcf(e.target.value)}
+                    >
+                      <option value="B02">Factura Consumo (B02)</option>
+                      <option value="B01">Crédito Fiscal (B01)</option>
+                      <option value="B14">Gubernamental (B14)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground mb-1 block">Método de Pago</label>
+                    <select
+                      className="input-field"
+                      value={salePaymentMethod}
+                      onChange={(e) => setSalePaymentMethod(e.target.value as MetodoPago)}
+                    >
+                      <option value="efectivo">Efectivo</option>
+                      <option value="tarjeta">Tarjeta de Crédito/Débito</option>
+                      <option value="transferencia">Transferencia Bancaria</option>
+                      <option value="credito">Crédito (A pagar)</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div className="card p-5 space-y-4">
+                <div>
+                  <h3 className="font-semibold text-foreground">Productos</h3>
+                  <p className="text-xs text-muted-foreground">Busca y agrega ítems al carrito de la venta</p>
+                </div>
+                <div className="relative">
+                  <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    className="input-field !pl-10"
+                    placeholder="Buscar producto por nombre o código..."
+                    value={saleSearchProd}
+                    onChange={(e) => setSaleSearchProd(e.target.value)}
+                  />
+                </div>
+                <div className="max-h-48 overflow-y-auto border border-border rounded-xl divide-y divide-border text-sm">
+                  {dbProductos
+                    .filter((p) => p.nombre.toLowerCase().includes(saleSearchProd.toLowerCase()))
+                    .slice(0, 10)
+                    .map((p) => (
+                      <div
+                        key={p.id}
+                        onClick={() => handleAddProductToSaleCart(p)}
+                        className="px-3.5 py-3 hover:bg-primary/10 cursor-pointer flex justify-between items-center transition-colors gap-3"
+                      >
+                        <div className="min-w-0">
+                          <span className="font-semibold text-foreground block truncate">{p.nombre}</span>
+                          <span className="text-xs text-muted-foreground">
+                            Stock: {p.stock_actual} {p.unidad}
+                          </span>
+                        </div>
+                        <span className="font-bold text-primary whitespace-nowrap">
+                          RD$ {p.precio_venta.toLocaleString()}
+                        </span>
+                      </div>
+                    ))}
+                </div>
+
+                <div className="overflow-x-auto border border-border rounded-xl">
+                  <table className="w-full text-sm">
+                    <thead className="bg-secondary/40 border-b border-border">
+                      <tr>
+                        <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground">Producto</th>
+                        <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground">Precio</th>
+                        <th className="text-center px-3 py-2.5 font-semibold text-muted-foreground">Cant.</th>
+                        <th className="text-right px-3 py-2.5 font-semibold text-muted-foreground">Subtotal</th>
+                        <th className="px-3 py-2.5"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {saleCart.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="p-6 text-center text-muted-foreground">
+                            El carrito de ventas está vacío. Selecciona productos arriba.
+                          </td>
+                        </tr>
+                      ) : (
+                        saleCart.map((item, idx) => (
+                          <tr key={idx}>
+                            <td className="px-3 py-2.5 font-medium">{item.producto.nombre}</td>
+                            <td className="px-3 py-2.5">RD$ {item.precio_unitario.toLocaleString()}</td>
+                            <td className="px-3 py-2.5 text-center">
+                              <input
+                                type="number"
+                                min={1}
+                                value={item.cantidad}
+                                onChange={(e) => {
+                                  const val = Math.max(1, Number(e.target.value) || 1);
+                                  setSaleCart((prev) =>
+                                    prev.map((c, i) => (i === idx ? { ...c, cantidad: val } : c))
+                                  );
+                                }}
+                                className="input-field text-center w-16 py-1.5 text-sm inline-block"
+                              />
+                            </td>
+                            <td className="px-3 py-2.5 text-right font-bold">
+                              RD$ {(item.cantidad * item.precio_unitario).toLocaleString()}
+                            </td>
+                            <td className="px-3 py-2.5 text-right">
+                              <button
+                                type="button"
+                                onClick={() => setSaleCart((prev) => prev.filter((_, i) => i !== idx))}
+                                className="p-1.5 text-rose-500 hover:bg-rose-500/10 rounded"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="card p-5 space-y-3.5 bg-secondary/20 sticky top-4">
+                <h4 className="font-bold text-foreground border-b border-border pb-2.5">Resumen de Factura</h4>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Subtotal Neto</span>
+                  <span className="font-mono font-medium">
+                    RD$ {saleSubtotal.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">ITBIS Transparentado (18%)</span>
+                  <span className="font-mono font-bold text-amber-600 dark:text-amber-400">
+                    RD$ {saleTax.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+                <div className="border-t border-border pt-3 flex justify-between font-black text-foreground text-lg">
+                  <span>Total Venta</span>
+                  <span className="text-primary font-mono">
+                    RD$ {saleTotal.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+
+                {salePaymentMethod === 'efectivo' && (
+                  <div className="pt-2 space-y-2">
+                    <label className="text-xs font-medium text-muted-foreground block">Monto Recibido</label>
+                    <input
+                      type="number"
+                      step="any"
+                      placeholder="0.00"
+                      className="input-field font-mono"
+                      value={saleMontoPagado || ''}
+                      onChange={(e) => setSaleMontoPagado(Number(e.target.value))}
+                    />
+                    <div className="flex justify-between text-sm font-bold">
+                      <span>Devuelta / Cambio:</span>
+                      <span className="text-emerald-600 font-mono">
+                        RD$ {saleDevuelta.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex flex-col gap-2 pt-2">
+                  <button
+                    type="submit"
+                    disabled={saleCart.length === 0}
+                    className="btn-primary w-full py-3 font-bold shadow-md disabled:opacity-50"
+                  >
+                    Procesar y Guardar
+                  </button>
+                  <button type="button" onClick={closeSaleForm} className="btn-secondary w-full">
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            </div>
+          </form>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  if (showAddQuoteForm) {
+    return (
+      <AppLayout>
+        <div className="space-y-6 slide-up">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div>
+              <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+                <FileText className="text-primary" size={26} />
+                Nueva Cotización
+              </h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                Crear cotización comercial con validez y productos del catálogo
+              </p>
+            </div>
+            <button type="button" onClick={closeQuoteForm} className="btn-secondary">
+              ← Volver a Ventas
+            </button>
+          </div>
+
+          <form onSubmit={handleCreateQuoteSubmit} className="space-y-4">
+            <div className="card p-5 space-y-4">
+              <h3 className="font-semibold text-foreground">Información de la Cotización</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground mb-1 block">Cliente</label>
+                  <select
+                    className="input-field"
+                    value={quoteCustomerId}
+                    onChange={(e) => setQuoteCustomerId(e.target.value)}
+                  >
+                    <option value="">Seleccionar cliente...</option>
+                    {dbClientes.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground mb-1 block">Válida Hasta</label>
+                  <input
+                    type="date"
+                    className="input-field"
+                    value={quoteValidaHasta}
+                    onChange={(e) => setQuoteValidaHasta(e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="card p-5 space-y-4">
+              <div>
+                <h3 className="font-semibold text-foreground">Productos</h3>
+                <p className="text-xs text-muted-foreground">Selecciona productos para agregarlos a la cotización</p>
+              </div>
+              <div className="max-h-48 overflow-y-auto border border-border rounded-xl divide-y divide-border text-sm">
+                {dbProductos.slice(0, 12).map((p) => (
+                  <div
+                    key={p.id}
+                    onClick={() => {
+                      setQuoteCart((prev) => {
+                        const idx = prev.findIndex((item) => item.producto.id === p.id);
+                        if (idx >= 0) {
+                          const next = [...prev];
+                          next[idx].cantidad += 1;
+                          return next;
+                        }
+                        return [...prev, { producto: p, cantidad: 1, precio_unitario: p.precio_venta }];
+                      });
+                    }}
+                    className="px-3.5 py-3 hover:bg-primary/10 cursor-pointer flex justify-between items-center transition-colors gap-3"
+                  >
+                    <span className="font-semibold text-foreground truncate">{p.nombre}</span>
+                    <span className="font-bold text-primary whitespace-nowrap">
+                      RD$ {p.precio_venta.toLocaleString()}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="overflow-x-auto border border-border rounded-xl">
+                <table className="w-full text-sm">
+                  <thead className="bg-secondary/40 border-b border-border">
+                    <tr>
+                      <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground">Producto</th>
+                      <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground">Precio</th>
+                      <th className="text-center px-3 py-2.5 font-semibold text-muted-foreground">Cant.</th>
+                      <th className="text-right px-3 py-2.5 font-semibold text-muted-foreground">Subtotal</th>
+                      <th className="px-3 py-2.5"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {quoteCart.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="p-6 text-center text-muted-foreground">
+                          Selecciona productos arriba para agregarlos a la cotización
+                        </td>
+                      </tr>
+                    ) : (
+                      quoteCart.map((item, idx) => (
+                        <tr key={idx}>
+                          <td className="px-3 py-2.5 font-medium">{item.producto.nombre}</td>
+                          <td className="px-3 py-2.5">RD$ {item.precio_unitario.toLocaleString()}</td>
+                          <td className="px-3 py-2.5 text-center">
+                            <input
+                              type="number"
+                              min={1}
+                              value={item.cantidad}
+                              onChange={(e) => {
+                                const val = Math.max(1, Number(e.target.value) || 1);
+                                setQuoteCart((prev) =>
+                                  prev.map((c, i) => (i === idx ? { ...c, cantidad: val } : c))
+                                );
+                              }}
+                              className="input-field text-center w-16 py-1.5 text-sm inline-block"
+                            />
+                          </td>
+                          <td className="px-3 py-2.5 text-right font-bold">
+                            RD$ {(item.cantidad * item.precio_unitario).toLocaleString()}
+                          </td>
+                          <td className="px-3 py-2.5 text-right">
+                            <button
+                              type="button"
+                              onClick={() => setQuoteCart((prev) => prev.filter((_, i) => i !== idx))}
+                              className="p-1.5 text-rose-500 rounded hover:bg-rose-500/10"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-border">
+                <div className="font-bold text-base">
+                  Total Cotización:{' '}
+                  <span className="text-primary font-mono text-lg">
+                    RD$ {quoteTotal.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+                <div className="flex gap-2">
+                  <button type="button" onClick={closeQuoteForm} className="btn-secondary">
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={quoteCart.length === 0}
+                    className="btn-primary font-bold disabled:opacity-50"
+                  >
+                    Guardar Cotización
+                  </button>
+                </div>
+              </div>
+            </div>
+          </form>
+        </div>
+      </AppLayout>
+    );
+  }
+
   return (
     <AppLayout>
       <div className="space-y-6 slide-up">
@@ -420,13 +831,13 @@ export default function SalesPage() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <button
-              onClick={() => setShowAddQuoteModal(true)}
+              onClick={() => setShowAddQuoteForm(true)}
               className="btn-secondary flex items-center gap-1.5 text-xs font-semibold"
             >
               <FileText size={15} /> Nueva Cotización
             </button>
             <button
-              onClick={() => setShowAddSaleModal(true)}
+              onClick={() => setShowAddSaleForm(true)}
               className="btn-primary flex items-center gap-2 font-bold shadow-md"
             >
               <Plus size={16} /> Nueva Venta
@@ -725,7 +1136,8 @@ export default function SalesPage() {
                               </button>
                             )}
                             <button
-                              onClick={() => setViewingQuote(q)}
+                              type="button"
+                              onClick={() => void handleOpenQuoteDetail(q)}
                               className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
                               title="Ver Detalle Cotización"
                             >
@@ -988,376 +1400,126 @@ export default function SalesPage() {
           </div>
         )}
 
-        {/* MODAL 2: NUEVA VENTA */}
-        {showAddSaleModal && (
+        {/* VIEW QUOTE DETAIL */}
+        {viewingQuote && (
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/50 backdrop-blur-xs animate-in fade-in"
-            onClick={() => setShowAddSaleModal(false)}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/40 backdrop-blur-xs animate-in fade-in"
+            onClick={() => setViewingQuote(null)}
           >
-            <form
-              onSubmit={handleCreateSaleSubmit}
-              className="card w-full max-w-4xl p-6 space-y-4 shadow-2xl border-primary/30 max-h-[90vh] overflow-y-auto"
+            <div
+              className="card w-full max-w-xl p-6 space-y-4 shadow-2xl border-primary/20"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between border-b border-border pb-3">
-                <div className="flex items-center gap-2">
-                  <ShoppingCart className="text-primary" size={24} />
-                  <h3 className="font-extrabold text-foreground text-lg">Registrar Nueva Venta (Supabase)</h3>
-                </div>
-                <button type="button" onClick={() => setShowAddSaleModal(false)} className="p-1 text-muted-foreground hover:text-foreground">
-                  <X size={18} />
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Left Col: Customer & Product Selector */}
-                <div className="lg:col-span-2 space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-secondary/20 p-3 rounded-xl">
-                    <div>
-                      <label className="text-xs font-bold text-muted-foreground mb-1 block">Cliente</label>
-                      <select
-                        className="input-field text-xs py-1.5"
-                        value={saleCustomerId}
-                        onChange={(e) => setSaleCustomerId(e.target.value)}
-                      >
-                        <option value="">Cliente General (Contado)</option>
-                        {dbClientes.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.nombre} {c.rnc_cedula ? `(${c.rnc_cedula})` : ''}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-xs font-bold text-muted-foreground mb-1 block">Tipo Comprobante (NCF)</label>
-                      <select
-                        className="input-field text-xs py-1.5"
-                        value={saleTipoNcf}
-                        onChange={(e) => setSaleTipoNcf(e.target.value)}
-                      >
-                        <option value="B02">Factura Consumo (B02)</option>
-                        <option value="B01">Crédito Fiscal (B01)</option>
-                        <option value="B14">Gubernamental (B14)</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-xs font-bold text-muted-foreground mb-1 block">Método de Pago</label>
-                      <select
-                        className="input-field text-xs py-1.5"
-                        value={salePaymentMethod}
-                        onChange={(e) => setSalePaymentMethod(e.target.value as MetodoPago)}
-                      >
-                        <option value="efectivo">Efectivo</option>
-                        <option value="tarjeta">Tarjeta de Crédito/Débito</option>
-                        <option value="transferencia">Transferencia Bancaria</option>
-                        <option value="credito">Crédito (A pagar)</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Product Search and Picker */}
-                  <div className="card p-3 space-y-2">
-                    <label className="text-xs font-bold text-muted-foreground block">Seleccionar Productos</label>
-                    <div className="relative">
-                      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                      <input
-                        className="input-field !pl-8 text-xs py-1.5"
-                        placeholder="Buscar producto por nombre o código..."
-                        value={saleSearchProd}
-                        onChange={(e) => setSaleSearchProd(e.target.value)}
-                      />
-                    </div>
-                    <div className="max-h-36 overflow-y-auto border border-border rounded-xl divide-y divide-border text-xs">
-                      {dbProductos
-                        .filter((p) => p.nombre.toLowerCase().includes(saleSearchProd.toLowerCase()))
-                        .slice(0, 10)
-                        .map((p) => (
-                          <div
-                            key={p.id}
-                            onClick={() => handleAddProductToSaleCart(p)}
-                            className="p-2 hover:bg-primary/10 cursor-pointer flex justify-between items-center transition-colors"
-                          >
-                            <div>
-                              <span className="font-semibold text-foreground block">{p.nombre}</span>
-                              <span className="text-[10px] text-muted-foreground">Stock: {p.stock_actual} {p.unidad}</span>
-                            </div>
-                            <span className="font-bold text-primary">RD$ {p.precio_venta.toLocaleString()}</span>
-                          </div>
-                        ))}
-                    </div>
-                  </div>
-
-                  {/* Cart Table */}
-                  <div className="border border-border rounded-xl overflow-hidden">
-                    <table className="w-full text-xs">
-                      <thead className="bg-secondary/40 border-b border-border">
-                        <tr>
-                          <th className="text-left p-2 font-semibold text-muted-foreground">Producto</th>
-                          <th className="text-left p-2 font-semibold text-muted-foreground">Precio</th>
-                          <th className="text-center p-2 font-semibold text-muted-foreground">Cant.</th>
-                          <th className="text-right p-2 font-semibold text-muted-foreground">Subtotal</th>
-                          <th className="p-2"></th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-border">
-                        {saleCart.length === 0 ? (
-                          <tr>
-                            <td colSpan={5} className="p-4 text-center text-muted-foreground">
-                              El carrito de ventas está vacío
-                            </td>
-                          </tr>
-                        ) : (
-                          saleCart.map((item, idx) => (
-                            <tr key={idx}>
-                              <td className="p-2 font-medium">{item.producto.nombre}</td>
-                              <td className="p-2">RD$ {item.precio_unitario.toLocaleString()}</td>
-                              <td className="p-2 text-center">
-                                <input
-                                  type="number"
-                                  min={1}
-                                  value={item.cantidad}
-                                  onChange={(e) => {
-                                    const val = Math.max(1, Number(e.target.value) || 1);
-                                    setSaleCart((prev) =>
-                                      prev.map((c, i) => (i === idx ? { ...c, cantidad: val } : c))
-                                    );
-                                  }}
-                                  className="input-field text-center w-14 py-0.5 text-xs inline-block"
-                                />
-                              </td>
-                              <td className="p-2 text-right font-bold">
-                                RD$ {(item.cantidad * item.precio_unitario).toLocaleString()}
-                              </td>
-                              <td className="p-2 text-right">
-                                <button
-                                  type="button"
-                                  onClick={() => setSaleCart((prev) => prev.filter((_, i) => i !== idx))}
-                                  className="p-1 text-rose-500 hover:bg-rose-500/10 rounded"
-                                >
-                                  <Trash2 size={13} />
-                                </button>
-                              </td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                {/* Right Col: Summary & Payment */}
-                <div className="space-y-4">
-                  <div className="card p-4 space-y-3 bg-secondary/20">
-                    <h4 className="font-bold text-foreground text-sm border-b border-border pb-2">Resumen de Factura</h4>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">Subtotal Neto</span>
-                      <span className="font-mono font-medium">RD$ {saleSubtotal.toLocaleString('es-DO', { minimumFractionDigits: 2 })}</span>
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">ITBIS Transparentado (18%)</span>
-                      <span className="font-mono font-bold text-amber-600 dark:text-amber-400">
-                        RD$ {saleTax.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                      </span>
-                    </div>
-                    <div className="border-t border-border pt-2 flex justify-between font-black text-foreground text-base">
-                      <span>Total Venta</span>
-                      <span className="text-primary font-mono">RD$ {saleTotal.toLocaleString('es-DO', { minimumFractionDigits: 2 })}</span>
-                    </div>
-                  </div>
-
-                  {salePaymentMethod === 'efectivo' && (
-                    <div className="card p-4 space-y-2">
-                      <label className="text-xs font-bold text-muted-foreground block">Monto Recibido</label>
-                      <input
-                        type="number"
-                        step="any"
-                        placeholder="0.00"
-                        className="input-field text-sm py-1.5 font-mono"
-                        value={saleMontoPagado || ''}
-                        onChange={(e) => setSaleMontoPagado(Number(e.target.value))}
-                      />
-                      <div className="flex justify-between text-xs font-bold pt-1">
-                        <span>Devuelta / Cambio:</span>
-                        <span className="text-emerald-600 font-mono">
-                          RD$ {saleDevuelta.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="flex gap-2 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => setShowAddSaleModal(false)}
-                      className="btn-secondary text-xs flex-1 py-2"
-                    >
-                      Cancelar
-                    </button>
-                    <button type="submit" className="btn-primary text-xs flex-1 py-2 font-bold shadow-md">
-                      Procesar y Guardar
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </form>
-          </div>
-        )}
-
-        {/* MODAL 3: NUEVA COTIZACIÓN */}
-        {showAddQuoteModal && (
-          <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/50 backdrop-blur-xs animate-in fade-in"
-            onClick={() => setShowAddQuoteModal(false)}
-          >
-            <form
-              onSubmit={handleCreateQuoteSubmit}
-              className="card w-full max-w-2xl p-6 space-y-4 shadow-2xl border-primary/30 max-h-[90vh] overflow-y-auto"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center justify-between border-b border-border pb-3">
-                <div className="flex items-center gap-2">
-                  <FileText className="text-primary" size={24} />
-                  <h3 className="font-extrabold text-foreground text-lg">Nueva Cotización Comercial</h3>
-                </div>
-                <button type="button" onClick={() => setShowAddQuoteModal(false)} className="p-1 text-muted-foreground hover:text-foreground">
-                  <X size={18} />
-                </button>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 bg-secondary/20 p-3 rounded-xl text-xs">
                 <div>
-                  <label className="font-bold text-muted-foreground block mb-1">Cliente</label>
-                  <select
-                    className="input-field text-xs py-1.5"
-                    value={quoteCustomerId}
-                    onChange={(e) => setQuoteCustomerId(e.target.value)}
-                  >
-                    <option value="">Seleccionar cliente...</option>
-                    {dbClientes.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.nombre}
-                      </option>
-                    ))}
-                  </select>
+                  <h3 className="font-bold text-foreground text-lg flex items-center gap-2">
+                    <FileText className="text-primary" size={20} />
+                    Cotización {viewingQuote.codigo}
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Estado:{' '}
+                    <span className={saleStatusMap[viewingQuote.estado]?.cls ?? 'badge-neutral'}>
+                      {saleStatusMap[viewingQuote.estado]?.label ?? viewingQuote.estado}
+                    </span>
+                  </p>
                 </div>
-                <div>
-                  <label className="font-bold text-muted-foreground block mb-1">Válida Hasta</label>
-                  <input
-                    type="date"
-                    className="input-field text-xs py-1.5"
-                    value={quoteValidaHasta}
-                    onChange={(e) => setQuoteValidaHasta(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              {/* Product Picker */}
-              <div className="card p-3 space-y-2">
-                <label className="text-xs font-bold text-muted-foreground block">Agregar Productos a Cotización</label>
-                <div className="max-h-32 overflow-y-auto border border-border rounded-xl divide-y divide-border text-xs">
-                  {dbProductos.slice(0, 8).map((p) => (
-                    <div
-                      key={p.id}
-                      onClick={() => {
-                        setQuoteCart((prev) => {
-                          const idx = prev.findIndex((item) => item.producto.id === p.id);
-                          if (idx >= 0) {
-                            const next = [...prev];
-                            next[idx].cantidad += 1;
-                            return next;
-                          }
-                          return [...prev, { producto: p, cantidad: 1, precio_unitario: p.precio_venta }];
-                        });
-                      }}
-                      className="p-2 hover:bg-primary/10 cursor-pointer flex justify-between items-center transition-colors"
-                    >
-                      <span className="font-semibold text-foreground">{p.nombre}</span>
-                      <span className="font-bold text-primary">RD$ {p.precio_venta.toLocaleString()}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Quote Cart Table */}
-              <div className="border border-border rounded-xl overflow-hidden text-xs">
-                <table className="w-full">
-                  <thead className="bg-secondary/40 border-b border-border">
-                    <tr>
-                      <th className="text-left p-2 font-semibold">Producto</th>
-                      <th className="text-left p-2 font-semibold">Precio</th>
-                      <th className="text-center p-2 font-semibold">Cant.</th>
-                      <th className="text-right p-2 font-semibold">Subtotal</th>
-                      <th className="p-2"></th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {quoteCart.length === 0 ? (
-                      <tr>
-                        <td colSpan={5} className="p-4 text-center text-muted-foreground">
-                          Selecciona productos arriba para agregarlos a la cotización
-                        </td>
-                      </tr>
-                    ) : (
-                      quoteCart.map((item, idx) => (
-                        <tr key={idx}>
-                          <td className="p-2 font-medium">{item.producto.nombre}</td>
-                          <td className="p-2">RD$ {item.precio_unitario.toLocaleString()}</td>
-                          <td className="p-2 text-center">
-                            <input
-                              type="number"
-                              min={1}
-                              value={item.cantidad}
-                              onChange={(e) => {
-                                const val = Math.max(1, Number(e.target.value) || 1);
-                                setQuoteCart((prev) =>
-                                  prev.map((c, i) => (i === idx ? { ...c, cantidad: val } : c))
-                                );
-                              }}
-                              className="input-field text-center w-14 py-0.5 text-xs inline-block"
-                            />
-                          </td>
-                          <td className="p-2 text-right font-bold">
-                            RD$ {(item.cantidad * item.precio_unitario).toLocaleString()}
-                          </td>
-                          <td className="p-2 text-right">
-                            <button
-                              type="button"
-                              onClick={() => setQuoteCart((prev) => prev.filter((_, i) => i !== idx))}
-                              className="p-1 text-rose-500 rounded hover:bg-rose-500/10"
-                            >
-                              <Trash2 size={13} />
-                            </button>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Totals */}
-              <div className="flex justify-between items-center pt-2 border-t border-border font-bold text-sm">
-                <span>Total Cotización:</span>
-                <span className="text-primary font-mono text-base">
-                  RD$ {quoteTotal.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                </span>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2 border-t border-border">
                 <button
                   type="button"
-                  onClick={() => setShowAddQuoteModal(false)}
-                  className="btn-secondary text-xs py-2"
+                  onClick={() => setViewingQuote(null)}
+                  className="p-1 text-muted-foreground hover:text-foreground"
                 >
-                  Cancelar
-                </button>
-                <button type="submit" className="btn-primary text-xs py-2 font-bold">
-                  Guardar Cotización
+                  <X size={18} />
                 </button>
               </div>
-            </form>
+
+              {loadingQuoteDetail ? (
+                <div className="py-8 text-center text-sm text-muted-foreground">
+                  Cargando detalle de cotización...
+                </div>
+              ) : (
+                <div className="space-y-3 text-xs">
+                  <div className="grid grid-cols-2 gap-2 bg-secondary/30 rounded-xl p-3">
+                    <div>
+                      <span className="text-muted-foreground block">Cliente:</span>
+                      <span className="font-bold text-foreground">
+                        {viewingQuote.cliente_nombre || 'Cliente general'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block">Fecha emisión:</span>
+                      <span>{new Date(viewingQuote.creado_en).toLocaleString('es-DO')}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block">Válida hasta:</span>
+                      <span className="font-mono">{viewingQuote.valida_hasta || '—'}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block">Vendedor:</span>
+                      <span>{viewingQuote.vendedor_nombre || '—'}</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <p className="font-bold text-muted-foreground uppercase text-[10px] tracking-wider">
+                      Ítems ({viewingQuote.items?.length || 0})
+                    </p>
+                    <div className="bg-secondary/40 rounded-xl p-3 max-h-40 overflow-y-auto space-y-2">
+                      {(viewingQuote.items || []).length === 0 ? (
+                        <p className="text-muted-foreground text-center py-2">Sin ítems</p>
+                      ) : (
+                        (viewingQuote.items || []).map((item) => (
+                          <div
+                            key={item.id}
+                            className="flex justify-between items-center border-b border-border/40 pb-1.5 last:border-none"
+                          >
+                            <div>
+                              <span className="font-semibold text-foreground">{item.nombre_item}</span>
+                              <span className="text-[11px] text-muted-foreground block font-mono">
+                                {item.cantidad}x @ RD${' '}
+                                {item.precio_unitario.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                            <span className="font-bold font-mono text-foreground">
+                              RD$ {item.subtotal.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="border-t border-border pt-3 space-y-1.5">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Subtotal:</span>
+                      <span className="font-mono">
+                        RD$ {viewingQuote.subtotal.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    <div className="flex justify-between font-semibold">
+                      <span className="text-muted-foreground">ITBIS:</span>
+                      <span className="font-mono text-amber-600 dark:text-amber-400 font-bold">
+                        RD$ {viewingQuote.monto_impuesto.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    <div className="flex justify-between border-t border-border pt-2 text-sm font-bold">
+                      <span>Total:</span>
+                      <span className="text-primary font-black text-base">
+                        RD$ {viewingQuote.monto_total.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-border">
+                <button type="button" onClick={() => setViewingQuote(null)} className="btn-primary text-xs py-2">
+                  Cerrar
+                </button>
+              </div>
+            </div>
           </div>
         )}
+
 
         {/* MODAL 4: CONVERTIR COTIZACIÓN A VENTA */}
         {convertQuote && (

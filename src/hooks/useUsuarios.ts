@@ -3,6 +3,7 @@ import {
   actualizarPerfil,
   alternarActivoUsuario,
   crearUsuario,
+  eliminarUsuario,
   obtenerUsuarios,
   type CrearUsuarioPayload,
 } from '@/services/usuarios.service';
@@ -66,5 +67,13 @@ export function useUsuarios(busqueda = '') {
     [refetch]
   );
 
-  return { usuarios, loading, error, refetch, crear, actualizar, alternarActivo };
+  const eliminar = useCallback(
+    async (id: string) => {
+      await eliminarUsuario(id);
+      await refetch();
+    },
+    [refetch]
+  );
+
+  return { usuarios, loading, error, refetch, crear, actualizar, alternarActivo, eliminar };
 }

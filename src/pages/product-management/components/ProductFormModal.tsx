@@ -39,14 +39,14 @@ function FormField({
   children: React.ReactNode;
 }) {
   return (
-    <div className="space-y-1">
-      <label htmlFor={name} className="block text-xs font-semibold text-foreground">
+    <div className="space-y-1.5">
+      <label htmlFor={name} className="block text-sm font-semibold text-foreground">
         {label}
         {required && <span className="text-danger ml-0.5">*</span>}
       </label>
       {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
       {children}
-      {error && <p className="text-xs text-danger">{error}</p>}
+      {error && <p className="text-sm text-danger">{error}</p>}
     </div>
   );
 }

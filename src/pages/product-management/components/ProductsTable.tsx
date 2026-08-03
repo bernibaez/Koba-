@@ -17,6 +17,7 @@ interface ProductsTableProps {
   onEdit: (p: Product) => void;
   onDelete: (id: string) => void;
   onToggleStatus: (id: string) => void;
+  onView?: (p: Product) => void;
   onPrintLabel?: (products: Product[]) => void;
   onUpdateProduct?: (product: Product) => void;
 }
@@ -55,7 +56,7 @@ const columns: { key: keyof Product; label: string; sortable?: boolean; align?: 
 export default function ProductsTable({
   products, selectedIds, onToggleSelect, onSelectAll,
   sortField, sortDir, onSort, onEdit, onDelete, onToggleStatus,
-  onPrintLabel, onUpdateProduct
+  onView, onPrintLabel, onUpdateProduct
 }: ProductsTableProps) {
   const [hoveredRow, setHoveredRow] = useState<string | null>(null);
 
@@ -237,6 +238,13 @@ export default function ProductsTable({
                   {/* Actions */}
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1 justify-end">
+                      <button
+                        onClick={() => onView?.(product)}
+                        className="p-1.5 rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+                        title={`Ver ${product.name}`}
+                      >
+                        <Eye size={14} />
+                      </button>
                       <button
                         onClick={() => onEdit(product)}
                         className="p-1.5 rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"

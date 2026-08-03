@@ -3,27 +3,29 @@ import AppLayout from '@/components/AppLayout';
 import { Users, Truck, Tag, Plus, Search, Filter, Edit2, Trash2, Download, Eye, Phone, MapPin, CreditCard } from 'lucide-react';
 import { exportTableToPdf, formatMoneyPdf } from '@/lib/exportPdf';
 import { useClientes } from '@/hooks/useClientes';
+import { useProveedores } from '@/hooks/useProveedores';
 import { toast } from 'sonner';
 import ModalShell from '@/components/ui/ModalShell';
+import ConfirmModal from '@/components/ui/ConfirmModal';
+import type { TipoCliente } from '@/types/database';
+
+const TIPO_CLIENTE_OPTIONS: { value: TipoCliente; label: string }[] = [
+  { value: 'final', label: 'Final' },
+  { value: 'fiscal', label: 'Fiscal' },
+  { value: 'credito', label: 'Crédito' },
+];
 
 interface Customer {
   id: string; name: string; phone: string; email: string; address: string;
   credit: number; purchases: number; balance: number; status: 'active' | 'inactive'; group: string;
 }
 interface Supplier {
-  id: number; name: string; phone: string; email: string; address: string;
+  id: string; name: string; phone: string; email: string; address: string;
   contact: string; purchases: number; balance: number; status: 'active' | 'inactive';
 }
 interface Group {
   id: number; name: string; discount: number; customers: number; description: string;
 }
-
-const mockSuppliers: Supplier[] = [
-  { id: 1, name: 'Distribuidora Nacional S.A.', phone: '809-555-2001', email: 'ventas@disnac.com', address: 'Zona Industrial Herrera', contact: 'Ing. Ramón Castro', purchases: 45, balance: 25000, status: 'active' },
-  { id: 2, name: 'Importadora del Caribe', phone: '809-555-2002', email: 'info@impocaribe.com', address: 'Puerto de Haina', contact: 'Lic. Sandra Matos', purchases: 28, balance: 0, status: 'active' },
-  { id: 3, name: 'Alimentos Frescos RD', phone: '809-555-2003', email: 'pedidos@alimfrescos.com', address: 'Mercado Nuevo, Santiago', contact: 'Sr. Felipe Núñez', purchases: 120, balance: 8000, status: 'active' },
-  { id: 4, name: 'Bebidas y Más', phone: '809-555-2004', email: 'ventas@bebidasmas.com', address: 'Av. Independencia #200', contact: 'Sra. Patricia Lora', purchases: 67, balance: 3500, status: 'inactive' },
-];
 
 const mockGroups: Group[] = [
   { id: 1, name: 'VIP', discount: 10, customers: 25, description: 'Clientes con alto volumen de compras' },
@@ -33,17 +35,27 @@ const mockGroups: Group[] = [
 ];
 
 type Tab = 'customers' | 'suppliers' | 'groups';
+type FormMode = 'create' | 'edit' | 'view';
 
 export default function ContactsPage() {
   const [tab, setTab] = useState<Tab>('customers');
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
+  const [formMode, setFormMode] = useState<FormMode>('create');
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{ type: 'customer' | 'supplier'; id: string; name: string } | null>(null);
+
   const [formNombre, setFormNombre] = useState('');
   const [formTelefono, setFormTelefono] = useState('');
   const [formCorreo, setFormCorreo] = useState('');
+  const [formDireccion, setFormDireccion] = useState('');
+  const [formCredito, setFormCredito] = useState('');
+  const [formGrupo, setFormGrupo] = useState('');
 
-  const { clientes, crear } = useClientes(search);
+  const { clientes, crear: crearCliente, actualizar: actualizarCliente, eliminar: eliminarCliente } = useClientes(search);
+  const { proveedores, crear: crearProveedor, actualizar: actualizarProveedor, eliminar: eliminarProveedor } = useProveedores(search);
 
   const filteredCustomers: Customer[] = useMemo(
     () =>
@@ -62,15 +74,113 @@ export default function ContactsPage() {
     [clientes]
   );
 
+  const filteredSuppliers: Supplier[] = useMemo(
+    () =>
+      proveedores.map((p) => ({
+        id: p.id,
+        name: p.nombre,
+        phone: p.telefono ?? '',
+        email: p.correo ?? '',
+        address: p.direccion ?? '',
+        contact: p.correo ?? p.telefono ?? p.codigo,
+        purchases: 0,
+        balance: 0,
+        status: p.activo ? 'active' : 'inactive',
+      })),
+    [proveedores]
+  );
+
+  const customerStats = useMemo(() => {
+    const total = filteredCustomers.length;
+    const activos = filteredCustomers.filter((c) => c.status === 'active').length;
+    const credito = filteredCustomers.reduce((s, c) => s + c.credit, 0);
+    const saldo = filteredCustomers.reduce((s, c) => s + c.balance, 0);
+    return { total, activos, credito, saldo };
+  }, [filteredCustomers]);
+
+  const supplierStats = useMemo(() => {
+    const total = filteredSuppliers.length;
+    const activos = filteredSuppliers.filter((s) => s.status === 'active').length;
+    return { total, activos };
+  }, [filteredSuppliers]);
+
   const tabs = [
     { id: 'customers' as Tab, label: 'Clientes', icon: <Users size={16} /> },
     { id: 'suppliers' as Tab, label: 'Proveedores', icon: <Truck size={16} /> },
     { id: 'groups' as Tab, label: 'Grupos', icon: <Tag size={16} /> },
   ];
 
-  const filteredSuppliers = mockSuppliers.filter((s) =>
-    s.name.toLowerCase().includes(search.toLowerCase())
-  );
+  const resetForm = () => {
+    setFormNombre('');
+    setFormTelefono('');
+    setFormCorreo('');
+    setFormDireccion('');
+    setFormCredito('');
+    setFormGrupo('');
+    setEditingId(null);
+    setFormMode('create');
+  };
+
+  const closeFormModal = () => {
+    if (saving) return;
+    setShowModal(false);
+    resetForm();
+  };
+
+  const openCreate = () => {
+    resetForm();
+    setFormMode('create');
+    setShowModal(true);
+  };
+
+  const fillCustomerForm = (c: Customer) => {
+    setFormNombre(c.name);
+    setFormTelefono(c.phone);
+    setFormCorreo(c.email);
+    setFormDireccion(c.address);
+    setFormCredito(String(c.credit || ''));
+    setFormGrupo(c.group || '');
+    setEditingId(c.id);
+  };
+
+  const fillSupplierForm = (s: Supplier) => {
+    setFormNombre(s.name);
+    setFormTelefono(s.phone);
+    setFormCorreo(s.email);
+    setFormDireccion(s.address);
+    setFormCredito('');
+    setFormGrupo('');
+    setEditingId(s.id);
+  };
+
+  const openPreviewCustomer = (c: Customer) => {
+    fillCustomerForm(c);
+    setFormMode('view');
+    setShowModal(true);
+  };
+
+  const openEditCustomer = (c: Customer) => {
+    fillCustomerForm(c);
+    setFormMode('edit');
+    setShowModal(true);
+  };
+
+  const openPreviewSupplier = (s: Supplier) => {
+    fillSupplierForm(s);
+    setFormMode('view');
+    setShowModal(true);
+  };
+
+  const openEditSupplier = (s: Supplier) => {
+    fillSupplierForm(s);
+    setFormMode('edit');
+    setShowModal(true);
+  };
+
+  const formatK = (n: number) => {
+    if (n >= 1000) return `RD$ ${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}K`;
+    return `RD$ ${n.toLocaleString()}`;
+  };
 
   const handleExportPdf = () => {
     if (tab === 'customers') {
@@ -118,6 +228,114 @@ export default function ContactsPage() {
     });
   };
 
+  const handleSave = async () => {
+    if (tab === 'groups') {
+      toast.info('Grupos: próximamente');
+      closeFormModal();
+      return;
+    }
+
+    if (!formNombre.trim()) {
+      toast.error(tab === 'customers' ? 'Ingresa el nombre del cliente' : 'Ingresa el nombre del proveedor');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      if (tab === 'customers') {
+        const tipo = TIPO_CLIENTE_OPTIONS.some((o) => o.value === formGrupo)
+          ? (formGrupo as TipoCliente)
+          : undefined;
+        const payload = {
+          nombre: formNombre.trim(),
+          telefono: formTelefono.trim() || undefined,
+          correo: formCorreo.trim() || undefined,
+          direccion: formDireccion.trim() || undefined,
+          limite_credito: formCredito ? Number(formCredito) : undefined,
+          tipo_cliente: tipo,
+        };
+        if (formMode === 'edit' && editingId) {
+          await actualizarCliente(editingId, {
+            nombre: payload.nombre,
+            telefono: payload.telefono ?? null,
+            correo: payload.correo ?? null,
+            direccion: payload.direccion ?? null,
+            limite_credito: payload.limite_credito,
+            tipo_cliente: payload.tipo_cliente,
+          });
+          toast.success('Cliente actualizado');
+        } else {
+          await crearCliente(payload);
+          toast.success('Cliente creado');
+        }
+      } else {
+        const payload = {
+          nombre: formNombre.trim(),
+          telefono: formTelefono.trim() || undefined,
+          correo: formCorreo.trim() || undefined,
+          direccion: formDireccion.trim() || undefined,
+        };
+        if (formMode === 'edit' && editingId) {
+          await actualizarProveedor(editingId, {
+            nombre: payload.nombre,
+            telefono: payload.telefono ?? null,
+            correo: payload.correo ?? null,
+            direccion: payload.direccion ?? null,
+          });
+          toast.success('Proveedor actualizado');
+        } else {
+          await crearProveedor(payload);
+          toast.success('Proveedor creado');
+        }
+      }
+      setShowModal(false);
+      resetForm();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Error al guardar');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      if (deleteTarget.type === 'customer') {
+        await eliminarCliente(deleteTarget.id);
+        toast.success('Cliente eliminado');
+      } else {
+        await eliminarProveedor(deleteTarget.id);
+        toast.success('Proveedor eliminado');
+      }
+      setDeleteTarget(null);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Error al eliminar');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const isReadonly = formMode === 'view';
+  const modalTitle =
+    formMode === 'view'
+      ? tab === 'customers'
+        ? 'Detalle del Cliente'
+        : tab === 'suppliers'
+          ? 'Detalle del Proveedor'
+          : 'Detalle del Grupo'
+      : formMode === 'edit'
+        ? tab === 'customers'
+          ? 'Editar Cliente'
+          : tab === 'suppliers'
+            ? 'Editar Proveedor'
+            : 'Editar Grupo'
+        : tab === 'customers'
+          ? 'Nuevo Cliente'
+          : tab === 'suppliers'
+            ? 'Nuevo Proveedor'
+            : 'Nuevo Grupo';
+
   return (
     <AppLayout>
       <div className="space-y-6 slide-up">
@@ -126,7 +344,7 @@ export default function ContactsPage() {
             <h1 className="text-2xl font-bold text-foreground">Contactos</h1>
             <p className="text-sm text-muted-foreground mt-1">Gestiona clientes, proveedores y grupos</p>
           </div>
-          <button onClick={() => setShowModal(true)} className="btn-primary flex items-center gap-2 w-fit">
+          <button onClick={openCreate} className="btn-primary flex items-center gap-2 w-fit">
             <Plus size={16} /> Nuevo {tab === 'customers' ? 'Cliente' : tab === 'suppliers' ? 'Proveedor' : 'Grupo'}
           </button>
         </div>
@@ -143,20 +361,20 @@ export default function ContactsPage() {
         {/* Stats Row */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {tab === 'customers' && <>
-            <div className="card p-4"><p className="text-xs text-muted-foreground">Total Clientes</p><p className="text-2xl font-bold text-foreground mt-1">225</p></div>
-            <div className="card p-4"><p className="text-xs text-muted-foreground">Activos</p><p className="text-2xl font-bold text-success mt-1">198</p></div>
-            <div className="card p-4"><p className="text-xs text-muted-foreground">Crédito Total</p><p className="text-2xl font-bold text-info mt-1">RD$ 79K</p></div>
-            <div className="card p-4"><p className="text-xs text-muted-foreground">Saldo Pendiente</p><p className="text-2xl font-bold text-warning mt-1">RD$ 24.7K</p></div>
+            <div className="card p-4"><p className="text-xs text-muted-foreground">Total Clientes</p><p className="text-2xl font-bold text-foreground mt-1">{customerStats.total}</p></div>
+            <div className="card p-4"><p className="text-xs text-muted-foreground">Activos</p><p className="text-2xl font-bold text-success mt-1">{customerStats.activos}</p></div>
+            <div className="card p-4"><p className="text-xs text-muted-foreground">Crédito Total</p><p className="text-2xl font-bold text-info mt-1">{formatK(customerStats.credito)}</p></div>
+            <div className="card p-4"><p className="text-xs text-muted-foreground">Saldo Pendiente</p><p className="text-2xl font-bold text-warning mt-1">{formatK(customerStats.saldo)}</p></div>
           </>}
           {tab === 'suppliers' && <>
-            <div className="card p-4"><p className="text-xs text-muted-foreground">Total Proveedores</p><p className="text-2xl font-bold text-foreground mt-1">18</p></div>
-            <div className="card p-4"><p className="text-xs text-muted-foreground">Activos</p><p className="text-2xl font-bold text-success mt-1">15</p></div>
-            <div className="card p-4"><p className="text-xs text-muted-foreground">Compras este mes</p><p className="text-2xl font-bold text-info mt-1">RD$ 145K</p></div>
-            <div className="card p-4"><p className="text-xs text-muted-foreground">Saldo por pagar</p><p className="text-2xl font-bold text-warning mt-1">RD$ 36.5K</p></div>
+            <div className="card p-4"><p className="text-xs text-muted-foreground">Total Proveedores</p><p className="text-2xl font-bold text-foreground mt-1">{supplierStats.total}</p></div>
+            <div className="card p-4"><p className="text-xs text-muted-foreground">Activos</p><p className="text-2xl font-bold text-success mt-1">{supplierStats.activos}</p></div>
+            <div className="card p-4"><p className="text-xs text-muted-foreground">Compras este mes</p><p className="text-2xl font-bold text-info mt-1">—</p></div>
+            <div className="card p-4"><p className="text-xs text-muted-foreground">Saldo por pagar</p><p className="text-2xl font-bold text-warning mt-1">—</p></div>
           </>}
           {tab === 'groups' && <>
-            <div className="card p-4"><p className="text-xs text-muted-foreground">Total Grupos</p><p className="text-2xl font-bold text-foreground mt-1">4</p></div>
-            <div className="card p-4"><p className="text-xs text-muted-foreground">Clientes Asignados</p><p className="text-2xl font-bold text-success mt-1">225</p></div>
+            <div className="card p-4"><p className="text-xs text-muted-foreground">Total Grupos</p><p className="text-2xl font-bold text-foreground mt-1">{mockGroups.length}</p></div>
+            <div className="card p-4"><p className="text-xs text-muted-foreground">Clientes Asignados</p><p className="text-2xl font-bold text-success mt-1">{customerStats.total}</p></div>
           </>}
         </div>
 
@@ -214,9 +432,9 @@ export default function ContactsPage() {
                       <td className="px-4 py-3"><span className={c.status === 'active' ? 'badge-success' : 'badge-danger'}>{c.status === 'active' ? 'Activo' : 'Inactivo'}</span></td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1">
-                          <button className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"><Eye size={14} /></button>
-                          <button className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"><Edit2 size={14} /></button>
-                          <button className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-danger transition-colors"><Trash2 size={14} /></button>
+                          <button type="button" onClick={() => openPreviewCustomer(c)} className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors" title="Ver"><Eye size={14} /></button>
+                          <button type="button" onClick={() => openEditCustomer(c)} className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors" title="Editar"><Edit2 size={14} /></button>
+                          <button type="button" onClick={() => setDeleteTarget({ type: 'customer', id: c.id, name: c.name })} className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-danger transition-colors" title="Eliminar"><Trash2 size={14} /></button>
                         </div>
                       </td>
                     </tr>
@@ -259,13 +477,13 @@ export default function ContactsPage() {
                           <div>
                             <p className="font-medium text-foreground">{s.name}</p>
                             <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
-                              <MapPin size={10} />{s.address.substring(0, 30)}...
+                              <MapPin size={10} />{s.address ? (s.address.length > 30 ? `${s.address.substring(0, 30)}...` : s.address) : '—'}
                             </div>
                           </div>
                         </div>
                       </td>
                       <td className="px-4 py-3 hidden md:table-cell">
-                        <p className="text-foreground text-sm">{s.contact}</p>
+                        <p className="text-foreground text-sm">{s.contact || '—'}</p>
                         <p className="text-xs text-muted-foreground">{s.phone}</p>
                       </td>
                       <td className="px-4 py-3 hidden lg:table-cell text-muted-foreground">{s.purchases} órdenes</td>
@@ -277,9 +495,9 @@ export default function ContactsPage() {
                       <td className="px-4 py-3"><span className={s.status === 'active' ? 'badge-success' : 'badge-danger'}>{s.status === 'active' ? 'Activo' : 'Inactivo'}</span></td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1">
-                          <button className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"><Eye size={14} /></button>
-                          <button className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"><Edit2 size={14} /></button>
-                          <button className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-danger transition-colors"><Trash2 size={14} /></button>
+                          <button type="button" onClick={() => openPreviewSupplier(s)} className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors" title="Ver"><Eye size={14} /></button>
+                          <button type="button" onClick={() => openEditSupplier(s)} className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors" title="Editar"><Edit2 size={14} /></button>
+                          <button type="button" onClick={() => setDeleteTarget({ type: 'supplier', id: s.id, name: s.name })} className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-danger transition-colors" title="Eliminar"><Trash2 size={14} /></button>
                         </div>
                       </td>
                     </tr>
@@ -313,8 +531,8 @@ export default function ContactsPage() {
                       <td className="px-4 py-3 hidden md:table-cell text-muted-foreground">{g.customers} clientes</td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1">
-                          <button className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"><Edit2 size={14} /></button>
-                          <button className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-danger transition-colors"><Trash2 size={14} /></button>
+                          <button type="button" onClick={() => toast.info('Grupos: próximamente')} className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"><Edit2 size={14} /></button>
+                          <button type="button" onClick={() => toast.info('Grupos: próximamente')} className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-danger transition-colors"><Trash2 size={14} /></button>
                         </div>
                       </td>
                     </tr>
@@ -328,88 +546,109 @@ export default function ContactsPage() {
 
       <ModalShell
         open={showModal}
-        onClose={() => setShowModal(false)}
+        onClose={closeFormModal}
         size="lg"
         busy={saving}
         busyLabel="Guardando…"
         className="p-6"
       >
-            <h2 className="text-lg font-bold text-foreground mb-4">
-              {tab === 'customers' ? 'Nuevo Cliente' : tab === 'suppliers' ? 'Nuevo Proveedor' : 'Nuevo Grupo'}
-            </h2>
-            <div className="grid grid-cols-2 gap-3">
-              <input
-                className="input-field col-span-2"
-                placeholder="Nombre"
-                value={formNombre}
-                onChange={(e) => setFormNombre(e.target.value)}
-              />
-              {tab !== 'groups' && <>
-                <input
-                  className="input-field"
-                  placeholder="Teléfono"
-                  value={formTelefono}
-                  onChange={(e) => setFormTelefono(e.target.value)}
-                />
-                <input
-                  className="input-field"
-                  placeholder="Email"
-                  type="email"
-                  value={formCorreo}
-                  onChange={(e) => setFormCorreo(e.target.value)}
-                />
-                <input className="input-field col-span-2" placeholder="Dirección" />
-              </>}
-              {tab === 'customers' && <>
-                <input className="input-field" placeholder="Límite de crédito" type="number" />
-                <select className="input-field">
-                  <option>Seleccionar grupo...</option>
-                  {mockGroups.map(g => <option key={g.id}>{g.name}</option>)}
-                </select>
-              </>}
-              {tab === 'groups' && <>
-                <input className="input-field" placeholder="Descuento (%)" type="number" />
-                <textarea className="input-field col-span-2" placeholder="Descripción" rows={3} />
-              </>}
-            </div>
-            <div className="flex gap-3 mt-6">
-              <button type="button" className="btn-secondary flex-1" disabled={saving} onClick={() => setShowModal(false)}>Cancelar</button>
+        <h2 className="text-lg font-bold text-foreground mb-4">{modalTitle}</h2>
+        <div className="grid grid-cols-2 gap-3">
+          <input
+            className="input-field col-span-2"
+            placeholder="Nombre"
+            value={formNombre}
+            onChange={(e) => setFormNombre(e.target.value)}
+            readOnly={isReadonly}
+            disabled={isReadonly}
+          />
+          {tab !== 'groups' && <>
+            <input
+              className="input-field"
+              placeholder="Teléfono"
+              value={formTelefono}
+              onChange={(e) => setFormTelefono(e.target.value)}
+              readOnly={isReadonly}
+              disabled={isReadonly}
+            />
+            <input
+              className="input-field"
+              placeholder="Email"
+              type="email"
+              value={formCorreo}
+              onChange={(e) => setFormCorreo(e.target.value)}
+              readOnly={isReadonly}
+              disabled={isReadonly}
+            />
+            <input
+              className="input-field col-span-2"
+              placeholder="Dirección"
+              value={formDireccion}
+              onChange={(e) => setFormDireccion(e.target.value)}
+              readOnly={isReadonly}
+              disabled={isReadonly}
+            />
+          </>}
+          {tab === 'customers' && <>
+            <input
+              className="input-field"
+              placeholder="Límite de crédito"
+              type="number"
+              value={formCredito}
+              onChange={(e) => setFormCredito(e.target.value)}
+              readOnly={isReadonly}
+              disabled={isReadonly}
+            />
+            <select
+              className="input-field"
+              value={formGrupo}
+              onChange={(e) => setFormGrupo(e.target.value)}
+              disabled={isReadonly}
+            >
+              <option value="">Tipo de cliente...</option>
+              {TIPO_CLIENTE_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </>}
+          {tab === 'groups' && <>
+            <input className="input-field" placeholder="Descuento (%)" type="number" disabled={isReadonly} />
+            <textarea className="input-field col-span-2" placeholder="Descripción" rows={3} disabled={isReadonly} />
+          </>}
+        </div>
+        <div className="flex gap-3 mt-6">
+          {isReadonly ? (
+            <>
+              <button type="button" className="btn-secondary flex-1" onClick={closeFormModal}>Cerrar</button>
               <button
                 type="button"
                 className="btn-primary flex-1"
-                disabled={saving}
-                onClick={async () => {
-                  if (tab !== 'customers') {
-                    setShowModal(false);
-                    return;
-                  }
-                  if (!formNombre.trim()) {
-                    toast.error('Ingresa el nombre del cliente');
-                    return;
-                  }
-                  setSaving(true);
-                  try {
-                    await crear({
-                      nombre: formNombre.trim(),
-                      telefono: formTelefono.trim() || undefined,
-                      correo: formCorreo.trim() || undefined,
-                    });
-                    toast.success('Cliente creado');
-                    setShowModal(false);
-                    setFormNombre('');
-                    setFormTelefono('');
-                    setFormCorreo('');
-                  } catch (e) {
-                    toast.error(e instanceof Error ? e.message : 'Error al crear cliente');
-                  } finally {
-                    setSaving(false);
-                  }
-                }}
+                onClick={() => setFormMode('edit')}
               >
+                Editar
+              </button>
+            </>
+          ) : (
+            <>
+              <button type="button" className="btn-secondary flex-1" disabled={saving} onClick={closeFormModal}>Cancelar</button>
+              <button type="button" className="btn-primary flex-1" disabled={saving} onClick={handleSave}>
                 Guardar
               </button>
-            </div>
+            </>
+          )}
+        </div>
       </ModalShell>
+
+      <ConfirmModal
+        open={!!deleteTarget}
+        onClose={() => !deleting && setDeleteTarget(null)}
+        onConfirm={handleDeleteConfirm}
+        title={deleteTarget?.type === 'supplier' ? 'Eliminar proveedor' : 'Eliminar cliente'}
+        description={`¿Eliminar "${deleteTarget?.name ?? ''}"? Esta acción lo desactivará del sistema.`}
+        confirmLabel="Eliminar"
+        loading={deleting}
+        busyLabel="Eliminando…"
+      />
     </AppLayout>
   );
 }

@@ -108,3 +108,48 @@ export async function crearCliente(datos: {
   if (error) throw error;
   return data as Cliente;
 }
+
+export async function actualizarCliente(
+  id: string,
+  datos: Partial<{
+    nombre: string;
+    telefono: string | null;
+    correo: string | null;
+    direccion: string | null;
+    rnc_cedula: string | null;
+    tipo_cliente: Cliente['tipo_cliente'];
+    limite_credito: number;
+    activo: boolean;
+  }>
+): Promise<Cliente> {
+  if (!isSupabaseConfigured()) {
+    throw new Error('Configura Supabase para editar clientes');
+  }
+  const sb = getSupabase();
+  const { data, error } = await sb
+    .from('clientes')
+    .update(datos)
+    .eq('id', id)
+    .select(CLIENTE_COLUMNS)
+    .single();
+  if (error) throw error;
+  return data as Cliente;
+}
+
+/** Soft-delete: marca el cliente como inactivo. */
+export async function eliminarCliente(id: string): Promise<void> {
+  if (!isSupabaseConfigured()) {
+    throw new Error('Configura Supabase para eliminar clientes');
+  }
+  const sb = getSupabase();
+  const { error } = await sb.from('clientes').update({ activo: false }).eq('id', id);
+  if (error) throw error;
+}
+
+export async function obtenerCliente(id: string): Promise<Cliente | null> {
+  const sb = tryGetSupabase();
+  if (!sb) return null;
+  const { data, error } = await sb.from('clientes').select(CLIENTE_COLUMNS).eq('id', id).maybeSingle();
+  if (error) throw error;
+  return (data as Cliente) ?? null;
+}

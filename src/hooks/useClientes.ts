@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { crearCliente, obtenerClientes } from '@/services/clientes.service';
+import {
+  actualizarCliente,
+  crearCliente,
+  eliminarCliente,
+  obtenerClientes,
+} from '@/services/clientes.service';
 import type { Cliente } from '@/types/database';
 
 export function useClientes(busqueda = '', limite = 200) {
@@ -39,5 +44,21 @@ export function useClientes(busqueda = '', limite = 200) {
     [refetch]
   );
 
-  return { clientes, loading, error, refetch, crear };
+  const actualizar = useCallback(
+    async (id: string, datos: Parameters<typeof actualizarCliente>[1]) => {
+      await actualizarCliente(id, datos);
+      await refetch();
+    },
+    [refetch]
+  );
+
+  const eliminar = useCallback(
+    async (id: string) => {
+      await eliminarCliente(id);
+      await refetch();
+    },
+    [refetch]
+  );
+
+  return { clientes, loading, error, refetch, crear, actualizar, eliminar };
 }

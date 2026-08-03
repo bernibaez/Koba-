@@ -22,7 +22,7 @@ import { useUsuarios } from '@/hooks/useUsuarios';
 import { useAgentes } from '@/hooks/useAgentes';
 import { useRoles } from '@/hooks/useRoles';
 import { ROL_DB_A_UI, ROL_UI_A_DB } from '@/services/auth.service';
-import type { AgenteComercial, Rol, RolDb } from '@/types/database';
+import type { AgenteComercial, Perfil, Rol, RolDb } from '@/types/database';
 import type { UserRole } from '@/lib/auth';
 import { toast } from 'sonner';
 import { isSupabaseConfigured } from '@/services/clienteSupabase';
@@ -36,6 +36,9 @@ export default function UsersPage() {
   const [tab, setTab] = useState<Tab>('users');
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
+  const [editingUser, setEditingUser] = useState<Perfil | null>(null);
+  const [viewingUser, setViewingUser] = useState<Perfil | null>(null);
+  const [viewingAgent, setViewingAgent] = useState<AgenteComercial | null>(null);
   const [editingAgent, setEditingAgent] = useState<AgenteComercial | null>(null);
   const [editingRole, setEditingRole] = useState<Rol | null>(null);
   const [formNombre, setFormNombre] = useState('');
@@ -48,7 +51,7 @@ export default function UsersPage() {
   const [formCodigoRol, setFormCodigoRol] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const { usuarios, loading, crear, alternarActivo } = useUsuarios(search);
+  const { usuarios, loading, crear, actualizar, alternarActivo, eliminar } = useUsuarios(search);
   const {
     agentes,
     loading: loadingAgentes,
@@ -86,12 +89,24 @@ export default function UsersPage() {
     setFormComision('5');
     setFormDescRol('');
     setFormCodigoRol('');
+    setFormRol('Cajero');
+    setEditingUser(null);
     setEditingAgent(null);
     setEditingRole(null);
   };
 
   const openNewModal = () => {
     resetForm();
+    setShowModal(true);
+  };
+
+  const openEditUser = (user: Perfil) => {
+    setEditingUser(user);
+    setFormNombre(user.nombre_completo);
+    setFormCorreo(user.correo);
+    setFormTelefono(user.telefono ?? '');
+    setFormPassword('');
+    setFormRol((ROL_DB_A_UI[user.rol] as UserRole) || 'Cajero');
     setShowModal(true);
   };
 
@@ -212,7 +227,29 @@ export default function UsersPage() {
   };
 
   const handleCreateUser = async () => {
-    if (!formNombre.trim() || !formCorreo.trim() || !formPassword) {
+    if (!formNombre.trim()) {
+      toast.error('Ingresa el nombre completo');
+      return;
+    }
+    if (editingUser) {
+      setSaving(true);
+      try {
+        await actualizar(editingUser.id, {
+          nombre_completo: formNombre.trim(),
+          telefono: formTelefono.trim() || null,
+          rol: ROL_UI_A_DB[formRol] as RolDb,
+        });
+        toast.success('Usuario actualizado');
+        setShowModal(false);
+        resetForm();
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Error al actualizar usuario');
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+    if (!formCorreo.trim() || !formPassword) {
       toast.error('Completa nombre, correo y contraseña');
       return;
     }
@@ -232,6 +269,16 @@ export default function UsersPage() {
       toast.error(e instanceof Error ? e.message : 'Error al crear usuario');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDeleteUser = async (user: Perfil) => {
+    if (!confirm(`¿Desactivar / eliminar al usuario "${user.nombre_completo}"?`)) return;
+    try {
+      await eliminar(user.id);
+      toast.success(`Usuario "${user.nombre_completo}" eliminado`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'No se pudo eliminar el usuario');
     }
   };
 
@@ -374,13 +421,28 @@ export default function UsersPage() {
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center justify-end gap-1">
-                            <button className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors">
+                            <button
+                              type="button"
+                              className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+                              title="Ver usuario"
+                              onClick={() => setViewingUser(user)}
+                            >
                               <Eye size={14} />
                             </button>
-                            <button className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors">
+                            <button
+                              type="button"
+                              className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+                              title="Editar usuario"
+                              onClick={() => openEditUser(user)}
+                            >
                               <Edit2 size={14} />
                             </button>
-                            <button className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-danger transition-colors">
+                            <button
+                              type="button"
+                              className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-danger transition-colors"
+                              title="Eliminar usuario"
+                              onClick={() => void handleDeleteUser(user)}
+                            >
                               <Trash2 size={14} />
                             </button>
                             <button
@@ -616,6 +678,14 @@ export default function UsersPage() {
                           <div className="flex items-center justify-end gap-1">
                             <button
                               type="button"
+                              title="Vista previa"
+                              onClick={() => setViewingAgent(agent)}
+                              className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+                            >
+                              <Eye size={14} />
+                            </button>
+                            <button
+                              type="button"
                               onClick={() => openEditAgent(agent)}
                               className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
                             >
@@ -659,7 +729,9 @@ export default function UsersPage() {
       >
             <h2 className="text-lg font-bold text-foreground mb-4">
               {tab === 'users'
-                ? 'Nuevo Usuario'
+                ? editingUser
+                  ? 'Editar Usuario'
+                  : 'Nuevo Usuario'
                 : tab === 'roles'
                   ? editingRole
                     ? 'Editar Rol'
@@ -682,6 +754,7 @@ export default function UsersPage() {
                   type="email"
                   value={formCorreo}
                   onChange={(e) => setFormCorreo(e.target.value)}
+                  disabled={tab === 'users' && !!editingUser}
                 />
               )}
               {tab !== 'roles' && (
@@ -737,7 +810,7 @@ export default function UsersPage() {
                   </select>
                 </div>
               )}
-              {tab === 'users' && (
+              {tab === 'users' && !editingUser && (
                 <input
                   className="input-field"
                   placeholder="Contraseña"
@@ -797,6 +870,112 @@ export default function UsersPage() {
                 Guardar
               </button>
             </div>
+      </ModalShell>
+
+      <ModalShell open={!!viewingUser} onClose={() => setViewingUser(null)} size="md" className="p-6">
+        {viewingUser && (
+          <>
+            <div className="flex items-center justify-between border-b border-border pb-3 mb-4">
+              <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
+                <Users size={20} className="text-primary" />
+                Detalle de Usuario
+              </h2>
+            </div>
+            <div className="space-y-3 text-sm">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-lg">
+                  {viewingUser.nombre_completo.charAt(0)}
+                </div>
+                <div>
+                  <p className="font-bold text-foreground">{viewingUser.nombre_completo}</p>
+                  <p className="text-xs text-muted-foreground">{viewingUser.correo}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3 bg-secondary/30 rounded-xl p-3 text-xs">
+                <div>
+                  <span className="text-muted-foreground block">Teléfono</span>
+                  <span className="font-medium text-foreground">{viewingUser.telefono || '—'}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground block">Rol</span>
+                  <span className="badge-info">{ROL_DB_A_UI[viewingUser.rol] ?? viewingUser.rol}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground block">Estado</span>
+                  <span className={viewingUser.activo ? 'badge-success' : 'badge-danger'}>
+                    {viewingUser.activo ? 'Activo' : 'Inactivo'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground block">Código acceso</span>
+                  <span className="font-mono">{viewingUser.codigo_acceso || '—'}</span>
+                </div>
+                {viewingUser.creado_en && (
+                  <div className="col-span-2">
+                    <span className="text-muted-foreground block">Creado</span>
+                    <span>{new Date(viewingUser.creado_en).toLocaleString('es-DO')}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="flex justify-end mt-6">
+              <button type="button" className="btn-primary" onClick={() => setViewingUser(null)}>
+                Cerrar
+              </button>
+            </div>
+          </>
+        )}
+      </ModalShell>
+
+      <ModalShell open={!!viewingAgent} onClose={() => setViewingAgent(null)} size="md" className="p-6">
+        {viewingAgent && (
+          <>
+            <div className="flex items-center justify-between border-b border-border pb-3 mb-4">
+              <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
+                <UserCheck size={20} className="text-primary" />
+                Detalle de Agente
+              </h2>
+            </div>
+            <div className="space-y-3 text-sm">
+              <p className="font-bold text-foreground text-base">{viewingAgent.nombre}</p>
+              <div className="grid grid-cols-2 gap-3 bg-secondary/30 rounded-xl p-3 text-xs">
+                <div>
+                  <span className="text-muted-foreground block">Correo</span>
+                  <span className="font-medium text-foreground">{viewingAgent.correo || '—'}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground block">Teléfono</span>
+                  <span className="font-medium text-foreground">{viewingAgent.telefono || '—'}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground block">Comisión</span>
+                  <span className="font-bold text-primary">{viewingAgent.porcentaje_comision ?? 0}%</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground block">Estado</span>
+                  <span className={viewingAgent.activo ? 'badge-success' : 'badge-danger'}>
+                    {viewingAgent.activo ? 'Activo' : 'Inactivo'}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-6">
+              <button type="button" className="btn-secondary" onClick={() => setViewingAgent(null)}>
+                Cerrar
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => {
+                  setViewingAgent(null);
+                  openEditAgent(viewingAgent);
+                }}
+              >
+                Editar
+              </button>
+            </div>
+          </>
+        )}
       </ModalShell>
     </AppLayout>
   );

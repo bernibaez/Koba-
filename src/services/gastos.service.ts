@@ -182,6 +182,22 @@ export async function actualizarEstadoGasto(id: string, estado: EstadoGasto): Pr
   if (error) throw errorSupabase(error);
 }
 
+export async function actualizarGasto(
+  id: string,
+  datos: Partial<NuevoGastoInput>
+): Promise<void> {
+  if (!isSupabaseConfigured()) throw new Error('Supabase no configurado');
+  const sb = getSupabase();
+  const patch: Record<string, unknown> = {};
+  if (datos.categoria_id !== undefined) patch.categoria_id = datos.categoria_id;
+  if (datos.descripcion !== undefined) patch.descripcion = datos.descripcion.trim();
+  if (datos.monto !== undefined) patch.monto = datos.monto;
+  if (datos.tiene_recibo !== undefined) patch.tiene_recibo = datos.tiene_recibo;
+  if (datos.estado !== undefined) patch.estado = datos.estado;
+  const { error } = await sb.from('gastos').update(patch).eq('id', id);
+  if (error) throw errorSupabase(error);
+}
+
 export async function eliminarGasto(id: string): Promise<void> {
   if (!isSupabaseConfigured()) throw new Error('Supabase no configurado');
   const sb = getSupabase();

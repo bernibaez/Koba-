@@ -5,6 +5,8 @@ import ProductsTable from './ProductsTable';
 import ProductFormModal from './ProductFormModal';
 import PriceLabelModal from './PriceLabelModal';
 import ConfirmModal from '@/components/ui/ConfirmModal';
+import ModalShell from '@/components/ui/ModalShell';
+import { X } from 'lucide-react';
 import { toast } from 'sonner';
 import { exportTableToPdf, formatMoneyPdf } from '@/lib/exportPdf';
 import { useProductos } from '@/hooks/useProductos';
@@ -54,6 +56,7 @@ export default function ProductManagementScreen() {
   const [filterStock, setFilterStock] = useState('all');
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [editProduct, setEditProduct] = useState<Product | null>(null);
+  const [viewingProduct, setViewingProduct] = useState<Product | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [sortField, setSortField] = useState<keyof Product>('name');
@@ -240,6 +243,7 @@ export default function ProductManagementScreen() {
         sortField={sortField}
         sortDir={sortDir}
         onSort={handleSort}
+        onView={(p) => setViewingProduct(p)}
         onEdit={(p) => { setEditProduct(p); setAddModalOpen(true); }}
         onDelete={(id) => setDeleteId(id)}
         onToggleStatus={handleToggleStatus}
@@ -261,6 +265,87 @@ export default function ProductManagementScreen() {
         onSave={handleSaveProduct}
         onPrintLabel={(p) => setLabelModalProducts([p])}
       />
+
+      <ModalShell
+        open={!!viewingProduct}
+        onClose={() => setViewingProduct(null)}
+        size="md"
+        className="p-6"
+      >
+        {viewingProduct && (
+          <>
+            <div className="flex items-center justify-between border-b border-border pb-3 mb-4">
+              <h2 className="text-lg font-bold text-foreground">Detalle del Producto</h2>
+              <button
+                type="button"
+                onClick={() => setViewingProduct(null)}
+                className="p-1 text-muted-foreground hover:text-foreground"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="col-span-2">
+                <span className="text-xs text-muted-foreground block">Nombre</span>
+                <span className="font-semibold text-foreground">{viewingProduct.name}</span>
+              </div>
+              <div>
+                <span className="text-xs text-muted-foreground block">SKU</span>
+                <span className="font-mono text-foreground">{viewingProduct.sku}</span>
+              </div>
+              <div>
+                <span className="text-xs text-muted-foreground block">Código de barras</span>
+                <span className="font-mono text-foreground">{viewingProduct.barcode || '—'}</span>
+              </div>
+              <div>
+                <span className="text-xs text-muted-foreground block">Categoría</span>
+                <span className="text-foreground">{viewingProduct.category}</span>
+              </div>
+              <div>
+                <span className="text-xs text-muted-foreground block">Estado</span>
+                <span className="text-foreground">
+                  {viewingProduct.status === 'active'
+                    ? 'Activo'
+                    : viewingProduct.status === 'inactive'
+                      ? 'Inactivo'
+                      : 'Descontinuado'}
+                </span>
+              </div>
+              <div>
+                <span className="text-xs text-muted-foreground block">Precio costo</span>
+                <span className="text-foreground">
+                  RD$ {viewingProduct.costPrice.toLocaleString('es-DO')}
+                </span>
+              </div>
+              <div>
+                <span className="text-xs text-muted-foreground block">Precio venta</span>
+                <span className="font-semibold text-foreground">
+                  RD$ {viewingProduct.salePrice.toLocaleString('es-DO')}
+                </span>
+              </div>
+              <div>
+                <span className="text-xs text-muted-foreground block">Precio mayoreo</span>
+                <span className="text-foreground">
+                  RD$ {viewingProduct.wholesalePrice.toLocaleString('es-DO')}
+                </span>
+              </div>
+              <div>
+                <span className="text-xs text-muted-foreground block">Stock</span>
+                <span className="text-foreground">{viewingProduct.currentStock}</span>
+              </div>
+            </div>
+            <div className="mt-6">
+              <button
+                type="button"
+                className="btn-secondary w-full"
+                onClick={() => setViewingProduct(null)}
+              >
+                Cerrar
+              </button>
+            </div>
+          </>
+        )}
+      </ModalShell>
 
       {labelModalProducts && (
         <PriceLabelModal

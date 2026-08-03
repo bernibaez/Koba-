@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   actualizarEstadoGasto,
+  actualizarGasto,
   crearCategoriaGasto,
   crearGasto,
   eliminarCategoriaGasto,
@@ -57,6 +58,14 @@ export function useGastos() {
     [refetch]
   );
 
+  const actualizar = useCallback(
+    async (id: string, input: Partial<NuevoGastoInput>) => {
+      await actualizarGasto(id, input);
+      await refetch();
+    },
+    [refetch]
+  );
+
   const crearCategoria = useCallback(
     async (input: NuevaCategoriaGastoInput) => {
       await crearCategoriaGasto(input);
@@ -96,6 +105,7 @@ export function useGastos() {
     error,
     refetch,
     crear,
+    actualizar,
     crearCategoria,
     cambiarEstado,
     eliminar,

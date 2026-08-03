@@ -1,10 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
-import { DollarSign, Tag, Plus, Search, Download, Check, X, Trash2 } from 'lucide-react';
+import { DollarSign, Tag, Plus, Search, Download, Check, X, Trash2, Edit2, Eye } from 'lucide-react';
 import { exportTableToPdf, formatMoneyPdf } from '@/lib/exportPdf';
 import { toast } from 'sonner';
 import { useGastos } from '@/hooks/useGastos';
-import type { GastoStatusUi } from '@/services/gastos.service';
+import type { GastoStatusUi, GastoUi } from '@/services/gastos.service';
 import {
   InlineLoader,
   KpiGridSkeleton,
@@ -28,6 +28,7 @@ export default function ExpensesPage() {
     loading,
     error,
     crear,
+    actualizar,
     crearCategoria,
     cambiarEstado,
     eliminar,
@@ -38,6 +39,8 @@ export default function ExpensesPage() {
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [editingGasto, setEditingGasto] = useState<GastoUi | null>(null);
+  const [viewingGasto, setViewingGasto] = useState<GastoUi | null>(null);
 
   const [catId, setCatId] = useState('');
   const [descripcion, setDescripcion] = useState('');
@@ -92,6 +95,26 @@ export default function ExpensesPage() {
     setCatNombre('');
     setCatDesc('');
     setCatPresupuesto('');
+    setEditingGasto(null);
+  };
+
+  const openCreateModal = () => {
+    resetModal();
+    setShowModal(true);
+  };
+
+  const openEditGasto = (gasto: GastoUi) => {
+    setEditingGasto(gasto);
+    setCatId(gasto.categoryId ?? '');
+    setDescripcion(gasto.description);
+    setMonto(String(gasto.amount));
+    setTieneRecibo(gasto.receipt);
+    setShowModal(true);
+  };
+
+  const closeFormModal = () => {
+    setShowModal(false);
+    resetModal();
   };
 
   const handleSave = async () => {
@@ -99,14 +122,24 @@ export default function ExpensesPage() {
     try {
       if (tab === 'list') {
         const m = parseFloat(monto);
-        await crear({
-          categoria_id: catId,
-          descripcion,
-          monto: m,
-          tiene_recibo: tieneRecibo,
-          estado: 'pendiente',
-        });
-        toast.success('Gasto registrado');
+        if (editingGasto) {
+          await actualizar(editingGasto.id, {
+            categoria_id: catId,
+            descripcion,
+            monto: m,
+            tiene_recibo: tieneRecibo,
+          });
+          toast.success('Gasto actualizado');
+        } else {
+          await crear({
+            categoria_id: catId,
+            descripcion,
+            monto: m,
+            tiene_recibo: tieneRecibo,
+            estado: 'pendiente',
+          });
+          toast.success('Gasto registrado');
+        }
       } else {
         await crearCategoria({
           nombre: catNombre,
@@ -115,8 +148,7 @@ export default function ExpensesPage() {
         });
         toast.success('Categoría creada');
       }
-      setShowModal(false);
-      resetModal();
+      closeFormModal();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'No se pudo guardar');
     } finally {
@@ -142,10 +174,7 @@ export default function ExpensesPage() {
           </div>
           <button
             type="button"
-            onClick={() => {
-              resetModal();
-              setShowModal(true);
-            }}
+            onClick={openCreateModal}
             className="btn-primary flex items-center gap-2 w-fit"
           >
             <Plus size={16} />
@@ -262,6 +291,22 @@ export default function ExpensesPage() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1">
+                          <button
+                            type="button"
+                            title="Ver"
+                            className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+                            onClick={() => setViewingGasto(e)}
+                          >
+                            <Eye size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            title="Editar"
+                            className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+                            onClick={() => openEditGasto(e)}
+                          >
+                            <Edit2 size={14} />
+                          </button>
                           {e.status === 'pending' && (
                             <>
                               <button
@@ -394,14 +439,18 @@ export default function ExpensesPage() {
 
       <ModalShell
         open={showModal}
-        onClose={() => setShowModal(false)}
+        onClose={closeFormModal}
         size="md"
         busy={saving}
         busyLabel="Guardando…"
         className="p-6"
       >
         <h2 className="text-lg font-bold text-foreground mb-4">
-          {tab === 'list' ? 'Nuevo Gasto' : 'Nueva Categoría'}
+          {tab === 'list'
+            ? editingGasto
+              ? 'Editar Gasto'
+              : 'Nuevo Gasto'
+            : 'Nueva Categoría'}
         </h2>
         <div className="space-y-3">
           {tab === 'list' ? (
@@ -456,13 +505,86 @@ export default function ExpensesPage() {
           )}
         </div>
         <div className="flex gap-3 mt-6">
-          <button type="button" className="btn-secondary flex-1" disabled={saving} onClick={() => setShowModal(false)}>
+          <button type="button" className="btn-secondary flex-1" disabled={saving} onClick={closeFormModal}>
             Cancelar
           </button>
           <button type="button" className="btn-primary flex-1" disabled={saving} onClick={handleSave}>
             Guardar
           </button>
         </div>
+      </ModalShell>
+
+      <ModalShell
+        open={!!viewingGasto}
+        onClose={() => setViewingGasto(null)}
+        size="md"
+        className="p-6"
+      >
+        {viewingGasto && (
+          <>
+            <div className="flex items-center justify-between border-b border-border pb-3 mb-4">
+              <h2 className="text-lg font-bold text-foreground">Detalle del Gasto</h2>
+              <button
+                type="button"
+                onClick={() => setViewingGasto(null)}
+                className="p-1 text-muted-foreground hover:text-foreground"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <span className="text-xs text-muted-foreground block">Código</span>
+                <span className="font-mono font-medium text-primary">{viewingGasto.code}</span>
+              </div>
+              <div>
+                <span className="text-xs text-muted-foreground block">Estado</span>
+                <span className={statusMap[viewingGasto.status].cls}>
+                  {statusMap[viewingGasto.status].label}
+                </span>
+              </div>
+              <div className="col-span-2">
+                <span className="text-xs text-muted-foreground block">Descripción</span>
+                <span className="font-medium text-foreground">{viewingGasto.description}</span>
+              </div>
+              <div>
+                <span className="text-xs text-muted-foreground block">Categoría</span>
+                <span className="text-foreground">{viewingGasto.category}</span>
+              </div>
+              <div>
+                <span className="text-xs text-muted-foreground block">Monto</span>
+                <span className="font-bold text-foreground">
+                  RD$ {viewingGasto.amount.toLocaleString()}
+                </span>
+              </div>
+              <div>
+                <span className="text-xs text-muted-foreground block">Responsable</span>
+                <span className="text-foreground">{viewingGasto.responsible}</span>
+              </div>
+              <div>
+                <span className="text-xs text-muted-foreground block">Fecha</span>
+                <span className="text-foreground">{viewingGasto.date}</span>
+              </div>
+              <div>
+                <span className="text-xs text-muted-foreground block">Comprobante</span>
+                {viewingGasto.receipt ? (
+                  <span className="badge-success">Sí</span>
+                ) : (
+                  <span className="badge-danger">No</span>
+                )}
+              </div>
+            </div>
+            <div className="mt-6">
+              <button
+                type="button"
+                className="btn-secondary w-full"
+                onClick={() => setViewingGasto(null)}
+              >
+                Cerrar
+              </button>
+            </div>
+          </>
+        )}
       </ModalShell>
     </AppLayout>
   );

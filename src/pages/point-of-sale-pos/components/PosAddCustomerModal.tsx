@@ -50,31 +50,31 @@ export default function PosAddCustomerModal({ onClose, onCreated }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/40" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop" onClick={onClose}>
       <div
-        className="card w-full max-w-md p-5 space-y-4"
+        className="card w-full max-w-md p-6 sm:p-7 space-y-5 modal-panel"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3">
           <div>
-            <h3 className="font-bold text-foreground flex items-center gap-2">
-              <UserPlus size={18} className="text-primary" />
+            <h3 className="font-extrabold text-foreground text-xl flex items-center gap-2">
+              <UserPlus size={22} className="text-primary" />
               Nuevo cliente
             </h3>
-            <p className="text-xs text-muted-foreground mt-1">
+            <p className="text-sm text-muted-foreground mt-1">
               Se guardará en Supabase y estará disponible en el POS
             </p>
           </div>
-          <button type="button" onClick={onClose} className="p-1 text-muted-foreground hover:text-foreground">
-            <X size={16} />
+          <button type="button" onClick={onClose} className="p-2 text-muted-foreground hover:text-foreground rounded-lg hover:bg-secondary">
+            <X size={20} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-3">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="text-xs font-medium text-muted-foreground mb-1 block">Nombre *</label>
+            <label className="text-sm font-bold text-muted-foreground mb-1.5 block">Nombre *</label>
             <input
-              className="input-field"
+              className="input-field h-12 text-base"
               placeholder="Nombre completo o empresa"
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -82,27 +82,27 @@ export default function PosAddCustomerModal({ onClose, onCreated }: Props) {
             />
           </div>
           <div>
-            <label className="text-xs font-medium text-muted-foreground mb-1 block">Teléfono *</label>
+            <label className="text-sm font-bold text-muted-foreground mb-1.5 block">Teléfono *</label>
             <input
-              className="input-field"
+              className="input-field h-12 text-base"
               placeholder="809-555-0000"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
             />
           </div>
           <div>
-            <label className="text-xs font-medium text-muted-foreground mb-1 block">
+            <label className="text-sm font-bold text-muted-foreground mb-1.5 block">
               Límite de crédito (RD$)
             </label>
             <input
-              className="input-field"
+              className="input-field h-12 text-base"
               type="number"
               min={0}
               value={credit}
               onChange={(e) => setCredit(e.target.value)}
             />
           </div>
-          <button type="submit" className="btn-primary w-full" disabled={saving}>
+          <button type="submit" className="btn-primary w-full py-3 text-sm font-bold" disabled={saving}>
             {saving ? 'Guardando…' : 'Guardar cliente'}
           </button>
         </form>

@@ -96,3 +96,8 @@ export async function actualizarPerfil(
 export async function alternarActivoUsuario(id: string, activo: boolean): Promise<void> {
   await actualizarPerfil(id, { activo });
 }
+
+/** Soft-delete: desactiva el usuario (no borra auth.users). */
+export async function eliminarUsuario(id: string): Promise<void> {
+  await actualizarPerfil(id, { activo: false });
+}
