@@ -1,55 +1,52 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
-import { ShoppingCart, FileText, RotateCcw, Plus, Search, Filter, Download, Eye, Edit2, Trash2, Printer, X, FileSpreadsheet } from 'lucide-react';
+import {
+  ShoppingCart,
+  FileText,
+  RotateCcw,
+  Plus,
+  Search,
+  Download,
+  Eye,
+  Trash2,
+  Printer,
+  X,
+  FileSpreadsheet,
+  CheckCircle,
+  XCircle,
+  Clock,
+  ArrowRightLeft,
+  AlertTriangle,
+  User,
+  Package,
+} from 'lucide-react';
 import { exportTableToPdf, exportTableToExcel, formatMoneyPdf } from '@/lib/exportPdf';
 import { toast } from 'sonner';
 import { useVentas } from '@/hooks/useVentas';
-
-interface Sale {
-  id: string;
-  code: string;
-  customer: string;
-  date: string;
-  time: string;
-  items: number;
-  subtotal: number;
-  tax: number;
-  discount: number;
-  total: number;
-  cost: number;
-  profit: number;
-  status: 'paid' | 'pending' | 'cancelled';
-  payment: string;
-  agent: string;
-}
-
-interface Quote {
-  id: number; code: string; customer: string; date: string; validUntil: string; total: number; status: 'pending' | 'approved' | 'rejected' | 'converted';
-}
-interface SaleReturn {
-  id: number; code: string; saleCode: string; customer: string; date: string; total: number; reason: string; status: 'approved' | 'pending';
-}
-
-const mockQuotes: Quote[] = [
-  { id: 1, code: 'COT-001', customer: 'Empresa ABC S.R.L.', date: '2026-07-25', validUntil: '2026-08-01', total: 35000, status: 'pending' },
-  { id: 2, code: 'COT-002', customer: 'Distribuidora XYZ', date: '2026-07-24', validUntil: '2026-07-31', total: 78000, status: 'approved' },
-  { id: 3, code: 'COT-003', customer: 'Juan Pérez', date: '2026-07-22', validUntil: '2026-07-29', total: 4500, status: 'converted' },
-];
-
-const mockReturns: SaleReturn[] = [
-  { id: 1, code: 'DEV-001', saleCode: 'FAC-001', customer: 'Juan Pérez', date: '2026-07-25', total: 450, reason: 'Producto defectuoso', status: 'approved' },
-  { id: 2, code: 'DEV-002', saleCode: 'FAC-003', customer: 'Rosa Jiménez', date: '2026-07-24', total: 200, reason: 'Cambio de producto', status: 'pending' },
-];
+import { useCotizaciones } from '@/hooks/useCotizaciones';
+import { useDevoluciones } from '@/hooks/useDevoluciones';
+import { obtenerClientes } from '@/services/clientes.service';
+import { obtenerProductos } from '@/services/productos.service';
+import type { Cliente, Producto, MetodoPago } from '@/types/database';
+import type { VentaConDetalle } from '@/services/ventas.service';
+import type { CotizacionConDetalle } from '@/services/cotizaciones.service';
 
 type Tab = 'sales' | 'quotes' | 'returns';
 
 const saleStatusMap: Record<string, { label: string; cls: string }> = {
-  paid: { label: 'Pagado', cls: 'badge-success' },
+  completada: { label: 'Completada', cls: 'badge-success' },
+  paid: { label: 'Pagada', cls: 'badge-success' },
+  anulada: { label: 'Anulada', cls: 'badge-danger' },
+  cancelled: { label: 'Cancelada', cls: 'badge-danger' },
+  reembolsada: { label: 'Reembolsada', cls: 'badge-warning' },
   pending: { label: 'Pendiente', cls: 'badge-warning' },
-  cancelled: { label: 'Cancelado', cls: 'badge-danger' },
-  approved: { label: 'Aprobado', cls: 'badge-success' },
-  rejected: { label: 'Rechazado', cls: 'badge-danger' },
-  converted: { label: 'Convertido', cls: 'badge-info' },
+  pendiente: { label: 'Pendiente', cls: 'badge-warning' },
+  aprobada: { label: 'Aprobada', cls: 'badge-success' },
+  approved: { label: 'Aprobada', cls: 'badge-success' },
+  rechazada: { label: 'Rechazada', cls: 'badge-danger' },
+  rejected: { label: 'Rechazada', cls: 'badge-danger' },
+  convertida: { label: 'Convertida', cls: 'badge-info' },
+  converted: { label: 'Convertida', cls: 'badge-info' },
 };
 
 const metodoLabel: Record<string, string> = {
@@ -58,71 +55,281 @@ const metodoLabel: Record<string, string> = {
   transferencia: 'Transferencia',
   credito: 'Crédito',
   mixto: 'Mixto',
+  nota_credito: 'Nota de crédito',
+  cambio: 'Cambio',
 };
+
+interface CartItem {
+  producto: Producto;
+  cantidad: number;
+  precio_unitario: number;
+}
 
 export default function SalesPage() {
   const [tab, setTab] = useState<Tab>('sales');
   const [search, setSearch] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [viewingSale, setViewingSale] = useState<Sale | null>(null);
 
-  const { ventas } = useVentas({
-    pagina: 1,
-    limite: 100,
+  // Modals & State
+  const [showAddSaleModal, setShowAddSaleModal] = useState(false);
+  const [showAddQuoteModal, setShowAddQuoteModal] = useState(false);
+  const [showAddReturnModal, setShowAddReturnModal] = useState(false);
+
+  const [viewingSale, setViewingSale] = useState<VentaConDetalle | null>(null);
+  const [loadingSaleDetail, setLoadingSaleDetail] = useState(false);
+
+  const [anulandoSale, setAnulandoSale] = useState<VentaConDetalle | null>(null);
+  const [anularMotivo, setAnularMotivo] = useState('Anulación por error de facturación');
+
+  const [viewingQuote, setViewingQuote] = useState<CotizacionConDetalle | null>(null);
+  const [convertQuote, setConvertQuote] = useState<CotizacionConDetalle | null>(null);
+  const [convertPaymentMethod, setConvertPaymentMethod] = useState<MetodoPago>('efectivo');
+
+  const [rejectingReturnId, setRejectingReturnId] = useState<string | null>(null);
+  const [rejectReturnReason, setRejectReturnReason] = useState('No cumple con las políticas de devolución');
+
+  // Supabase hooks
+  const { ventas, total: totalVentas, loading: loadingVentas, cobrar, obtenerDetalle, anular } = useVentas({
     busqueda: search,
     fechaInicio: dateFrom || undefined,
     fechaFin: dateTo || undefined,
   });
 
-  const sales: Sale[] = useMemo(
-    () =>
-      ventas.map((v) => {
-        const d = new Date(v.creado_en);
-        return {
-          id: v.id,
-          code: v.numero_factura,
-          customer: v.cliente_id ?? 'Cliente general',
-          date: d.toISOString().slice(0, 10),
-          time: d.toTimeString().slice(0, 5),
-          items: 0,
-          subtotal: Number(v.subtotal),
-          tax: Number(v.monto_impuesto),
-          discount: Number(v.monto_descuento),
-          total: Number(v.monto_total),
-          cost: Number(v.costo_total),
-          profit: Number(v.monto_total) - Number(v.costo_total),
-          status:
-            v.estado === 'completada' ? 'paid' : v.estado === 'anulada' ? 'cancelled' : 'pending',
-          payment: metodoLabel[v.metodo_pago] ?? v.metodo_pago,
-          agent: v.cajero_id ?? '—',
-        };
-      }),
-    [ventas]
+  const {
+    cotizaciones,
+    loading: loadingCotizaciones,
+    guardarCotizacion,
+    cambiarEstado: cambiarEstadoCotizacion,
+    convertirAVenta,
+  } = useCotizaciones({
+    busqueda: tab === 'quotes' ? search : undefined,
+  });
+
+  const {
+    devoluciones,
+    loading: loadingDevoluciones,
+    registrarDevolucion,
+    procesarEstado: procesarEstadoDevolucion,
+  } = useDevoluciones({
+    busqueda: tab === 'returns' ? search : undefined,
+  });
+
+  // DB Data for creation modals
+  const [dbClientes, setDbClientes] = useState<Cliente[]>([]);
+  const [dbProductos, setDbProductos] = useState<Producto[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    obtenerClientes({ limite: 100 }).then((res) => {
+      if (active) setDbClientes(res.datos);
+    });
+    obtenerProductos({ limite: 100 }).then((res) => {
+      if (active) setDbProductos(res.datos);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // Nueva Venta form state
+  const [saleCustomerId, setSaleCustomerId] = useState<string>('');
+  const [salePaymentMethod, setSalePaymentMethod] = useState<MetodoPago>('efectivo');
+  const [saleTipoNcf, setSaleTipoNcf] = useState<string>('B02');
+  const [saleCart, setSaleCart] = useState<CartItem[]>([]);
+  const [saleMontoPagado, setSaleMontoPagado] = useState<number>(0);
+  const [saleSearchProd, setSaleSearchProd] = useState('');
+
+  // Nueva Cotización form state
+  const [quoteCustomerId, setQuoteCustomerId] = useState<string>('');
+  const [quoteValidaHasta, setQuoteValidaHasta] = useState<string>(
+    new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
   );
+  const [quoteCart, setQuoteCart] = useState<CartItem[]>([]);
 
-  const filteredSales = sales;
+  // Nueva Devolución form state
+  const [returnVentaId, setReturnVentaId] = useState<string>('');
+  const [returnMotivo, setReturnMotivo] = useState('Producto defectuoso / garantía');
+  const [returnMetodo, setReturnMetodo] = useState<'efectivo' | 'tarjeta' | 'nota_credito' | 'cambio'>('efectivo');
+  const [returnProducts, setReturnProducts] = useState<{ producto_id: string; nombre: string; cant: number; precio: number }[]>([]);
 
+  // Open Sale Detail modal with live items
+  const handleOpenSaleDetail = async (v: VentaConDetalle) => {
+    setViewingSale(v);
+    setLoadingSaleDetail(true);
+    try {
+      const full = await obtenerDetalle(v.id);
+      if (full) setViewingSale(full);
+    } catch {
+      // Keep initial summary
+    } finally {
+      setLoadingSaleDetail(false);
+    }
+  };
+
+  // Void Sale
+  const handleConfirmAnular = async () => {
+    if (!anulandoSale) return;
+    try {
+      await anular(anulandoSale.id, anularMotivo);
+      toast.success(`Factura ${anulandoSale.numero_factura} anulada exitosamente`);
+      setAnulandoSale(null);
+    } catch (err: any) {
+      toast.error(err.message || 'Error al anular la venta');
+    }
+  };
+
+  // Add Item to New Sale Cart
+  const handleAddProductToSaleCart = (p: Producto) => {
+    setSaleCart((prev) => {
+      const idx = prev.findIndex((item) => item.producto.id === p.id);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx].cantidad += 1;
+        return next;
+      }
+      return [...prev, { producto: p, cantidad: 1, precio_unitario: p.precio_venta }];
+    });
+  };
+
+  // Calculations for New Sale Cart
+  const saleSubtotal = useMemo(
+    () => saleCart.reduce((sum, item) => sum + item.cantidad * item.precio_unitario, 0),
+    [saleCart]
+  );
+  const saleTax = useMemo(() => Math.round(saleSubtotal * 0.18 * 100) / 100, [saleSubtotal]);
+  const saleTotal = useMemo(() => saleSubtotal + saleTax, [saleSubtotal]);
+  const saleCostoTotal = useMemo(
+    () => saleCart.reduce((sum, item) => sum + item.cantidad * (item.producto.precio_costo || 0), 0),
+    [saleCart]
+  );
+  const saleDevuelta = useMemo(() => Math.max(0, saleMontoPagado - saleTotal), [saleMontoPagado, saleTotal]);
+
+  // Submit New Sale
+  const handleCreateSaleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (saleCart.length === 0) {
+      toast.error('Agrega al menos un producto al carrito');
+      return;
+    }
+
+    try {
+      const payload = {
+        cliente_id: saleCustomerId || null,
+        tipo_ncf: saleTipoNcf,
+        subtotal: saleSubtotal,
+        monto_impuesto: saleTax,
+        monto_descuento: 0,
+        monto_total: saleTotal,
+        costo_total: saleCostoTotal,
+        metodo_pago: salePaymentMethod,
+        monto_pagado: salePaymentMethod === 'efectivo' ? (saleMontoPagado || saleTotal) : saleTotal,
+        devuelta_entregada: saleDevuelta,
+        items: saleCart.map((item) => ({
+          producto_id: item.producto.id,
+          tipo_item: 'producto' as const,
+          nombre_item: item.producto.nombre,
+          precio_unitario: item.precio_unitario,
+          costo_unitario: item.producto.precio_costo || 0,
+          cantidad: item.cantidad,
+          porcentaje_impuesto: item.producto.porcentaje_impuesto || 18,
+          subtotal: item.cantidad * item.precio_unitario,
+        })),
+      };
+
+      const res = await cobrar(payload);
+      toast.success(`¡Venta procesada con éxito! Factura: ${res.numero_factura}`);
+      setShowAddSaleModal(false);
+      setSaleCart([]);
+      setSaleMontoPagado(0);
+    } catch (err: any) {
+      toast.error(err.message || 'Error al procesar la venta');
+    }
+  };
+
+  // Calculations for New Quote Cart
+  const quoteSubtotal = useMemo(
+    () => quoteCart.reduce((sum, item) => sum + item.cantidad * item.precio_unitario, 0),
+    [quoteCart]
+  );
+  const quoteTax = useMemo(() => Math.round(quoteSubtotal * 0.18 * 100) / 100, [quoteSubtotal]);
+  const quoteTotal = useMemo(() => quoteSubtotal + quoteTax, [quoteSubtotal]);
+
+  // Submit New Quote
+  const handleCreateQuoteSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (quoteCart.length === 0) {
+      toast.error('Agrega al menos un producto a la cotización');
+      return;
+    }
+
+    try {
+      const cot = await guardarCotizacion({
+        cliente_id: quoteCustomerId || null,
+        subtotal: quoteSubtotal,
+        monto_impuesto: quoteTax,
+        monto_total: quoteTotal,
+        valida_hasta: quoteValidaHasta,
+        items: quoteCart.map((it) => ({
+          producto_id: it.producto.id,
+          nombre_item: it.producto.nombre,
+          precio_unitario: it.precio_unitario,
+          cantidad: it.cantidad,
+          subtotal: it.cantidad * it.precio_unitario,
+        })),
+      });
+
+      toast.success(`Cotización ${cot.codigo} guardada exitosamente`);
+      setShowAddQuoteModal(false);
+      setQuoteCart([]);
+    } catch (err: any) {
+      toast.error(err.message || 'Error al crear la cotización');
+    }
+  };
+
+  // Convert Quote to Sale
+  const handleConfirmConvertQuote = async () => {
+    if (!convertQuote) return;
+    try {
+      const res = await convertirAVenta(convertQuote.id, convertPaymentMethod);
+      toast.success(`Cotización convertida a factura: ${res.numero_factura}`);
+      setConvertQuote(null);
+    } catch (err: any) {
+      toast.error(err.message || 'Error al convertir la cotización');
+    }
+  };
+
+  // Export PDF & Excel
   const handleExportPdf = () => {
     if (tab === 'sales') {
       exportTableToPdf({
-        title: 'Historial Detallado de Ventas',
+        title: 'Historial Detallado de Ventas (Supabase)',
         filename: 'historial-ventas',
-        headers: ['Factura', 'Fecha', 'Cliente', 'Usuario/Agente', 'Pago', 'Subtotal', 'ITBIS (18%)', 'Desc.', 'Total', 'Costo', 'Ganancia', 'Estado'],
-        rows: filteredSales.map((s) => [
-          s.code,
-          `${s.date} ${s.time}`,
-          s.customer,
-          s.agent,
-          s.payment,
-          formatMoneyPdf(s.subtotal),
-          formatMoneyPdf(s.tax),
-          formatMoneyPdf(s.discount),
-          formatMoneyPdf(s.total),
-          formatMoneyPdf(s.cost),
-          formatMoneyPdf(s.profit),
-          saleStatusMap[s.status]?.label ?? s.status,
+        headers: [
+          'Factura',
+          'NCF',
+          'Fecha/Hora',
+          'Cliente',
+          'Cajero',
+          'Pago',
+          'Subtotal',
+          'ITBIS (18%)',
+          'Total',
+          'Ganancia',
+          'Estado',
+        ],
+        rows: ventas.map((v) => [
+          v.numero_factura,
+          v.ncf || '—',
+          new Date(v.creado_en).toLocaleString('es-DO'),
+          v.cliente_nombre || 'General',
+          v.cajero_nombre || 'Cajero',
+          metodoLabel[v.metodo_pago] || v.metodo_pago,
+          formatMoneyPdf(v.subtotal),
+          formatMoneyPdf(v.monto_impuesto),
+          formatMoneyPdf(v.monto_total),
+          formatMoneyPdf(v.monto_total - v.costo_total),
+          saleStatusMap[v.estado]?.label ?? v.estado,
         ]),
         landscape: true,
       });
@@ -132,30 +339,30 @@ export default function SalesPage() {
       exportTableToPdf({
         title: 'Listado de Cotizaciones',
         filename: 'cotizaciones',
-        headers: ['Código', 'Cliente', 'Fecha', 'Válida hasta', 'Total', 'Estado'],
-        rows: mockQuotes.map((q) => [
-          q.code,
-          q.customer,
-          q.date,
-          q.validUntil,
-          formatMoneyPdf(q.total),
-          saleStatusMap[q.status]?.label ?? q.status,
+        headers: ['Código', 'Cliente', 'Fecha Emisión', 'Válida hasta', 'Total', 'Estado'],
+        rows: cotizaciones.map((q) => [
+          q.codigo,
+          q.cliente_nombre || 'General',
+          new Date(q.creado_en).toLocaleDateString('es-DO'),
+          q.valida_hasta || '—',
+          formatMoneyPdf(q.monto_total),
+          saleStatusMap[q.estado]?.label ?? q.estado,
         ]),
       });
       return;
     }
     exportTableToPdf({
-      title: 'Devoluciones de Venta',
+      title: 'Historial de Devoluciones de Venta',
       filename: 'devoluciones-venta',
-      headers: ['Código', 'Factura', 'Cliente', 'Fecha', 'Total', 'Motivo', 'Estado'],
-      rows: mockReturns.map((r) => [
-        r.code,
-        r.saleCode,
-        r.customer,
-        r.date,
-        formatMoneyPdf(r.total),
-        r.reason,
-        saleStatusMap[r.status]?.label ?? r.status,
+      headers: ['Código', 'Factura Ref.', 'Cliente', 'Fecha', 'Total Reembolso', 'Motivo', 'Estado'],
+      rows: devoluciones.map((r) => [
+        r.codigo,
+        r.numero_factura || '—',
+        r.cliente_nombre || 'General',
+        new Date(r.creado_en).toLocaleString('es-DO'),
+        formatMoneyPdf(r.monto_total),
+        r.motivo,
+        saleStatusMap[r.estado]?.label ?? r.estado,
       ]),
     });
   };
@@ -164,154 +371,119 @@ export default function SalesPage() {
     exportTableToExcel({
       title: 'Historial Detallado de Ventas',
       filename: 'historial-ventas',
-      headers: ['Factura', 'Fecha', 'Hora', 'Cliente', 'Usuario Agente', 'Método Pago', 'Ítems', 'Subtotal', 'ITBIS (18%)', 'Descuento', 'Total Factura', 'Costo Total', 'Ganancia Bruta', 'Estado'],
-      rows: filteredSales.map((s) => [
-        s.code,
-        s.date,
-        s.time,
-        s.customer,
-        s.agent,
-        s.payment,
-        s.items,
-        s.subtotal,
-        s.tax,
-        s.discount,
-        s.total,
-        s.cost,
-        s.profit,
-        saleStatusMap[s.status]?.label ?? s.status,
+      headers: [
+        'Factura',
+        'NCF',
+        'Fecha',
+        'Cliente',
+        'Cajero',
+        'Método Pago',
+        'Subtotal',
+        'ITBIS (18%)',
+        'Descuento',
+        'Total Factura',
+        'Costo Total',
+        'Ganancia Bruta',
+        'Estado',
+      ],
+      rows: ventas.map((v) => [
+        v.numero_factura,
+        v.ncf || '',
+        new Date(v.creado_en).toLocaleString('es-DO'),
+        v.cliente_nombre || 'General',
+        v.cajero_nombre || 'Cajero',
+        metodoLabel[v.metodo_pago] || v.metodo_pago,
+        v.subtotal,
+        v.monto_impuesto,
+        v.monto_descuento,
+        v.monto_total,
+        v.costo_total,
+        v.monto_total - v.costo_total,
+        saleStatusMap[v.estado]?.label ?? v.estado,
       ]),
     });
   };
 
-  if (showAddForm) {
-    return (
-      <AppLayout>
-        <div className="space-y-6 slide-up">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-foreground">Nueva Venta</h1>
-              <p className="text-sm text-muted-foreground mt-1">Registrar factura de venta con ITBIS transparentado</p>
-            </div>
-            <button onClick={() => setShowAddForm(false)} className="btn-secondary">← Volver</button>
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 space-y-4">
-              <div className="card p-5 space-y-4">
-                <h3 className="font-semibold text-foreground">Información de la Venta</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground mb-1 block">Cliente *</label>
-                    <select className="input-field"><option>Seleccionar cliente...</option><option>Juan Pérez</option><option>Empresa ABC S.R.L.</option></select>
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground mb-1 block">Fecha *</label>
-                    <input type="date" className="input-field" defaultValue="2026-07-26" />
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground mb-1 block">Agente / Usuario</label>
-                    <select className="input-field"><option>Roberto Díaz</option><option>Luisa Fernández</option></select>
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground mb-1 block">Método de Pago</label>
-                    <select className="input-field"><option>Efectivo</option><option>Tarjeta</option><option>Transferencia</option><option>Crédito</option></select>
-                  </div>
-                </div>
-              </div>
-              <div className="card p-5">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-semibold text-foreground">Productos</h3>
-                  <div className="flex gap-2">
-                    <div className="relative">
-                      <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                      <input className="input-field pl-8 py-1.5 text-xs w-48" placeholder="Buscar producto..." />
-                    </div>
-                    <button className="btn-primary flex items-center gap-1 text-xs py-1.5"><Plus size={14} />Agregar</button>
-                  </div>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead><tr className="border-b border-border">
-                      <th className="text-left py-2 text-muted-foreground font-medium">Producto</th>
-                      <th className="text-left py-2 text-muted-foreground font-medium">Precio</th>
-                      <th className="text-left py-2 text-muted-foreground font-medium">Cant.</th>
-                      <th className="text-left py-2 text-muted-foreground font-medium">Desc.</th>
-                      <th className="text-left py-2 text-muted-foreground font-medium">Total</th>
-                      <th className="py-2"></th>
-                    </tr></thead>
-                    <tbody>
-                      {[
-                        { name: 'Arroz Selecto 5lb', price: 285, qty: 5, disc: 0, total: 1425 },
-                        { name: 'Aceite Vegetal 1L', price: 195, qty: 3, disc: 0, total: 585 },
-                      ].map((item, i) => (
-                        <tr key={i} className="border-b border-border">
-                          <td className="py-2 text-foreground font-medium">{item.name}</td>
-                          <td className="py-2"><input type="number" defaultValue={item.price} className="input-field w-24 py-1" /></td>
-                          <td className="py-2"><input type="number" defaultValue={item.qty} className="input-field w-16 py-1" /></td>
-                          <td className="py-2"><input type="number" defaultValue={item.disc} className="input-field w-16 py-1" /></td>
-                          <td className="py-2 font-semibold text-foreground">RD$ {item.total.toLocaleString()}</td>
-                          <td className="py-2"><button className="p-1 text-danger hover:bg-danger-bg rounded"><Trash2 size={14} /></button></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-            <div className="space-y-4">
-              <div className="card p-5 space-y-3">
-                <h3 className="font-semibold text-foreground">Resumen de Facturación</h3>
-                <div className="flex justify-between text-sm"><span className="text-muted-foreground">Subtotal</span><span className="font-medium">RD$ 2,010.00</span></div>
-                <div className="flex justify-between text-sm"><span className="text-muted-foreground">Descuento</span><span className="font-medium text-success">- RD$ 0.00</span></div>
-                <div className="flex justify-between text-sm"><span className="text-muted-foreground">ITBIS (18% transparentado)</span><span className="font-medium">RD$ 361.80</span></div>
-                <div className="border-t border-border pt-3 flex justify-between font-bold text-foreground text-lg"><span>Total Factura</span><span>RD$ 2,371.80</span></div>
-              </div>
-              <div className="card p-5 space-y-3">
-                <h3 className="font-semibold text-foreground">Cobro</h3>
-                <div><label className="text-xs text-muted-foreground mb-1 block">Monto recibido</label><input className="input-field" placeholder="0.00" type="number" /></div>
-                <div className="flex justify-between text-sm font-semibold"><span>Cambio a devolver</span><span className="text-success">RD$ 0.00</span></div>
-              </div>
-              <div className="flex gap-2">
-                <button className="btn-secondary flex-1 flex items-center justify-center gap-2" onClick={() => window.print()}><Printer size={16} />Imprimir</button>
-                <button className="btn-primary flex-1" onClick={() => { toast.success('Venta guardada'); setShowAddForm(false); }}>Guardar</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </AppLayout>
-    );
-  }
-
   return (
     <AppLayout>
       <div className="space-y-6 slide-up">
+        {/* Top Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Ventas e Historial Detallado</h1>
-            <p className="text-sm text-muted-foreground mt-1">Gestiona facturas, cotizaciones, ganancia por venta e ITBIS transparentado</p>
+            <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+              <ShoppingCart className="text-primary" size={26} />
+              Módulo de Ventas y Gestión Comercial
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Control de ventas, facturación con ITBIS 18% transparentado, cotizaciones y devoluciones con Supabase
+            </p>
           </div>
-          <button onClick={() => setShowAddForm(true)} className="btn-primary flex items-center gap-2 w-fit">
-            <Plus size={16} />Nueva Venta
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => setShowAddQuoteModal(true)}
+              className="btn-secondary flex items-center gap-1.5 text-xs font-semibold"
+            >
+              <FileText size={15} /> Nueva Cotización
+            </button>
+            <button
+              onClick={() => setShowAddSaleModal(true)}
+              className="btn-primary flex items-center gap-2 font-bold shadow-md"
+            >
+              <Plus size={16} /> Nueva Venta
+            </button>
+          </div>
         </div>
 
-        {/* Stats */}
+        {/* Live Key Metric Summary Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="card p-4"><p className="text-xs text-muted-foreground">Ventas totales en filtro</p><p className="text-2xl font-bold text-foreground mt-1">RD$ {filteredSales.reduce((s, x) => s + x.total, 0).toLocaleString()}</p></div>
-          <div className="card p-4"><p className="text-xs text-muted-foreground">Ganancia Bruta total</p><p className="text-2xl font-bold text-success mt-1">RD$ {filteredSales.reduce((s, x) => s + x.profit, 0).toLocaleString()}</p></div>
-          <div className="card p-4"><p className="text-xs text-muted-foreground">ITBIS Transparentado</p><p className="text-2xl font-bold text-warning mt-1">RD$ {filteredSales.reduce((s, x) => s + x.tax, 0).toLocaleString()}</p></div>
-          <div className="card p-4"><p className="text-xs text-muted-foreground">Facturas Emitidas</p><p className="text-2xl font-bold text-info mt-1">{filteredSales.length}</p></div>
+          <div className="card p-4 hover:border-primary/40 transition-all">
+            <p className="text-xs text-muted-foreground font-medium">Ventas Totales (En Filtro)</p>
+            <p className="text-2xl font-bold text-foreground mt-1">
+              RD$ {ventas.reduce((s, x) => s + x.monto_total, 0).toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+            </p>
+          </div>
+          <div className="card p-4 hover:border-emerald-500/40 transition-all">
+            <p className="text-xs text-muted-foreground font-medium">Ganancia Bruta Estimada</p>
+            <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
+              RD${' '}
+              {ventas
+                .reduce((s, x) => s + (x.monto_total - x.costo_total), 0)
+                .toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+            </p>
+          </div>
+          <div className="card p-4 hover:border-amber-500/40 transition-all">
+            <p className="text-xs text-muted-foreground font-medium">ITBIS (18% Transparentado)</p>
+            <p className="text-2xl font-bold text-amber-600 dark:text-amber-400 mt-1">
+              RD$ {ventas.reduce((s, x) => s + x.monto_impuesto, 0).toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+            </p>
+          </div>
+          <div className="card p-4 hover:border-blue-500/40 transition-all">
+            <p className="text-xs text-muted-foreground font-medium">Facturas Emitidas</p>
+            <p className="text-2xl font-bold text-info mt-1">{totalVentas} facturas</p>
+          </div>
         </div>
 
-        <div className="flex gap-1 bg-secondary rounded-xl p-1 w-fit flex-wrap">
+        {/* Tab Navigation */}
+        <div className="flex gap-1 bg-secondary rounded-xl p-1 w-fit flex-wrap border border-border/60">
           {[
-            { id: 'sales' as Tab, label: 'Todas las Ventas', icon: <ShoppingCart size={16} /> },
-            { id: 'quotes' as Tab, label: 'Cotizaciones', icon: <FileText size={16} /> },
-            { id: 'returns' as Tab, label: 'Devoluciones', icon: <RotateCcw size={16} /> },
+            { id: 'sales' as Tab, label: 'Todas las Ventas', icon: <ShoppingCart size={16} />, count: totalVentas },
+            { id: 'quotes' as Tab, label: 'Cotizaciones', icon: <FileText size={16} />, count: cotizaciones.length },
+            { id: 'returns' as Tab, label: 'Devoluciones', icon: <RotateCcw size={16} />, count: devoluciones.length },
           ].map((t) => (
-            <button key={t.id} onClick={() => setTab(t.id)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${tab === t.id ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
-              {t.icon}{t.label}
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+                tab === t.id
+                  ? 'bg-card text-foreground shadow-xs border border-border/80'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {t.icon}
+              {t.label}
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-secondary text-muted-foreground font-mono">
+                {t.count}
+              </span>
             </button>
           ))}
         </div>
@@ -319,78 +491,172 @@ export default function SalesPage() {
         {/* Filter Bar */}
         <div className="card p-4 space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="relative">
-              <label className="text-xs font-semibold text-muted-foreground mb-1 block">Buscar</label>
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground mb-1 block">Buscar en Supabase</label>
               <div className="relative">
                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                <input className="input-field pl-9" placeholder="Buscar por código, cliente o agente..." value={search} onChange={(e) => setSearch(e.target.value)} />
+                <input
+                  className="input-field !pl-9"
+                  placeholder="Buscar por número de factura, NCF, cliente..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
               </div>
             </div>
             <div>
               <label className="text-xs font-semibold text-muted-foreground mb-1 block">Desde (Fecha)</label>
-              <input type="date" className="input-field" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+              <input
+                type="date"
+                className="input-field"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+              />
             </div>
             <div>
               <label className="text-xs font-semibold text-muted-foreground mb-1 block">Hasta (Fecha)</label>
-              <input type="date" className="input-field" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+              <input
+                type="date"
+                className="input-field"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+              />
             </div>
           </div>
 
           <div className="flex justify-between items-center pt-2 border-t border-border">
-            <span className="text-xs text-muted-foreground">Mostrando {filteredSales.length} venta(s)</span>
+            <span className="text-xs text-muted-foreground font-medium">
+              Mostrando {tab === 'sales' ? ventas.length : tab === 'quotes' ? cotizaciones.length : devoluciones.length}{' '}
+              registro(s)
+            </span>
             <div className="flex gap-2">
-              <button type="button" onClick={handleExportPdf} className="btn-secondary flex items-center gap-1.5 text-xs"><Download size={14} /> Exportar PDF</button>
-              <button type="button" onClick={handleExportExcel} className="btn-secondary flex items-center gap-1.5 text-xs"><FileSpreadsheet size={14} /> Exportar Excel</button>
+              <button
+                type="button"
+                onClick={handleExportPdf}
+                className="btn-secondary flex items-center gap-1.5 text-xs font-semibold"
+              >
+                <Download size={14} /> PDF
+              </button>
+              <button
+                type="button"
+                onClick={handleExportExcel}
+                className="btn-secondary flex items-center gap-1.5 text-xs font-semibold"
+              >
+                <FileSpreadsheet size={14} /> Excel
+              </button>
             </div>
           </div>
         </div>
 
+        {/* TAB 1: TODAS LAS VENTAS */}
         {tab === 'sales' && (
           <div className="card overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border bg-secondary/50">
-                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Factura</th>
+                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Factura / NCF</th>
                     <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Fecha/Hora</th>
                     <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Cliente</th>
-                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden lg:table-cell">Usuario/Agente</th>
-                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden lg:table-cell">Pago</th>
+                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden lg:table-cell">
+                      Cajero
+                    </th>
+                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden lg:table-cell">
+                      Método Pago
+                    </th>
                     <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Subtotal</th>
-                    <th className="text-right px-4 py-3 font-semibold text-muted-foreground">ITBIS</th>
+                    <th className="text-right px-4 py-3 font-semibold text-muted-foreground">ITBIS 18%</th>
                     <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Total</th>
-                    <th className="text-right px-4 py-3 font-semibold text-muted-foreground hidden xl:table-cell">Ganancia</th>
-                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden md:table-cell">Estado</th>
+                    <th className="text-right px-4 py-3 font-semibold text-muted-foreground hidden xl:table-cell">
+                      Ganancia
+                    </th>
+                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden md:table-cell">
+                      Estado
+                    </th>
                     <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredSales.map((s, i) => (
-                    <tr key={s.id} className={`border-b border-border hover:bg-secondary/30 transition-colors ${i % 2 === 0 ? '' : 'bg-secondary/10'}`}>
-                      <td className="px-4 py-3 font-mono text-primary font-bold">{s.code}</td>
-                      <td className="px-4 py-3 text-muted-foreground text-xs">{s.date} {s.time}</td>
-                      <td className="px-4 py-3 font-medium text-foreground">{s.customer}</td>
-                      <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell text-xs">{s.agent}</td>
-                      <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell text-xs">{s.payment}</td>
-                      <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">RD$ {s.subtotal.toLocaleString()}</td>
-                      <td className="px-4 py-3 text-right tabular-nums text-warning font-semibold">RD$ {s.tax.toLocaleString()}</td>
-                      <td className="px-4 py-3 text-right font-bold text-foreground">RD$ {s.total.toLocaleString()}</td>
-                      <td className="px-4 py-3 text-right tabular-nums font-bold text-success hidden xl:table-cell">RD$ {s.profit.toLocaleString()}</td>
-                      <td className="px-4 py-3 hidden md:table-cell"><span className={saleStatusMap[s.status].cls}>{saleStatusMap[s.status].label}</span></td>
-                      <td className="px-4 py-3 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <button onClick={() => setViewingSale(s)} className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors" title="Ver Detalle Factura"><Eye size={14} /></button>
-                          <button onClick={() => window.print()} className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors" title="Imprimir"><Printer size={14} /></button>
-                        </div>
+                  {loadingVentas ? (
+                    <tr>
+                      <td colSpan={11} className="px-4 py-12 text-center text-muted-foreground">
+                        Cargando ventas desde Supabase...
                       </td>
                     </tr>
-                  ))}
+                  ) : ventas.length === 0 ? (
+                    <tr>
+                      <td colSpan={11} className="px-4 py-12 text-center text-muted-foreground">
+                        No se encontraron ventas registradas
+                      </td>
+                    </tr>
+                  ) : (
+                    ventas.map((s, i) => (
+                      <tr
+                        key={s.id}
+                        className={`border-b border-border hover:bg-secondary/30 transition-colors ${
+                          i % 2 === 0 ? '' : 'bg-secondary/10'
+                        }`}
+                      >
+                        <td className="px-4 py-3">
+                          <div className="font-mono text-primary font-bold">{s.numero_factura}</div>
+                          {s.ncf && <div className="text-[10px] text-muted-foreground font-mono">NCF: {s.ncf}</div>}
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground text-xs">
+                          {new Date(s.creado_en).toLocaleString('es-DO')}
+                        </td>
+                        <td className="px-4 py-3 font-medium text-foreground">{s.cliente_nombre || 'Cliente General'}</td>
+                        <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell text-xs">
+                          {s.cajero_nombre || 'Cajero'}
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell text-xs">
+                          <span className="badge-neutral">{metodoLabel[s.metodo_pago] || s.metodo_pago}</span>
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
+                          RD$ {s.subtotal.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums text-amber-600 dark:text-amber-400 font-semibold">
+                          RD$ {s.monto_impuesto.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-4 py-3 text-right font-bold text-foreground">
+                          RD$ {s.monto_total.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums font-bold text-emerald-600 dark:text-emerald-400 hidden xl:table-cell">
+                          RD$ {(s.monto_total - s.costo_total).toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-4 py-3 hidden md:table-cell">
+                          <span className={saleStatusMap[s.estado]?.cls ?? 'badge-neutral'}>
+                            {saleStatusMap[s.estado]?.label ?? s.estado}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              onClick={() => handleOpenSaleDetail(s)}
+                              className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+                              title="Ver Detalle Factura"
+                            >
+                              <Eye size={15} />
+                            </button>
+                            {s.estado !== 'anulada' && (
+                              <button
+                                onClick={() => setAnulandoSale(s)}
+                                className="p-1.5 rounded-lg hover:bg-rose-500/10 text-muted-foreground hover:text-rose-600 transition-colors"
+                                title="Anular Factura"
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
           </div>
         )}
 
+        {/* TAB 2: COTIZACIONES */}
         {tab === 'quotes' && (
           <div className="card overflow-hidden">
             <div className="overflow-x-auto">
@@ -399,36 +665,84 @@ export default function SalesPage() {
                   <tr className="border-b border-border bg-secondary/50">
                     <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Código</th>
                     <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Cliente</th>
-                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden md:table-cell">Fecha</th>
-                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden md:table-cell">Válida hasta</th>
-                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Total</th>
+                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden md:table-cell">
+                      Fecha Emisión
+                    </th>
+                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden md:table-cell">
+                      Válida hasta
+                    </th>
+                    <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Total</th>
                     <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Estado</th>
                     <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {mockQuotes.map((q, i) => (
-                    <tr key={q.id} className={`border-b border-border hover:bg-secondary/30 transition-colors ${i % 2 === 0 ? '' : 'bg-secondary/10'}`}>
-                      <td className="px-4 py-3 font-mono text-primary font-medium">{q.code}</td>
-                      <td className="px-4 py-3 font-medium text-foreground">{q.customer}</td>
-                      <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">{q.date}</td>
-                      <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">{q.validUntil}</td>
-                      <td className="px-4 py-3 font-bold text-foreground">RD$ {q.total.toLocaleString()}</td>
-                      <td className="px-4 py-3"><span className={saleStatusMap[q.status].cls}>{saleStatusMap[q.status].label}</span></td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-end gap-1">
-                          <button className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"><Eye size={14} /></button>
-                          <button className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"><Edit2 size={14} /></button>
-                        </div>
+                  {loadingCotizaciones ? (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-12 text-center text-muted-foreground">
+                        Cargando cotizaciones desde Supabase...
                       </td>
                     </tr>
-                  ))}
+                  ) : cotizaciones.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-12 text-center text-muted-foreground">
+                        No hay cotizaciones registradas
+                      </td>
+                    </tr>
+                  ) : (
+                    cotizaciones.map((q, i) => (
+                      <tr
+                        key={q.id}
+                        className={`border-b border-border hover:bg-secondary/30 transition-colors ${
+                          i % 2 === 0 ? '' : 'bg-secondary/10'
+                        }`}
+                      >
+                        <td className="px-4 py-3 font-mono text-primary font-bold">{q.codigo}</td>
+                        <td className="px-4 py-3 font-medium text-foreground">{q.cliente_nombre || 'Cliente general'}</td>
+                        <td className="px-4 py-3 text-muted-foreground hidden md:table-cell text-xs">
+                          {new Date(q.creado_en).toLocaleDateString('es-DO')}
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground hidden md:table-cell text-xs font-mono">
+                          {q.valida_hasta || '—'}
+                        </td>
+                        <td className="px-4 py-3 text-right font-bold text-foreground">
+                          RD$ {q.monto_total.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={saleStatusMap[q.estado]?.cls ?? 'badge-neutral'}>
+                            {saleStatusMap[q.estado]?.label ?? q.estado}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            {q.estado === 'pendiente' && (
+                              <button
+                                onClick={() => setConvertQuote(q)}
+                                className="px-2.5 py-1 rounded-lg bg-primary/10 text-primary border border-primary/30 hover:bg-primary/20 text-xs font-bold flex items-center gap-1 transition-all"
+                                title="Convertir a Factura"
+                              >
+                                <ArrowRightLeft size={13} /> Convertir Venta
+                              </button>
+                            )}
+                            <button
+                              onClick={() => setViewingQuote(q)}
+                              className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+                              title="Ver Detalle Cotización"
+                            >
+                              <Eye size={15} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
           </div>
         )}
 
+        {/* TAB 3: DEVOLUCIONES */}
         {tab === 'returns' && (
           <div className="card overflow-hidden">
             <div className="overflow-x-auto">
@@ -437,66 +751,720 @@ export default function SalesPage() {
                   <tr className="border-b border-border bg-secondary/50">
                     <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Código</th>
                     <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Factura Ref.</th>
-                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden md:table-cell">Cliente</th>
-                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden md:table-cell">Fecha</th>
-                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Total</th>
-                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden lg:table-cell">Motivo</th>
+                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden md:table-cell">
+                      Cliente
+                    </th>
+                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden md:table-cell">
+                      Fecha
+                    </th>
+                    <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Total Reembolso</th>
+                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden lg:table-cell">
+                      Motivo
+                    </th>
                     <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Estado</th>
+                    <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Acciones Admin</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {mockReturns.map((r, i) => (
-                    <tr key={r.id} className={`border-b border-border hover:bg-secondary/30 transition-colors ${i % 2 === 0 ? '' : 'bg-secondary/10'}`}>
-                      <td className="px-4 py-3 font-mono text-danger font-medium">{r.code}</td>
-                      <td className="px-4 py-3 font-mono text-primary">{r.saleCode}</td>
-                      <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">{r.customer}</td>
-                      <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">{r.date}</td>
-                      <td className="px-4 py-3 font-bold text-foreground">RD$ {r.total.toLocaleString()}</td>
-                      <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell">{r.reason}</td>
-                      <td className="px-4 py-3"><span className={saleStatusMap[r.status].cls}>{saleStatusMap[r.status].label}</span></td>
+                  {loadingDevoluciones ? (
+                    <tr>
+                      <td colSpan={8} className="px-4 py-12 text-center text-muted-foreground">
+                        Cargando devoluciones desde Supabase...
+                      </td>
                     </tr>
-                  ))}
+                  ) : devoluciones.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="px-4 py-12 text-center text-muted-foreground">
+                        No hay devoluciones registradas
+                      </td>
+                    </tr>
+                  ) : (
+                    devoluciones.map((r, i) => (
+                      <tr
+                        key={r.id}
+                        className={`border-b border-border hover:bg-secondary/30 transition-colors ${
+                          i % 2 === 0 ? '' : 'bg-secondary/10'
+                        }`}
+                      >
+                        <td className="px-4 py-3 font-mono text-rose-600 dark:text-rose-400 font-bold">{r.codigo}</td>
+                        <td className="px-4 py-3 font-mono text-primary font-semibold">
+                          {r.numero_factura || '—'}
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">
+                          {r.cliente_nombre || 'Cliente general'}
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground hidden md:table-cell text-xs">
+                          {new Date(r.creado_en).toLocaleString('es-DO')}
+                        </td>
+                        <td className="px-4 py-3 text-right font-bold text-foreground">
+                          RD$ {r.monto_total.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell text-xs">{r.motivo}</td>
+                        <td className="px-4 py-3">
+                          <span className={saleStatusMap[r.estado]?.cls ?? 'badge-neutral'}>
+                            {saleStatusMap[r.estado]?.label ?? r.estado}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            {r.estado === 'pendiente' ? (
+                              <>
+                                <button
+                                  onClick={() => {
+                                    procesarEstadoDevolucion(r.id, 'aprobada');
+                                    toast.success(`Devolución ${r.codigo} aprobada exitosamente`);
+                                  }}
+                                  className="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-600 border border-emerald-500/30 hover:bg-emerald-500/20 text-xs font-bold flex items-center gap-1"
+                                >
+                                  <CheckCircle size={13} /> Aprobar
+                                </button>
+                                <button
+                                  onClick={() => setRejectingReturnId(r.id)}
+                                  className="px-2.5 py-1 rounded-lg bg-rose-500/10 text-rose-600 border border-rose-500/30 hover:bg-rose-500/20 text-xs font-bold flex items-center gap-1"
+                                >
+                                  <XCircle size={13} /> Rechazar
+                                </button>
+                              </>
+                            ) : (
+                              <span className="text-xs text-muted-foreground font-mono">Procesado</span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
           </div>
         )}
 
-        {/* Viewing Invoice Detail Modal with Transparent ITBIS Breakdown */}
+        {/* MODAL 1: VIEW SALE DETAIL & TAX BREAKDOWN */}
         {viewingSale && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/40" onClick={() => setViewingSale(null)}>
-            <div className="card w-full max-w-lg p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/40 backdrop-blur-xs animate-in fade-in"
+            onClick={() => setViewingSale(null)}
+          >
+            <div
+              className="card w-full max-w-xl p-6 space-y-4 shadow-2xl border-primary/20"
+              onClick={(e) => e.stopPropagation()}
+            >
               <div className="flex items-center justify-between border-b border-border pb-3">
-                <h3 className="font-bold text-foreground text-lg">Detalle de Factura {viewingSale.code}</h3>
-                <button type="button" onClick={() => setViewingSale(null)} className="p-1 text-muted-foreground hover:text-foreground">
+                <div>
+                  <h3 className="font-bold text-foreground text-lg flex items-center gap-2">
+                    <FileText className="text-primary" size={20} />
+                    Detalle de Factura {viewingSale.numero_factura}
+                  </h3>
+                  {viewingSale.ncf && (
+                    <p className="text-xs text-muted-foreground font-mono mt-0.5">NCF Fiscal: {viewingSale.ncf}</p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setViewingSale(null)}
+                  className="p-1 text-muted-foreground hover:text-foreground"
+                >
                   <X size={18} />
                 </button>
               </div>
 
-              <div className="space-y-2.5 text-xs">
-                <div className="flex justify-between"><span className="text-muted-foreground">Cliente:</span><span className="font-bold text-foreground">{viewingSale.customer}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Fecha y Hora:</span><span>{viewingSale.date} {viewingSale.time}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Usuario / Agente:</span><span>{viewingSale.agent}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Método de Pago:</span><span className="badge-neutral">{viewingSale.payment}</span></div>
+              {loadingSaleDetail ? (
+                <div className="py-8 text-center text-sm text-muted-foreground">Cargando productos de factura...</div>
+              ) : (
+                <div className="space-y-3 text-xs">
+                  {/* General Info */}
+                  <div className="grid grid-cols-2 gap-2 bg-secondary/30 rounded-xl p-3">
+                    <div>
+                      <span className="text-muted-foreground block">Cliente:</span>
+                      <span className="font-bold text-foreground">{viewingSale.cliente_nombre || 'Cliente general'}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block">Fecha / Hora:</span>
+                      <span>{new Date(viewingSale.creado_en).toLocaleString('es-DO')}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block">Cajero Solicitante:</span>
+                      <span>{viewingSale.cajero_nombre || 'Cajero'}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block">Método de Pago:</span>
+                      <span className="badge-neutral font-medium">
+                        {metodoLabel[viewingSale.metodo_pago] || viewingSale.metodo_pago}
+                      </span>
+                    </div>
+                  </div>
 
-                <div className="border-t border-border/80 pt-3 space-y-1.5">
-                  <p className="font-bold uppercase tracking-wider text-muted-foreground text-[10px]">Transparencia Fiscal y Costos</p>
-                  <div className="flex justify-between"><span className="text-muted-foreground">Subtotal:</span><span className="font-mono">RD$ {viewingSale.subtotal.toLocaleString('es-DO', { minimumFractionDigits: 2 })}</span></div>
-                  <div className="flex justify-between"><span className="text-muted-foreground">Descuento:</span><span className="font-mono text-success">- RD$ {viewingSale.discount.toLocaleString('es-DO', { minimumFractionDigits: 2 })}</span></div>
-                  <div className="flex justify-between"><span className="text-muted-foreground font-semibold">ITBIS (18% Transparentado):</span><span className="font-mono text-warning font-bold">RD$ {viewingSale.tax.toLocaleString('es-DO', { minimumFractionDigits: 2 })}</span></div>
-                  <div className="flex justify-between border-t border-border pt-2 text-sm font-bold"><span>Total Factura:</span><span className="text-primary font-black">RD$ {viewingSale.total.toLocaleString('es-DO', { minimumFractionDigits: 2 })}</span></div>
+                  {/* Detalle de productos */}
+                  <div className="space-y-1">
+                    <p className="font-bold text-muted-foreground uppercase text-[10px] tracking-wider">
+                      Ítems de Facturación ({viewingSale.detalle_ventas?.length || 0})
+                    </p>
+                    <div className="bg-secondary/40 rounded-xl p-3 max-h-40 overflow-y-auto space-y-2">
+                      {(viewingSale.detalle_ventas || []).map((item) => (
+                        <div
+                          key={item.id}
+                          className="flex justify-between items-center border-b border-border/40 pb-1.5 last:border-none"
+                        >
+                          <div>
+                            <span className="font-semibold text-foreground">{item.nombre_item}</span>
+                            <span className="text-[11px] text-muted-foreground block font-mono">
+                              {item.cantidad}x @ RD${' '}
+                              {item.precio_unitario.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                          <span className="font-bold font-mono text-foreground">
+                            RD$ {item.subtotal.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Transparencia Fiscal ITBIS */}
+                  <div className="border-t border-border pt-3 space-y-1.5">
+                    <p className="font-bold uppercase tracking-wider text-muted-foreground text-[10px]">
+                      Transparencia Fiscal y Costos
+                    </p>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Subtotal Neto:</span>
+                      <span className="font-mono">
+                        RD$ {viewingSale.subtotal.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Descuento Aplicado:</span>
+                      <span className="font-mono text-emerald-600">
+                        - RD$ {viewingSale.monto_descuento.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    <div className="flex justify-between font-semibold">
+                      <span className="text-muted-foreground">ITBIS (18% Transparentado):</span>
+                      <span className="font-mono text-amber-600 dark:text-amber-400 font-bold">
+                        RD$ {viewingSale.monto_impuesto.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    <div className="flex justify-between border-t border-border pt-2 text-sm font-bold">
+                      <span>Total Factura:</span>
+                      <span className="text-primary font-black text-base">
+                        RD$ {viewingSale.monto_total.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Rentabilidad */}
+                  <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 flex justify-between items-center text-xs">
+                    <div>
+                      <span className="text-muted-foreground font-medium block">Costo de Inversión:</span>
+                      <span className="font-mono text-foreground font-semibold">
+                        RD$ {viewingSale.costo_total.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-muted-foreground font-medium block">Ganancia Bruta:</span>
+                      <span className="font-mono text-emerald-600 dark:text-emerald-400 font-bold text-sm">
+                        RD${' '}
+                        {(viewingSale.monto_total - viewingSale.costo_total).toLocaleString('es-DO', {
+                          minimumFractionDigits: 2,
+                        })}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-border">
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="btn-secondary flex items-center gap-1.5 text-xs py-2"
+                >
+                  <Printer size={14} /> Imprimir Factura
+                </button>
+                <button type="button" onClick={() => setViewingSale(null)} className="btn-primary text-xs py-2">
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* MODAL 2: NUEVA VENTA */}
+        {showAddSaleModal && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/50 backdrop-blur-xs animate-in fade-in"
+            onClick={() => setShowAddSaleModal(false)}
+          >
+            <form
+              onSubmit={handleCreateSaleSubmit}
+              className="card w-full max-w-4xl p-6 space-y-4 shadow-2xl border-primary/30 max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between border-b border-border pb-3">
+                <div className="flex items-center gap-2">
+                  <ShoppingCart className="text-primary" size={24} />
+                  <h3 className="font-extrabold text-foreground text-lg">Registrar Nueva Venta (Supabase)</h3>
+                </div>
+                <button type="button" onClick={() => setShowAddSaleModal(false)} className="p-1 text-muted-foreground hover:text-foreground">
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Left Col: Customer & Product Selector */}
+                <div className="lg:col-span-2 space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-secondary/20 p-3 rounded-xl">
+                    <div>
+                      <label className="text-xs font-bold text-muted-foreground mb-1 block">Cliente</label>
+                      <select
+                        className="input-field text-xs py-1.5"
+                        value={saleCustomerId}
+                        onChange={(e) => setSaleCustomerId(e.target.value)}
+                      >
+                        <option value="">Cliente General (Contado)</option>
+                        {dbClientes.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.nombre} {c.rnc_cedula ? `(${c.rnc_cedula})` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-muted-foreground mb-1 block">Tipo Comprobante (NCF)</label>
+                      <select
+                        className="input-field text-xs py-1.5"
+                        value={saleTipoNcf}
+                        onChange={(e) => setSaleTipoNcf(e.target.value)}
+                      >
+                        <option value="B02">Factura Consumo (B02)</option>
+                        <option value="B01">Crédito Fiscal (B01)</option>
+                        <option value="B14">Gubernamental (B14)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-muted-foreground mb-1 block">Método de Pago</label>
+                      <select
+                        className="input-field text-xs py-1.5"
+                        value={salePaymentMethod}
+                        onChange={(e) => setSalePaymentMethod(e.target.value as MetodoPago)}
+                      >
+                        <option value="efectivo">Efectivo</option>
+                        <option value="tarjeta">Tarjeta de Crédito/Débito</option>
+                        <option value="transferencia">Transferencia Bancaria</option>
+                        <option value="credito">Crédito (A pagar)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Product Search and Picker */}
+                  <div className="card p-3 space-y-2">
+                    <label className="text-xs font-bold text-muted-foreground block">Seleccionar Productos</label>
+                    <div className="relative">
+                      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                      <input
+                        className="input-field !pl-8 text-xs py-1.5"
+                        placeholder="Buscar producto por nombre o código..."
+                        value={saleSearchProd}
+                        onChange={(e) => setSaleSearchProd(e.target.value)}
+                      />
+                    </div>
+                    <div className="max-h-36 overflow-y-auto border border-border rounded-xl divide-y divide-border text-xs">
+                      {dbProductos
+                        .filter((p) => p.nombre.toLowerCase().includes(saleSearchProd.toLowerCase()))
+                        .slice(0, 10)
+                        .map((p) => (
+                          <div
+                            key={p.id}
+                            onClick={() => handleAddProductToSaleCart(p)}
+                            className="p-2 hover:bg-primary/10 cursor-pointer flex justify-between items-center transition-colors"
+                          >
+                            <div>
+                              <span className="font-semibold text-foreground block">{p.nombre}</span>
+                              <span className="text-[10px] text-muted-foreground">Stock: {p.stock_actual} {p.unidad}</span>
+                            </div>
+                            <span className="font-bold text-primary">RD$ {p.precio_venta.toLocaleString()}</span>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+
+                  {/* Cart Table */}
+                  <div className="border border-border rounded-xl overflow-hidden">
+                    <table className="w-full text-xs">
+                      <thead className="bg-secondary/40 border-b border-border">
+                        <tr>
+                          <th className="text-left p-2 font-semibold text-muted-foreground">Producto</th>
+                          <th className="text-left p-2 font-semibold text-muted-foreground">Precio</th>
+                          <th className="text-center p-2 font-semibold text-muted-foreground">Cant.</th>
+                          <th className="text-right p-2 font-semibold text-muted-foreground">Subtotal</th>
+                          <th className="p-2"></th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {saleCart.length === 0 ? (
+                          <tr>
+                            <td colSpan={5} className="p-4 text-center text-muted-foreground">
+                              El carrito de ventas está vacío
+                            </td>
+                          </tr>
+                        ) : (
+                          saleCart.map((item, idx) => (
+                            <tr key={idx}>
+                              <td className="p-2 font-medium">{item.producto.nombre}</td>
+                              <td className="p-2">RD$ {item.precio_unitario.toLocaleString()}</td>
+                              <td className="p-2 text-center">
+                                <input
+                                  type="number"
+                                  min={1}
+                                  value={item.cantidad}
+                                  onChange={(e) => {
+                                    const val = Math.max(1, Number(e.target.value) || 1);
+                                    setSaleCart((prev) =>
+                                      prev.map((c, i) => (i === idx ? { ...c, cantidad: val } : c))
+                                    );
+                                  }}
+                                  className="input-field text-center w-14 py-0.5 text-xs inline-block"
+                                />
+                              </td>
+                              <td className="p-2 text-right font-bold">
+                                RD$ {(item.cantidad * item.precio_unitario).toLocaleString()}
+                              </td>
+                              <td className="p-2 text-right">
+                                <button
+                                  type="button"
+                                  onClick={() => setSaleCart((prev) => prev.filter((_, i) => i !== idx))}
+                                  className="p-1 text-rose-500 hover:bg-rose-500/10 rounded"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
 
-                <div className="bg-secondary/40 rounded-xl p-3 space-y-1 mt-2">
-                  <p className="font-bold text-muted-foreground text-[10px] uppercase">Rendimiento Financiero</p>
-                  <div className="flex justify-between"><span className="text-muted-foreground">Costo de Productos:</span><span>RD$ {viewingSale.cost.toLocaleString('es-DO', { minimumFractionDigits: 2 })}</span></div>
-                  <div className="flex justify-between font-bold text-success"><span>Ganancia Bruta:</span><span>RD$ {viewingSale.profit.toLocaleString('es-DO', { minimumFractionDigits: 2 })}</span></div>
+                {/* Right Col: Summary & Payment */}
+                <div className="space-y-4">
+                  <div className="card p-4 space-y-3 bg-secondary/20">
+                    <h4 className="font-bold text-foreground text-sm border-b border-border pb-2">Resumen de Factura</h4>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">Subtotal Neto</span>
+                      <span className="font-mono font-medium">RD$ {saleSubtotal.toLocaleString('es-DO', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">ITBIS Transparentado (18%)</span>
+                      <span className="font-mono font-bold text-amber-600 dark:text-amber-400">
+                        RD$ {saleTax.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    <div className="border-t border-border pt-2 flex justify-between font-black text-foreground text-base">
+                      <span>Total Venta</span>
+                      <span className="text-primary font-mono">RD$ {saleTotal.toLocaleString('es-DO', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                  </div>
+
+                  {salePaymentMethod === 'efectivo' && (
+                    <div className="card p-4 space-y-2">
+                      <label className="text-xs font-bold text-muted-foreground block">Monto Recibido</label>
+                      <input
+                        type="number"
+                        step="any"
+                        placeholder="0.00"
+                        className="input-field text-sm py-1.5 font-mono"
+                        value={saleMontoPagado || ''}
+                        onChange={(e) => setSaleMontoPagado(Number(e.target.value))}
+                      />
+                      <div className="flex justify-between text-xs font-bold pt-1">
+                        <span>Devuelta / Cambio:</span>
+                        <span className="text-emerald-600 font-mono">
+                          RD$ {saleDevuelta.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex gap-2 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowAddSaleModal(false)}
+                      className="btn-secondary text-xs flex-1 py-2"
+                    >
+                      Cancelar
+                    </button>
+                    <button type="submit" className="btn-primary text-xs flex-1 py-2 font-bold shadow-md">
+                      Procesar y Guardar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* MODAL 3: NUEVA COTIZACIÓN */}
+        {showAddQuoteModal && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/50 backdrop-blur-xs animate-in fade-in"
+            onClick={() => setShowAddQuoteModal(false)}
+          >
+            <form
+              onSubmit={handleCreateQuoteSubmit}
+              className="card w-full max-w-2xl p-6 space-y-4 shadow-2xl border-primary/30 max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between border-b border-border pb-3">
+                <div className="flex items-center gap-2">
+                  <FileText className="text-primary" size={24} />
+                  <h3 className="font-extrabold text-foreground text-lg">Nueva Cotización Comercial</h3>
+                </div>
+                <button type="button" onClick={() => setShowAddQuoteModal(false)} className="p-1 text-muted-foreground hover:text-foreground">
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 bg-secondary/20 p-3 rounded-xl text-xs">
+                <div>
+                  <label className="font-bold text-muted-foreground block mb-1">Cliente</label>
+                  <select
+                    className="input-field text-xs py-1.5"
+                    value={quoteCustomerId}
+                    onChange={(e) => setQuoteCustomerId(e.target.value)}
+                  >
+                    <option value="">Seleccionar cliente...</option>
+                    {dbClientes.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="font-bold text-muted-foreground block mb-1">Válida Hasta</label>
+                  <input
+                    type="date"
+                    className="input-field text-xs py-1.5"
+                    value={quoteValidaHasta}
+                    onChange={(e) => setQuoteValidaHasta(e.target.value)}
+                  />
                 </div>
               </div>
 
+              {/* Product Picker */}
+              <div className="card p-3 space-y-2">
+                <label className="text-xs font-bold text-muted-foreground block">Agregar Productos a Cotización</label>
+                <div className="max-h-32 overflow-y-auto border border-border rounded-xl divide-y divide-border text-xs">
+                  {dbProductos.slice(0, 8).map((p) => (
+                    <div
+                      key={p.id}
+                      onClick={() => {
+                        setQuoteCart((prev) => {
+                          const idx = prev.findIndex((item) => item.producto.id === p.id);
+                          if (idx >= 0) {
+                            const next = [...prev];
+                            next[idx].cantidad += 1;
+                            return next;
+                          }
+                          return [...prev, { producto: p, cantidad: 1, precio_unitario: p.precio_venta }];
+                        });
+                      }}
+                      className="p-2 hover:bg-primary/10 cursor-pointer flex justify-between items-center transition-colors"
+                    >
+                      <span className="font-semibold text-foreground">{p.nombre}</span>
+                      <span className="font-bold text-primary">RD$ {p.precio_venta.toLocaleString()}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Quote Cart Table */}
+              <div className="border border-border rounded-xl overflow-hidden text-xs">
+                <table className="w-full">
+                  <thead className="bg-secondary/40 border-b border-border">
+                    <tr>
+                      <th className="text-left p-2 font-semibold">Producto</th>
+                      <th className="text-left p-2 font-semibold">Precio</th>
+                      <th className="text-center p-2 font-semibold">Cant.</th>
+                      <th className="text-right p-2 font-semibold">Subtotal</th>
+                      <th className="p-2"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {quoteCart.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="p-4 text-center text-muted-foreground">
+                          Selecciona productos arriba para agregarlos a la cotización
+                        </td>
+                      </tr>
+                    ) : (
+                      quoteCart.map((item, idx) => (
+                        <tr key={idx}>
+                          <td className="p-2 font-medium">{item.producto.nombre}</td>
+                          <td className="p-2">RD$ {item.precio_unitario.toLocaleString()}</td>
+                          <td className="p-2 text-center">
+                            <input
+                              type="number"
+                              min={1}
+                              value={item.cantidad}
+                              onChange={(e) => {
+                                const val = Math.max(1, Number(e.target.value) || 1);
+                                setQuoteCart((prev) =>
+                                  prev.map((c, i) => (i === idx ? { ...c, cantidad: val } : c))
+                                );
+                              }}
+                              className="input-field text-center w-14 py-0.5 text-xs inline-block"
+                            />
+                          </td>
+                          <td className="p-2 text-right font-bold">
+                            RD$ {(item.cantidad * item.precio_unitario).toLocaleString()}
+                          </td>
+                          <td className="p-2 text-right">
+                            <button
+                              type="button"
+                              onClick={() => setQuoteCart((prev) => prev.filter((_, i) => i !== idx))}
+                              className="p-1 text-rose-500 rounded hover:bg-rose-500/10"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Totals */}
+              <div className="flex justify-between items-center pt-2 border-t border-border font-bold text-sm">
+                <span>Total Cotización:</span>
+                <span className="text-primary font-mono text-base">
+                  RD$ {quoteTotal.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-border">
+                <button
+                  type="button"
+                  onClick={() => setShowAddQuoteModal(false)}
+                  className="btn-secondary text-xs py-2"
+                >
+                  Cancelar
+                </button>
+                <button type="submit" className="btn-primary text-xs py-2 font-bold">
+                  Guardar Cotización
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* MODAL 4: CONVERTIR COTIZACIÓN A VENTA */}
+        {convertQuote && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/50 backdrop-blur-xs animate-in fade-in"
+            onClick={() => setConvertQuote(null)}
+          >
+            <div
+              className="card w-full max-w-md p-6 space-y-4 shadow-2xl border-primary/30"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between border-b border-border pb-3">
+                <div className="flex items-center gap-2">
+                  <ArrowRightLeft className="text-primary" size={22} />
+                  <h3 className="font-extrabold text-foreground text-lg">Convertir Cotización a Venta</h3>
+                </div>
+                <button type="button" onClick={() => setConvertQuote(null)} className="p-1 text-muted-foreground hover:text-foreground">
+                  <X size={18} />
+                </button>
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                Estás a punto de procesar la cotización <strong className="font-mono text-foreground">{convertQuote.codigo}</strong> por el monto total de{' '}
+                <strong className="text-primary">
+                  RD$ {convertQuote.monto_total.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                </strong>
+                . Se generará una factura formal y se descontará el stock en Supabase.
+              </p>
+
+              <div>
+                <label className="text-xs font-bold text-muted-foreground mb-1 block">Seleccionar Método de Pago</label>
+                <select
+                  className="input-field text-xs py-2 w-full"
+                  value={convertPaymentMethod}
+                  onChange={(e) => setConvertPaymentMethod(e.target.value as MetodoPago)}
+                >
+                  <option value="efectivo">Efectivo</option>
+                  <option value="tarjeta">Tarjeta de Crédito/Débito</option>
+                  <option value="transferencia">Transferencia Bancaria</option>
+                  <option value="credito">Crédito</option>
+                </select>
+              </div>
+
               <div className="flex justify-end gap-2 pt-3 border-t border-border">
-                <button type="button" onClick={() => window.print()} className="btn-secondary flex items-center gap-1.5 text-xs"><Printer size={14} /> Imprimir Factura</button>
-                <button type="button" onClick={() => setViewingSale(null)} className="btn-primary text-xs">Cerrar</button>
+                <button type="button" onClick={() => setConvertQuote(null)} className="btn-secondary text-xs py-2">
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmConvertQuote}
+                  className="btn-primary text-xs py-2 font-bold flex items-center gap-1.5"
+                >
+                  <CheckCircle size={15} /> Confirmar Facturación
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* MODAL 5: ANULAR FACTURA */}
+        {anulandoSale && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/50 backdrop-blur-xs animate-in fade-in"
+            onClick={() => setAnulandoSale(null)}
+          >
+            <div
+              className="card w-full max-w-md p-6 space-y-4 shadow-2xl border-rose-500/30"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between border-b border-border pb-3">
+                <div className="flex items-center gap-2 text-rose-600 dark:text-rose-400">
+                  <AlertTriangle size={24} />
+                  <h3 className="font-extrabold text-foreground text-lg">Anular Factura de Venta</h3>
+                </div>
+                <button type="button" onClick={() => setAnulandoSale(null)} className="p-1 text-muted-foreground hover:text-foreground">
+                  <X size={18} />
+                </button>
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                ¿Estás seguro de anular la factura <strong className="font-mono text-foreground">{anulandoSale.numero_factura}</strong> por{' '}
+                <strong className="text-rose-600 font-bold">
+                  RD$ {anulandoSale.monto_total.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                </strong>
+                ? El estado de la factura cambiará a &quot;Anulada&quot; y el stock será restaurado en la base de datos.
+              </p>
+
+              <div>
+                <label className="text-xs font-bold text-muted-foreground mb-1 block">Motivo de Anulación</label>
+                <input
+                  className="input-field text-xs py-1.5 w-full"
+                  value={anularMotivo}
+                  onChange={(e) => setAnularMotivo(e.target.value)}
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-border">
+                <button type="button" onClick={() => setAnulandoSale(null)} className="btn-secondary text-xs py-2">
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmAnular}
+                  className="btn-primary text-xs py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold flex items-center gap-1.5"
+                >
+                  <Trash2 size={14} /> Confirmar Anulación
+                </button>
               </div>
             </div>
           </div>

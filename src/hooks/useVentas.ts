@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   obtenerHistorialVentas,
+  obtenerVentaPorId,
+  anularVenta,
   procesarVenta,
   type PayloadVenta,
+  type VentaConDetalle,
 } from '@/services/ventas.service';
-import type { Venta } from '@/types/database';
 
 export function useVentas(params: {
   pagina?: number;
@@ -13,7 +15,7 @@ export function useVentas(params: {
   fechaFin?: string;
   busqueda?: string;
 } = {}) {
-  const [ventas, setVentas] = useState<Venta[]>([]);
+  const [ventas, setVentas] = useState<VentaConDetalle[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -59,5 +61,32 @@ export function useVentas(params: {
     [refetch]
   );
 
-  return { ventas, total, loading, error, procesando, refetch, cobrar };
+  const obtenerDetalle = useCallback(async (ventaId: string) => {
+    return await obtenerVentaPorId(ventaId);
+  }, []);
+
+  const anular = useCallback(
+    async (ventaId: string, motivo?: string) => {
+      setProcesando(true);
+      try {
+        await anularVenta(ventaId, motivo);
+        await refetch();
+      } finally {
+        setProcesando(false);
+      }
+    },
+    [refetch]
+  );
+
+  return {
+    ventas,
+    total,
+    loading,
+    error,
+    procesando,
+    refetch,
+    cobrar,
+    obtenerDetalle,
+    anular,
+  };
 }
