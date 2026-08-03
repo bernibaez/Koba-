@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useId } from 'react';
 import {
-  X,
   Plus,
   Trash2,
   Sparkles,
@@ -301,34 +300,27 @@ export default function ComboFormModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
-      <div className="bg-card w-full max-w-4xl max-h-[92vh] rounded-3xl border border-border/80 shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 my-auto">
-        {/* Modal Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border/80 bg-secondary/30">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-primary/10 text-primary rounded-xl">
-              <Layers size={22} />
-            </div>
-            <div>
-              <h2 className="text-lg font-black text-foreground">
-                {editingCombo ? 'Editar Combo' : 'Crear Nuevo Combo'}
-              </h2>
-              <p className="text-xs text-muted-foreground">
-                Configura los productos componentes, precios y vigencia del combo
-              </p>
-            </div>
+    <div className="space-y-6 slide-up">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-primary/10 text-primary rounded-xl">
+            <Layers size={22} />
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-2 rounded-xl text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-          >
-            <X size={20} />
-          </button>
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">
+              {editingCombo ? 'Editar Combo' : 'Crear Nuevo Combo'}
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Configura los productos componentes, precios y vigencia del combo
+            </p>
+          </div>
         </div>
+        <button type="button" onClick={onClose} className="btn-secondary">
+          ← Volver a Combos
+        </button>
+      </div>
 
-        {/* Form Body */}
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin">
+      <form onSubmit={handleSubmit} className="space-y-6">
           {/* CARD 1: INFORMACIÓN GENERAL */}
           <div className="bg-card rounded-2xl border border-border/80 p-5 space-y-4 shadow-xs">
             <div className="flex items-center gap-2 border-b border-border/60 pb-3">
@@ -941,28 +933,20 @@ export default function ComboFormModal({
               </div>
             </div>
           </div>
+
+          <div className="flex items-center justify-between gap-3 pt-2 border-t border-border">
+            <button type="button" onClick={onClose} className="btn-secondary text-xs font-bold">
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              className="btn-primary text-sm font-black px-6 py-2.5 flex items-center gap-2 shadow-md shadow-primary/20"
+            >
+              <Check size={18} />
+              {editingCombo ? 'Guardar Cambios' : 'Crear Combo'}
+            </button>
+          </div>
         </form>
-
-        {/* Modal Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-border/80 bg-card">
-          <button
-            type="button"
-            onClick={onClose}
-            className="btn-secondary text-xs font-bold"
-          >
-            Cancelar
-          </button>
-
-          <button
-            type="button"
-            onClick={handleSubmit}
-            className="btn-primary text-sm font-black px-6 py-2.5 flex items-center gap-2 shadow-md shadow-primary/20"
-          >
-            <Check size={18} />
-            {editingCombo ? 'Guardar Cambios' : 'Crear Combo'}
-          </button>
-        </div>
-      </div>
     </div>
   );
 }

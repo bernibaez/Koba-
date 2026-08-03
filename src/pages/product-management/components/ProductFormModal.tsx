@@ -1,8 +1,7 @@
 import React, { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
-import Modal from '@/components/ui/Modal';
 import type { Product } from './ProductManagementScreen';
-import { Package, Barcode, Printer, Sparkles } from 'lucide-react';
+import { Package, Printer, Sparkles } from 'lucide-react';
 import { generateUniqueBarcode } from '@/lib/barcodeUtils';
 import { logAuditEvent } from '@/lib/auditStore';
 import { toast } from 'sonner';
@@ -189,55 +188,25 @@ export default function ProductFormModal({ open, onClose, product, onSave, onPri
     ? (((Number(salePrice) - Number(costPrice)) / Number(salePrice)) * 100).toFixed(1)
     : '0.0';
 
+  if (!open) return null;
+
   return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title={isEdit ? `Editar: ${product?.name}` : 'Nuevo Producto'}
-      subtitle={isEdit ? `SKU: ${product?.sku}` : 'Completa todos los campos requeridos'}
-      size="2xl"
-      busy={isSubmitting}
-      busyLabel={isEdit ? 'Guardando producto…' : 'Creando producto…'}
-      footer={
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            {isEdit && product && onPrintLabel && (
-              <button
-                type="button"
-                onClick={() => onPrintLabel(product)}
-                className="btn-secondary text-xs flex items-center gap-1.5 py-1.5"
-              >
-                <Printer size={14} /> Imprimir Etiqueta
-              </button>
-            )}
-            <p className="text-xs text-muted-foreground">
-              Los campos con <span className="text-danger">*</span> son obligatorios
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <button type="button" onClick={onClose} className="btn-secondary">
-              Cancelar
-            </button>
-            <button
-              form="product-form"
-              type="submit"
-              disabled={isSubmitting}
-              className="btn-primary flex items-center gap-2 min-w-28 justify-center"
-            >
-              {isSubmitting ? (
-                <>
-                  <span className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
-                  Guardando...
-                </>
-              ) : (
-                <>{isEdit ? 'Guardar Cambios' : 'Crear Producto'}</>
-              )}
-            </button>
-          </div>
+    <div className="space-y-6 slide-up">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">
+            {isEdit ? `Editar: ${product?.name}` : 'Nuevo Producto'}
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            {isEdit ? `SKU: ${product?.sku}` : 'Completa todos los campos requeridos'}
+          </p>
         </div>
-      }
-    >
-      <form id="product-form" onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        <button type="button" onClick={onClose} className="btn-secondary" disabled={isSubmitting}>
+          ← Volver a Productos
+        </button>
+      </div>
+
+      <form id="product-form" onSubmit={handleSubmit(onSubmit)} className="card p-5 sm:p-6 space-y-6">
         {/* Basic Info */}
         <div>
           <div className="flex items-center gap-2 mb-4">
@@ -485,7 +454,43 @@ export default function ProductFormModal({ open, onClose, product, onSave, onPri
             </FormField>
           </div>
         </div>
+
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-4 border-t border-border">
+          <div className="flex items-center gap-2 flex-wrap">
+            {isEdit && product && onPrintLabel && (
+              <button
+                type="button"
+                onClick={() => onPrintLabel(product)}
+                className="btn-secondary text-xs flex items-center gap-1.5 py-1.5"
+              >
+                <Printer size={14} /> Imprimir Etiqueta
+              </button>
+            )}
+            <p className="text-xs text-muted-foreground">
+              Los campos con <span className="text-danger">*</span> son obligatorios
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <button type="button" onClick={onClose} className="btn-secondary" disabled={isSubmitting}>
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="btn-primary flex items-center gap-2 min-w-28 justify-center"
+            >
+              {isSubmitting ? (
+                <>
+                  <span className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
+                  Guardando...
+                </>
+              ) : (
+                <>{isEdit ? 'Guardar Cambios' : 'Crear Producto'}</>
+              )}
+            </button>
+          </div>
+        </div>
       </form>
-    </Modal>
+    </div>
   );
 }

@@ -5,7 +5,6 @@ import { exportTableToPdf, formatMoneyPdf } from '@/lib/exportPdf';
 import { useClientes } from '@/hooks/useClientes';
 import { useProveedores } from '@/hooks/useProveedores';
 import { toast } from 'sonner';
-import ModalShell from '@/components/ui/ModalShell';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 import type { TipoCliente } from '@/types/database';
 
@@ -317,7 +316,7 @@ export default function ContactsPage() {
   };
 
   const isReadonly = formMode === 'view';
-  const modalTitle =
+  const formTitle =
     formMode === 'view'
       ? tab === 'customers'
         ? 'Detalle del Cliente'
@@ -335,6 +334,135 @@ export default function ContactsPage() {
           : tab === 'suppliers'
             ? 'Nuevo Proveedor'
             : 'Nuevo Grupo';
+
+  const formSubtitle =
+    formMode === 'view'
+      ? 'Consulta la información registrada'
+      : formMode === 'edit'
+        ? 'Actualiza los datos y guarda los cambios'
+        : tab === 'customers'
+          ? 'Registra un nuevo cliente en el sistema'
+          : tab === 'suppliers'
+            ? 'Registra un nuevo proveedor en el sistema'
+            : 'Crea un nuevo grupo de clientes';
+
+  if (showModal) {
+    return (
+      <AppLayout>
+        <div className="space-y-6 slide-up">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div>
+              <h1 className="text-2xl font-bold text-foreground">{formTitle}</h1>
+              <p className="text-sm text-muted-foreground mt-1">{formSubtitle}</p>
+            </div>
+            <button type="button" onClick={closeFormModal} className="btn-secondary" disabled={saving}>
+              ← Volver a Contactos
+            </button>
+          </div>
+
+          <div className="card p-5 sm:p-6 space-y-4 max-w-3xl">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <input
+                className="input-field sm:col-span-2"
+                placeholder="Nombre"
+                value={formNombre}
+                onChange={(e) => setFormNombre(e.target.value)}
+                readOnly={isReadonly}
+                disabled={isReadonly}
+              />
+              {tab !== 'groups' && (
+                <>
+                  <input
+                    className="input-field"
+                    placeholder="Teléfono"
+                    value={formTelefono}
+                    onChange={(e) => setFormTelefono(e.target.value)}
+                    readOnly={isReadonly}
+                    disabled={isReadonly}
+                  />
+                  <input
+                    className="input-field"
+                    placeholder="Email"
+                    type="email"
+                    value={formCorreo}
+                    onChange={(e) => setFormCorreo(e.target.value)}
+                    readOnly={isReadonly}
+                    disabled={isReadonly}
+                  />
+                  <input
+                    className="input-field sm:col-span-2"
+                    placeholder="Dirección"
+                    value={formDireccion}
+                    onChange={(e) => setFormDireccion(e.target.value)}
+                    readOnly={isReadonly}
+                    disabled={isReadonly}
+                  />
+                </>
+              )}
+              {tab === 'customers' && (
+                <>
+                  <input
+                    className="input-field"
+                    placeholder="Límite de crédito"
+                    type="number"
+                    value={formCredito}
+                    onChange={(e) => setFormCredito(e.target.value)}
+                    readOnly={isReadonly}
+                    disabled={isReadonly}
+                  />
+                  <select
+                    className="input-field"
+                    value={formGrupo}
+                    onChange={(e) => setFormGrupo(e.target.value)}
+                    disabled={isReadonly}
+                  >
+                    <option value="">Tipo de cliente...</option>
+                    {TIPO_CLIENTE_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                </>
+              )}
+              {tab === 'groups' && (
+                <>
+                  <input className="input-field" placeholder="Descuento (%)" type="number" disabled={isReadonly} />
+                  <textarea
+                    className="input-field sm:col-span-2"
+                    placeholder="Descripción"
+                    rows={3}
+                    disabled={isReadonly}
+                  />
+                </>
+              )}
+            </div>
+            <div className="flex gap-3 pt-2 border-t border-border">
+              {isReadonly ? (
+                <>
+                  <button type="button" className="btn-secondary flex-1" onClick={closeFormModal}>
+                    Cerrar
+                  </button>
+                  <button type="button" className="btn-primary flex-1" onClick={() => setFormMode('edit')}>
+                    Editar
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button type="button" className="btn-secondary flex-1" disabled={saving} onClick={closeFormModal}>
+                    Cancelar
+                  </button>
+                  <button type="button" className="btn-primary flex-1" disabled={saving} onClick={handleSave}>
+                    {saving ? 'Guardando…' : 'Guardar'}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>
@@ -543,101 +671,6 @@ export default function ContactsPage() {
           </div>
         )}
       </div>
-
-      <ModalShell
-        open={showModal}
-        onClose={closeFormModal}
-        size="lg"
-        busy={saving}
-        busyLabel="Guardando…"
-        className="p-6"
-      >
-        <h2 className="text-lg font-bold text-foreground mb-4">{modalTitle}</h2>
-        <div className="grid grid-cols-2 gap-3">
-          <input
-            className="input-field col-span-2"
-            placeholder="Nombre"
-            value={formNombre}
-            onChange={(e) => setFormNombre(e.target.value)}
-            readOnly={isReadonly}
-            disabled={isReadonly}
-          />
-          {tab !== 'groups' && <>
-            <input
-              className="input-field"
-              placeholder="Teléfono"
-              value={formTelefono}
-              onChange={(e) => setFormTelefono(e.target.value)}
-              readOnly={isReadonly}
-              disabled={isReadonly}
-            />
-            <input
-              className="input-field"
-              placeholder="Email"
-              type="email"
-              value={formCorreo}
-              onChange={(e) => setFormCorreo(e.target.value)}
-              readOnly={isReadonly}
-              disabled={isReadonly}
-            />
-            <input
-              className="input-field col-span-2"
-              placeholder="Dirección"
-              value={formDireccion}
-              onChange={(e) => setFormDireccion(e.target.value)}
-              readOnly={isReadonly}
-              disabled={isReadonly}
-            />
-          </>}
-          {tab === 'customers' && <>
-            <input
-              className="input-field"
-              placeholder="Límite de crédito"
-              type="number"
-              value={formCredito}
-              onChange={(e) => setFormCredito(e.target.value)}
-              readOnly={isReadonly}
-              disabled={isReadonly}
-            />
-            <select
-              className="input-field"
-              value={formGrupo}
-              onChange={(e) => setFormGrupo(e.target.value)}
-              disabled={isReadonly}
-            >
-              <option value="">Tipo de cliente...</option>
-              {TIPO_CLIENTE_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
-          </>}
-          {tab === 'groups' && <>
-            <input className="input-field" placeholder="Descuento (%)" type="number" disabled={isReadonly} />
-            <textarea className="input-field col-span-2" placeholder="Descripción" rows={3} disabled={isReadonly} />
-          </>}
-        </div>
-        <div className="flex gap-3 mt-6">
-          {isReadonly ? (
-            <>
-              <button type="button" className="btn-secondary flex-1" onClick={closeFormModal}>Cerrar</button>
-              <button
-                type="button"
-                className="btn-primary flex-1"
-                onClick={() => setFormMode('edit')}
-              >
-                Editar
-              </button>
-            </>
-          ) : (
-            <>
-              <button type="button" className="btn-secondary flex-1" disabled={saving} onClick={closeFormModal}>Cancelar</button>
-              <button type="button" className="btn-primary flex-1" disabled={saving} onClick={handleSave}>
-                Guardar
-              </button>
-            </>
-          )}
-        </div>
-      </ModalShell>
 
       <ConfirmModal
         open={!!deleteTarget}

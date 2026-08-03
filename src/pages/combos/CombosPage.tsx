@@ -82,6 +82,7 @@ export default function CombosPage() {
   };
 
   const handleEdit = (combo: Combo) => {
+    setDetailCombo(null);
     setEditingCombo(combo);
     setFormOpen(true);
   };
@@ -177,6 +178,24 @@ export default function CombosPage() {
     setValidityFilter('all');
   };
 
+  if (formOpen) {
+    return (
+      <AppLayout>
+        <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
+          <ComboFormModal
+            isOpen={formOpen}
+            onClose={() => {
+              setFormOpen(false);
+              setEditingCombo(null);
+            }}
+            onSave={handleSaveCombo}
+            editingCombo={editingCombo}
+          />
+        </div>
+      </AppLayout>
+    );
+  }
+
   return (
     <AppLayout>
       <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
@@ -213,14 +232,6 @@ export default function CombosPage() {
           onToggleStatus={handleToggleStatus}
           onDeleteRequest={(combo) => setDeleteTargetCombo(combo)}
           onViewDetail={(combo) => setDetailCombo(combo)}
-        />
-
-        {/* Create / Edit Modal */}
-        <ComboFormModal
-          isOpen={formOpen}
-          onClose={() => setFormOpen(false)}
-          onSave={handleSaveCombo}
-          editingCombo={editingCombo}
         />
 
         {/* Detail Inspection Modal */}

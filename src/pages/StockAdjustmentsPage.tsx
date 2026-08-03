@@ -146,6 +146,13 @@ export default function StockAdjustmentsPage() {
   const totalSalidas = adjustments.filter((a) => a.type === 'salida').reduce((sum, a) => sum + a.qty, 0);
   const totalPerdidas = adjustments.filter((a) => a.type === 'perdida').reduce((sum, a) => sum + a.qty, 0);
 
+  const closeBlockForm = () => {
+    setShowModal(false);
+    setBlockSearch('');
+    setSelectedCategory('all');
+    setItemReasons({});
+  };
+
   const handleSaveBlockAdjustment = async () => {
     const adjustmentsToApply: { product: ProductItem; newQty: number; reason: string }[] = [];
 
@@ -181,7 +188,7 @@ export default function StockAdjustmentsPage() {
         }))
       );
       refreshData();
-      setShowModal(false);
+      closeBlockForm();
       toast.success(`✓ Se aplicaron ajustes a ${adjustmentsToApply.length} producto(s) exitosamente`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Error al aplicar ajustes');
@@ -208,6 +215,208 @@ export default function StockAdjustmentsPage() {
       landscape: true,
     });
   };
+
+  if (showModal) {
+    return (
+      <AppLayout>
+        <div className="space-y-6 slide-up">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div>
+              <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+                <Sliders className="text-primary" size={26} />
+                Ajuste de Stock por Bloque
+              </h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                Escribe un término (ej. &quot;arroz&quot;, &quot;aceite&quot;) o selecciona una categoría para ajustar existencias en grupo
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              {modifiedCount > 0 && (
+                <span className="px-3 py-1 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-xs font-black rounded-xl">
+                  {modifiedCount} producto(s) modificado(s)
+                </span>
+              )}
+              <button type="button" onClick={closeBlockForm} className="btn-secondary">
+                ← Volver a Ajustes
+              </button>
+            </div>
+          </div>
+
+          <div className="card p-5 space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-extrabold text-foreground mb-1">
+                  Buscar Término o Grupo de Productos (ej. &quot;Arroz&quot;)
+                </label>
+                <div className="relative">
+                  <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-primary" />
+                  <input
+                    type="text"
+                    placeholder="Escribe arroz, carne, aceite o nombre de producto..."
+                    value={blockSearch}
+                    onChange={(e) => setBlockSearch(e.target.value)}
+                    className="input-field pl-10 h-11 text-sm font-bold shadow-2xs"
+                    autoFocus
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-extrabold text-foreground mb-1">Filtrar por Categoría</label>
+                <select
+                  value={selectedCategory}
+                  onChange={(e) => setSelectedCategory(e.target.value)}
+                  className="input-field h-11 text-sm font-bold"
+                >
+                  <option value="all">Todas las Categorías</option>
+                  {categoriesList.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-muted-foreground mb-1">
+                Motivo General del Ajuste de Inventario
+              </label>
+              <input
+                type="text"
+                value={blockReason}
+                onChange={(e) => setBlockReason(e.target.value)}
+                placeholder="Ej. Conteo físico de inventario mensual..."
+                className="input-field h-10 text-xs font-medium"
+              />
+            </div>
+          </div>
+
+          <div className="card p-5 space-y-3">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-bold text-muted-foreground uppercase tracking-wider">
+                Productos encontrados en este Bloque ({matchingBlockProducts.length})
+              </span>
+              <span className="text-[11px] text-muted-foreground">
+                Ingresa la cantidad física real en el campo &quot;Nuevo Stock&quot;
+              </span>
+            </div>
+
+            {matchingBlockProducts.length === 0 ? (
+              <div className="p-12 border-2 border-dashed border-border rounded-2xl text-center space-y-2">
+                <Package size={32} className="mx-auto text-muted-foreground opacity-50" />
+                <p className="font-bold text-foreground text-sm">No se encontraron productos en este bloque</p>
+                <p className="text-xs text-muted-foreground">
+                  Prueba buscando otro término como &quot;arroz&quot;, &quot;aceite&quot; o selecciona &quot;Todas las Categorías&quot;.
+                </p>
+              </div>
+            ) : (
+              <div className="border border-border rounded-2xl overflow-hidden overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-secondary/60 text-muted-foreground font-black uppercase">
+                    <tr>
+                      <th className="p-3">Producto / SKU</th>
+                      <th className="p-3">Categoría</th>
+                      <th className="p-3 text-center">Stock Actual</th>
+                      <th className="p-3 text-center">Nuevo Stock Físico</th>
+                      <th className="p-3 text-center">Diferencia</th>
+                      <th className="p-3">Motivo Renglón (Opcional)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/60">
+                    {matchingBlockProducts.map((p) => {
+                      const currentVal = physicalCounts[p.id] !== undefined ? physicalCounts[p.id] : p.currentStock;
+                      const delta = currentVal - p.currentStock;
+                      const isChanged = delta !== 0;
+
+                      return (
+                        <tr
+                          key={p.id}
+                          className={`transition-colors ${isChanged ? 'bg-primary/5' : 'hover:bg-secondary/20'}`}
+                        >
+                          <td className="p-3">
+                            <p className="font-extrabold text-foreground text-sm">{p.name}</p>
+                            <p className="font-mono text-[11px] text-muted-foreground">{p.sku}</p>
+                          </td>
+                          <td className="p-3 font-semibold text-muted-foreground">
+                            <span className="px-2 py-0.5 bg-secondary rounded-md text-[11px] font-bold text-foreground">
+                              {p.category}
+                            </span>
+                          </td>
+                          <td className="p-3 text-center font-bold text-muted-foreground text-sm tabular-nums">
+                            {p.currentStock} {p.unit}
+                          </td>
+                          <td className="p-3 text-center">
+                            <input
+                              type="number"
+                              min={0}
+                              value={currentVal}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value, 10);
+                                setPhysicalCounts((prev) => ({
+                                  ...prev,
+                                  [p.id]: isNaN(val) ? 0 : Math.max(0, val),
+                                }));
+                              }}
+                              className={`input-field w-24 text-center font-black text-sm h-10 tabular-nums ${
+                                isChanged ? 'border-primary ring-2 ring-primary/20 text-primary' : ''
+                              }`}
+                            />
+                          </td>
+                          <td className="p-3 text-center">
+                            {delta === 0 ? (
+                              <span className="text-muted-foreground font-semibold">Sin cambio</span>
+                            ) : (
+                              <span
+                                className={`px-2.5 py-1 rounded-xl text-xs font-black tabular-nums ${
+                                  delta > 0
+                                    ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
+                                    : 'bg-danger-bg text-danger border border-danger/30'
+                                }`}
+                              >
+                                {delta > 0 ? `+${delta}` : `${delta}`} {p.unit}
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-3">
+                            <input
+                              type="text"
+                              placeholder={blockReason}
+                              value={itemReasons[p.id] || ''}
+                              onChange={(e) =>
+                                setItemReasons((prev) => ({
+                                  ...prev,
+                                  [p.id]: e.target.value,
+                                }))
+                              }
+                              className="input-field text-xs h-9"
+                            />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-border">
+              <button type="button" onClick={closeBlockForm} className="btn-secondary text-xs px-4 py-2.5 font-bold">
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveBlockAdjustment}
+                disabled={modifiedCount === 0}
+                className="btn-primary text-xs px-6 py-2.5 font-black flex items-center gap-2 shadow-md disabled:opacity-50"
+              >
+                <Check size={16} />
+                Aplicar Ajustes del Bloque ({modifiedCount} modificado{modifiedCount === 1 ? '' : 's'})
+              </button>
+            </div>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>
@@ -400,221 +609,6 @@ export default function StockAdjustmentsPage() {
           </div>
         </div>
       </div>
-
-      {/* MODAL PRINCIPAL: AJUSTE POR BLOQUE / CATEGORÍA */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="w-full max-w-4xl bg-card rounded-3xl border border-border shadow-2xl overflow-hidden flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95 duration-150">
-            {/* Modal Header */}
-            <div className="px-6 py-4 border-b border-border flex items-center justify-between bg-primary/5">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-primary/15 text-primary flex items-center justify-center font-bold">
-                  <Sliders size={22} />
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-foreground text-lg">Ajuste de Stock por Bloque / Categoría</h3>
-                  <p className="text-xs text-muted-foreground">
-                    Escribe un término (ej. "arroz", "aceite") o selecciona una categoría para ajustar existencias en grupo
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3">
-                {modifiedCount > 0 && (
-                  <span className="px-3 py-1 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-xs font-black rounded-xl animate-bounce">
-                    {modifiedCount} producto(s) modificado(s)
-                  </span>
-                )}
-                <button type="button" onClick={() => setShowModal(false)} className="text-muted-foreground hover:text-foreground p-1">
-                  <X size={22} />
-                </button>
-              </div>
-            </div>
-
-            {/* Controls Bar: Search & Category Picker */}
-            <div className="p-5 border-b border-border bg-secondary/20 space-y-3">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {/* Search Bar */}
-                <div className="sm:col-span-2">
-                  <label className="block text-xs font-extrabold text-foreground mb-1">
-                    Buscar Término o Grupo de Productos (ej. "Arroz")
-                  </label>
-                  <div className="relative">
-                    <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-primary" />
-                    <input
-                      type="text"
-                      placeholder="Escribe arroz, carne, aceite o nombre de producto..."
-                      value={blockSearch}
-                      onChange={(e) => setBlockSearch(e.target.value)}
-                      className="input-field pl-10 h-11 text-sm font-bold shadow-2xs"
-                      autoFocus
-                    />
-                  </div>
-                </div>
-
-                {/* Category Filter */}
-                <div>
-                  <label className="block text-xs font-extrabold text-foreground mb-1">Filtrar por Categoría</label>
-                  <select
-                    value={selectedCategory}
-                    onChange={(e) => setSelectedCategory(e.target.value)}
-                    className="input-field h-11 text-sm font-bold"
-                  >
-                    <option value="all">Todas las Categorías</option>
-                    {categoriesList.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Global Reason for Block Adjustment */}
-              <div>
-                <label className="block text-xs font-bold text-muted-foreground mb-1">
-                  Motivo General del Ajuste de Inventario
-                </label>
-                <input
-                  type="text"
-                  value={blockReason}
-                  onChange={(e) => setBlockReason(e.target.value)}
-                  placeholder="Ej. Conteo físico de inventario mensual..."
-                  className="input-field h-10 text-xs font-medium"
-                />
-              </div>
-            </div>
-
-            {/* Block Products Table */}
-            <div className="p-5 overflow-y-auto flex-1 scrollbar-thin space-y-2">
-              <div className="flex items-center justify-between text-xs mb-2">
-                <span className="font-bold text-muted-foreground uppercase tracking-wider">
-                  Productos encontrados en este Bloque ({matchingBlockProducts.length})
-                </span>
-                <span className="text-[11px] text-muted-foreground">
-                  Ingresa la cantidad física real en el campo "Nuevo Stock"
-                </span>
-              </div>
-
-              {matchingBlockProducts.length === 0 ? (
-                <div className="p-12 border-2 border-dashed border-border rounded-2xl text-center space-y-2">
-                  <Package size={32} className="mx-auto text-muted-foreground opacity-50" />
-                  <p className="font-bold text-foreground text-sm">No se encontraron productos en este bloque</p>
-                  <p className="text-xs text-muted-foreground">
-                    Prueba buscando otro término como "arroz", "aceite" o selecciona "Todas las Categorías".
-                  </p>
-                </div>
-              ) : (
-                <div className="border border-border rounded-2xl overflow-hidden divide-y divide-border/60">
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-secondary/60 text-muted-foreground font-black uppercase">
-                      <tr>
-                        <th className="p-3">Producto / SKU</th>
-                        <th className="p-3">Categoría</th>
-                        <th className="p-3 text-center">Stock Actual</th>
-                        <th className="p-3 text-center">Nuevo Stock Físico</th>
-                        <th className="p-3 text-center">Diferencia</th>
-                        <th className="p-3">Motivo Renglón (Opcional)</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border/60">
-                      {matchingBlockProducts.map((p) => {
-                        const currentVal = physicalCounts[p.id] !== undefined ? physicalCounts[p.id] : p.currentStock;
-                        const delta = currentVal - p.currentStock;
-                        const isChanged = delta !== 0;
-
-                        return (
-                          <tr key={p.id} className={`transition-colors ${isChanged ? 'bg-primary/5' : 'hover:bg-secondary/20'}`}>
-                            <td className="p-3">
-                              <p className="font-extrabold text-foreground text-sm">{p.name}</p>
-                              <p className="font-mono text-[11px] text-muted-foreground">{p.sku}</p>
-                            </td>
-                            <td className="p-3 font-semibold text-muted-foreground">
-                              <span className="px-2 py-0.5 bg-secondary rounded-md text-[11px] font-bold text-foreground">
-                                {p.category}
-                              </span>
-                            </td>
-                            <td className="p-3 text-center font-bold text-muted-foreground text-sm tabular-nums">
-                              {p.currentStock} {p.unit}
-                            </td>
-                            <td className="p-3 text-center">
-                              <input
-                                type="number"
-                                min={0}
-                                value={currentVal}
-                                onChange={(e) => {
-                                  const val = parseInt(e.target.value, 10);
-                                  setPhysicalCounts((prev) => ({
-                                    ...prev,
-                                    [p.id]: isNaN(val) ? 0 : Math.max(0, val),
-                                  }));
-                                }}
-                                className={`input-field w-24 text-center font-black text-sm h-10 tabular-nums ${
-                                  isChanged ? 'border-primary ring-2 ring-primary/20 text-primary' : ''
-                                }`}
-                              />
-                            </td>
-                            <td className="p-3 text-center">
-                              {delta === 0 ? (
-                                <span className="text-muted-foreground font-semibold">Sin cambio</span>
-                              ) : (
-                                <span
-                                  className={`px-2.5 py-1 rounded-xl text-xs font-black tabular-nums ${
-                                    delta > 0
-                                      ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
-                                      : 'bg-danger-bg text-danger border border-danger/30'
-                                  }`}
-                                >
-                                  {delta > 0 ? `+${delta}` : `${delta}`} {p.unit}
-                                </span>
-                              )}
-                            </td>
-                            <td className="p-3">
-                              <input
-                                type="text"
-                                placeholder={blockReason}
-                                value={itemReasons[p.id] || ''}
-                                onChange={(e) =>
-                                  setItemReasons((prev) => ({
-                                    ...prev,
-                                    [p.id]: e.target.value,
-                                  }))
-                                }
-                                className="input-field text-xs h-9"
-                              />
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-
-            {/* Modal Actions Footer */}
-            <div className="p-4 border-t border-border flex flex-wrap items-center justify-between gap-3 bg-secondary/20">
-              <button
-                type="button"
-                onClick={() => setShowModal(false)}
-                className="btn-secondary text-xs px-4 py-2.5 font-bold"
-              >
-                Cancelar
-              </button>
-
-              <button
-                type="button"
-                onClick={handleSaveBlockAdjustment}
-                disabled={modifiedCount === 0}
-                className="btn-primary text-xs px-6 py-2.5 font-black flex items-center gap-2 shadow-md disabled:opacity-50"
-              >
-                <Check size={16} />
-                Aplicar Ajustes del Bloque ({modifiedCount} modificado{modifiedCount === 1 ? '' : 's'})
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* DETAIL MODAL */}
       {detailItem && (

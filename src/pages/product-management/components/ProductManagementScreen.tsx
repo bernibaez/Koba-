@@ -206,6 +206,29 @@ export default function ProductManagementScreen() {
     });
   };
 
+  if (addModalOpen) {
+    return (
+      <>
+        <ProductFormModal
+          open={addModalOpen}
+          onClose={() => {
+            setAddModalOpen(false);
+            setEditProduct(null);
+          }}
+          product={editProduct}
+          onSave={handleSaveProduct}
+          onPrintLabel={(p) => setLabelModalProducts([p])}
+        />
+        {labelModalProducts && (
+          <PriceLabelModal
+            products={labelModalProducts}
+            onClose={() => setLabelModalProducts(null)}
+          />
+        )}
+      </>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <ProductsHeader
@@ -256,14 +279,6 @@ export default function ProductManagementScreen() {
             await refetch();
           }
         }}
-      />
-
-      <ProductFormModal
-        open={addModalOpen}
-        onClose={() => { setAddModalOpen(false); setEditProduct(null); }}
-        product={editProduct}
-        onSave={handleSaveProduct}
-        onPrintLabel={(p) => setLabelModalProducts([p])}
       />
 
       <ModalShell
