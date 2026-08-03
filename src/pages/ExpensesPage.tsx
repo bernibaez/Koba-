@@ -164,6 +164,115 @@ export default function ExpensesPage() {
     );
   }
 
+  if (showModal) {
+    const formTitle =
+      tab === 'list' ? (editingGasto ? 'Editar Gasto' : 'Nuevo Gasto') : 'Nueva Categoría';
+    const formSubtitle =
+      tab === 'list'
+        ? editingGasto
+          ? `Actualiza los datos de ${editingGasto.code}`
+          : 'Registra un gasto operativo'
+        : 'Define una categoría con presupuesto mensual';
+
+    return (
+      <AppLayout>
+        <div className="space-y-6 slide-up">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div>
+              <h1 className="text-2xl font-bold text-foreground">{formTitle}</h1>
+              <p className="text-sm text-muted-foreground mt-1">{formSubtitle}</p>
+            </div>
+            <button type="button" onClick={closeFormModal} className="btn-secondary" disabled={saving}>
+              ← Volver a Gastos
+            </button>
+          </div>
+
+          <div className="card p-5 sm:p-6 space-y-4 max-w-3xl">
+            {tab === 'list' ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <select
+                  className="input-field sm:col-span-2"
+                  value={catId}
+                  onChange={(e) => setCatId(e.target.value)}
+                >
+                  <option value="">Seleccionar categoría...</option>
+                  {categorias.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  className="input-field sm:col-span-2"
+                  placeholder="Descripción del gasto"
+                  value={descripcion}
+                  onChange={(e) => setDescripcion(e.target.value)}
+                />
+                <input
+                  className="input-field"
+                  placeholder="Monto (RD$)"
+                  type="number"
+                  value={monto}
+                  onChange={(e) => setMonto(e.target.value)}
+                />
+                <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    checked={tieneRecibo}
+                    onChange={(e) => setTieneRecibo(e.target.checked)}
+                  />
+                  Tiene comprobante
+                </label>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <input
+                  className="input-field"
+                  placeholder="Nombre de la categoría"
+                  value={catNombre}
+                  onChange={(e) => setCatNombre(e.target.value)}
+                />
+                <textarea
+                  className="input-field"
+                  placeholder="Descripción"
+                  rows={3}
+                  value={catDesc}
+                  onChange={(e) => setCatDesc(e.target.value)}
+                />
+                <input
+                  className="input-field"
+                  placeholder="Presupuesto mensual (RD$)"
+                  type="number"
+                  value={catPresupuesto}
+                  onChange={(e) => setCatPresupuesto(e.target.value)}
+                />
+              </div>
+            )}
+
+            <div className="flex flex-col-reverse sm:flex-row gap-3 pt-2 border-t border-border">
+              <button
+                type="button"
+                className="btn-secondary flex-1"
+                disabled={saving}
+                onClick={closeFormModal}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="btn-primary flex-1"
+                disabled={saving}
+                onClick={handleSave}
+              >
+                {saving ? 'Guardando…' : 'Guardar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
+
   return (
     <AppLayout>
       <div className="space-y-6 slide-up">
@@ -436,83 +545,6 @@ export default function ExpensesPage() {
           </div>
         )}
       </div>
-
-      <ModalShell
-        open={showModal}
-        onClose={closeFormModal}
-        size="md"
-        busy={saving}
-        busyLabel="Guardando…"
-        className="p-6"
-      >
-        <h2 className="text-lg font-bold text-foreground mb-4">
-          {tab === 'list'
-            ? editingGasto
-              ? 'Editar Gasto'
-              : 'Nuevo Gasto'
-            : 'Nueva Categoría'}
-        </h2>
-        <div className="space-y-3">
-          {tab === 'list' ? (
-            <>
-              <select className="input-field" value={catId} onChange={(e) => setCatId(e.target.value)}>
-                <option value="">Seleccionar categoría...</option>
-                {categorias.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-              <input
-                className="input-field"
-                placeholder="Descripción del gasto"
-                value={descripcion}
-                onChange={(e) => setDescripcion(e.target.value)}
-              />
-              <input
-                className="input-field"
-                placeholder="Monto (RD$)"
-                type="number"
-                value={monto}
-                onChange={(e) => setMonto(e.target.value)}
-              />
-              <label className="flex items-center gap-2 text-sm text-muted-foreground">
-                <input type="checkbox" checked={tieneRecibo} onChange={(e) => setTieneRecibo(e.target.checked)} />
-                Tiene comprobante
-              </label>
-            </>
-          ) : (
-            <>
-              <input
-                className="input-field"
-                placeholder="Nombre de la categoría"
-                value={catNombre}
-                onChange={(e) => setCatNombre(e.target.value)}
-              />
-              <textarea
-                className="input-field"
-                placeholder="Descripción"
-                rows={3}
-                value={catDesc}
-                onChange={(e) => setCatDesc(e.target.value)}
-              />
-              <input
-                className="input-field"
-                placeholder="Presupuesto mensual (RD$)"
-                type="number"
-                value={catPresupuesto}
-                onChange={(e) => setCatPresupuesto(e.target.value)}
-              />
-            </>
-          )}
-        </div>
-        <div className="flex gap-3 mt-6">
-          <button type="button" className="btn-secondary flex-1" disabled={saving} onClick={closeFormModal}>
-            Cancelar
-          </button>
-          <button type="button" className="btn-primary flex-1" disabled={saving} onClick={handleSave}>
-            Guardar
-          </button>
-        </div>
-      </ModalShell>
 
       <ModalShell
         open={!!viewingGasto}
