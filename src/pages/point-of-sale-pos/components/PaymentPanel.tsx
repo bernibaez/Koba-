@@ -4,14 +4,9 @@ import { toast } from 'sonner';
 import type { CartItem, Customer } from './POSTerminal';
 import type { PaymentSplit } from '@/lib/posStore';
 import { logAuditEvent } from '@/lib/auditStore';
-import {
-  generateNextNCF,
-  saveFiscalInvoice,
-  validateRNC,
-  NCF_TYPES,
-  type NCFType,
-  type FiscalInvoiceRecord,
-} from '@/lib/ncfStore';
+import { validateRNC, NCF_TYPES, type NCFType, type FiscalInvoiceRecord } from '@/lib/ncfStore';
+import { generarSiguienteNcf } from '@/services/ncf.service';
+import { isSupabaseConfigured } from '@/services/clienteSupabase';
 
 type PaymentMethod = 'cash' | 'card' | 'transfer' | 'credit' | 'split';
 
@@ -114,7 +109,7 @@ export default function PaymentPanel({
     return null;
   };
 
-  const handleProcess = () => {
+  const handleProcess = async () => {
     if (cart.length === 0) {
       toast.error('El carrito está vacío');
       return;
@@ -143,11 +138,15 @@ export default function PaymentPanel({
     if (!payments) return;
 
     setProcessing(true);
-    const computedChange = method === 'cash' ? change : method === 'split' ? Math.max(0, splitNums.cash - (payments.cash || 0)) : 0;
+    const computedChange =
+      method === 'cash'
+        ? change
+        : method === 'split'
+          ? Math.max(0, splitNums.cash - (payments.cash || 0))
+          : 0;
     setLastChange(computedChange);
 
-    setTimeout(() => {
-      setProcessing(false);
+    try {
       const parts = [
         payments.cash > 0 ? `Efectivo ${fmt(payments.cash)}` : null,
         payments.card > 0 ? `Tarjeta ${fmt(payments.card)}` : null,
@@ -158,12 +157,18 @@ export default function PaymentPanel({
       let fiscalInvoice: FiscalInvoiceRecord | undefined;
 
       if (fiscalEnabled) {
-        // Generate NCF and Fiscal Invoice
-        const { ncf, expirationDate } = generateNextNCF(ncfType);
         const now = new Date();
-
         const subtotalNet = total / 1.18;
         const totalItbis = total - subtotalNet;
+
+        // En Supabase el NCF lo asigna procesar_venta_pos (evita doble avance de secuencia).
+        let ncf = '';
+        let expirationDate = '2027-12-31';
+        if (!isSupabaseConfigured()) {
+          const gen = await generarSiguienteNcf(ncfType);
+          ncf = gen.ncf;
+          expirationDate = gen.expirationDate;
+        }
 
         fiscalInvoice = {
           id: `inv-${Date.now()}`,
@@ -192,11 +197,6 @@ export default function PaymentPanel({
             };
           }),
         };
-
-        saveFiscalInvoice(fiscalInvoice);
-        toast.success(`Venta completada — NCF: ${ncf}`);
-      } else {
-        toast.success(`Venta completada — ${fmt(total)} (Sin Comprobante Fiscal)`);
       }
 
       logAuditEvent({
@@ -205,13 +205,20 @@ export default function PaymentPanel({
         action: 'Venta',
         module: 'POS',
         details: fiscalInvoice
-          ? `Factura Fiscal ${fiscalInvoice.ncf} emitida por ${fmt(total)} (${parts.join(' · ')})`
+          ? `Factura Fiscal (${fiscalInvoice.ncfType}) por ${fmt(total)} (${parts.join(' · ')})`
           : `Venta procesada por ${fmt(total)} (${parts.join(' · ')})`,
-        after: { total, payments, ncf: fiscalInvoice?.ncf, change: computedChange, cartCount: cart.length },
+        after: { total, payments, ncfType: fiscalInvoice?.ncfType, change: computedChange, cartCount: cart.length },
       });
 
-      void Promise.resolve(onComplete(payments, fiscalInvoice));
-    }, 400);
+      await Promise.resolve(onComplete(payments, fiscalInvoice));
+      if (!fiscalEnabled) {
+        toast.success(`Venta completada — ${fmt(total)} (Sin Comprobante Fiscal)`);
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Error al procesar el pago');
+    } finally {
+      setProcessing(false);
+    }
   };
 
   if (orderCompleted) {

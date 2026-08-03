@@ -17,7 +17,8 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { Combo, ComboItem, PricingMode } from '@/lib/comboStore';
-import { getStoredProducts, ProductItem } from '@/lib/productStore';
+import type { ProductItem } from '@/lib/productStore';
+import { obtenerProductos, productoAUi } from '@/services/productos.service';
 import CategoryIcon from '@/components/ui/CategoryIcon';
 import { toast } from 'sonner';
 
@@ -103,8 +104,15 @@ export default function ComboFormModal({
   const [prodCategoryFilter, setProdCategoryFilter] = useState('all');
 
   useEffect(() => {
-    const prods = getStoredProducts();
-    setAvailableProducts(prods);
+    let alive = true;
+    (async () => {
+      try {
+        const res = await obtenerProductos({ pagina: 1, limite: 500, estado: 'activo' });
+        if (alive) setAvailableProducts(res.datos.map(productoAUi) as ProductItem[]);
+      } catch {
+        if (alive) setAvailableProducts([]);
+      }
+    })();
 
     if (editingCombo) {
       setName(editingCombo.name);
@@ -154,6 +162,10 @@ export default function ComboFormModal({
       setStartTime('06:00');
       setEndTime('22:00');
     }
+
+    return () => {
+      alive = false;
+    };
   }, [editingCombo, isOpen]);
 
   // Real-time calculations

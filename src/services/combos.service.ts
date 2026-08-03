@@ -24,6 +24,8 @@ const DESC_DB_A_UI: Record<TipoDescuento, PricingMode> = {
 
 export type ComboConItems = Combo & { items: ComboItem[] };
 
+type ItemConMeta = ComboItem & { _nombre?: string; _sku?: string };
+
 export function comboDbAUi(c: Combo, items: ComboItem[] = []): UiCombo {
   const normal = Number(c.precio_normal);
   const price = Number(c.precio_venta);
@@ -55,18 +57,19 @@ export function comboDbAUi(c: Combo, items: ComboItem[] = []): UiCombo {
     startTime: '00:00',
     endTime: '23:59',
     image: c.imagen_url ?? '',
-    items: items.map(
-      (it): UiComboItem => ({
+    items: items.map((it): UiComboItem => {
+      const meta = it as ItemConMeta;
+      return {
         id: it.id,
         productId: it.producto_id,
-        sku: '',
-        name: '',
+        sku: meta._sku ?? '',
+        name: meta._nombre ?? '',
         quantity: it.cantidad,
         unitPrice: Number(it.precio_unitario),
         costPrice: Number(it.costo_unitario),
         subtotal: Number(it.subtotal),
-      })
-    ),
+      };
+    }),
     createdAt: c.creado_en ?? new Date().toISOString(),
     updatedAt: c.actualizado_en ?? new Date().toISOString(),
   };
@@ -123,7 +126,9 @@ export async function obtenerCombos(opts?: {
           costo_unitario: it.costPrice,
           precio_unitario: it.unitPrice,
           subtotal: it.subtotal,
-        })),
+          _nombre: it.name,
+          _sku: it.sku,
+        })) as ComboItem[],
       };
     });
   }
@@ -144,14 +149,33 @@ export async function obtenerCombos(opts?: {
     .in('combo_id', ids);
   if (itemsErr) throw itemsErr;
 
-  const byCombo = new Map<string, ComboItem[]>();
+  const byCombo = new Map<string, ItemConMeta[]>();
   for (const it of (items ?? []) as ComboItem[]) {
     const arr = byCombo.get(it.combo_id) ?? [];
     arr.push(it);
     byCombo.set(it.combo_id, arr);
   }
 
-  return combos.map((c) => ({ ...c, items: byCombo.get(c.id) ?? [] }));
+  const productIds = [...new Set(((items ?? []) as ComboItem[]).map((it) => it.producto_id).filter(Boolean))];
+  const productMeta = new Map<string, { nombre: string; sku: string }>();
+  if (productIds.length > 0) {
+    const { data: prods } = await sb.from('productos').select('id, nombre, sku').in('id', productIds);
+    for (const p of prods ?? []) {
+      productMeta.set(String((p as { id: string }).id), {
+        nombre: String((p as { nombre: string }).nombre ?? ''),
+        sku: String((p as { sku: string }).sku ?? ''),
+      });
+    }
+  }
+
+  return combos.map((c) => ({
+    ...c,
+    items: (byCombo.get(c.id) ?? []).map((it) => ({
+      ...it,
+      _nombre: productMeta.get(it.producto_id)?.nombre ?? '',
+      _sku: productMeta.get(it.producto_id)?.sku ?? '',
+    })),
+  }));
 }
 
 export async function obtenerComboPorId(id: string): Promise<ComboConItems | null> {

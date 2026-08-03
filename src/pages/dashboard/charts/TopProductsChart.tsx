@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   BarChart,
   Bar,
@@ -9,17 +9,7 @@ import {
   ResponsiveContainer,
   Cell,
 } from 'recharts';
-
-const data = [
-  { name: 'Arroz Selecto 5lb', ventas: 48200 },
-  { name: 'Aceite Vegetal 1L', ventas: 41800 },
-  { name: 'Pollo Entero/lb', ventas: 38400 },
-  { name: 'Leche Evaporada', ventas: 32100 },
-  { name: 'Azúcar Blanca 5lb', ventas: 28700 },
-  { name: 'Huevos x12', ventas: 24500 },
-  { name: 'Pan de Agua', ventas: 21300 },
-  { name: 'Habichuelas Neg.', ventas: 18900 },
-];
+import { obtenerTopProductosVendidos, type ProductoTopVenta } from '@/services/dashboard.service';
 
 interface CustomTooltipProps {
   active?: boolean;
@@ -51,6 +41,38 @@ const COLORS = [
 ];
 
 export default function TopProductsChart() {
+  const [data, setData] = useState<ProductoTopVenta[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const rows = await obtenerTopProductosVendidos(8);
+        if (alive) setData(rows);
+      } catch {
+        if (alive) setData([]);
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  if (loading) {
+    return <div className="h-60 animate-pulse rounded-lg bg-secondary" />;
+  }
+
+  if (data.length === 0) {
+    return (
+      <div className="h-60 flex items-center justify-center text-sm text-muted-foreground">
+        Sin ventas registradas aún
+      </div>
+    );
+  }
+
   return (
     <ResponsiveContainer width="100%" height={240}>
       <BarChart

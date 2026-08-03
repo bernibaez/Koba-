@@ -23,8 +23,10 @@ import {
   type PaymentSplit,
 } from '@/lib/posStore';
 import type { FiscalInvoiceRecord } from '@/lib/ncfStore';
+import { isSupabaseConfigured } from '@/services/clienteSupabase';
 import { getCombos, recordComboSale } from '@/lib/comboStore';
 import { procesarVenta } from '@/services/ventas.service';
+import { registrarFacturaFiscal } from '@/services/ncf.service';
 import type { MetodoPago } from '@/types/database';
 import { useAuth } from '@/context/AuthContext';
 
@@ -248,7 +250,7 @@ export default function POSTerminal() {
         _payments.cash + _payments.card + _payments.transfer + _payments.credit;
 
       try {
-        await procesarVenta({
+        const resultado = await procesarVenta({
           cajero_id: user?.id ?? null,
           cliente_id: selectedCustomer?.id ?? null,
           caja_id: String(activeCashId),
@@ -264,7 +266,8 @@ export default function POSTerminal() {
           monto_transferencia: _payments.transfer,
           monto_credito: _payments.credit,
           devuelta_entregada: Math.max(0, montoPagado - total),
-          ncf: fiscalInvoice?.ncf ?? null,
+          // Con Supabase el RPC asigna NCF si hay tipo_ncf; no pasar NCF previo.
+          ncf: isSupabaseConfigured() ? null : (fiscalInvoice?.ncf ?? null),
           tipo_ncf: fiscalInvoice?.ncfType ?? null,
           items: cart.map((item) => ({
             producto_id: item.isCombo ? null : item.productId,
@@ -278,25 +281,43 @@ export default function POSTerminal() {
             subtotal: item.price * item.qty * (1 - item.discount / 100),
           })),
         });
+
+        // Contador local de ventas de combo solo en modo offline
+        if (!isSupabaseConfigured()) {
+          cart.forEach((cartItem) => {
+            if (cartItem.isCombo && cartItem.comboId) {
+              const combo = getCombos().find((c) => c.id === cartItem.comboId);
+              if (combo) {
+                recordComboSale(combo, cartItem.qty, activeCash.label);
+              }
+            }
+          });
+        }
+
+        setLastPayments(_payments);
+        if (fiscalInvoice) {
+          const finalInvoice: FiscalInvoiceRecord = {
+            ...fiscalInvoice,
+            ncf: resultado.ncf || fiscalInvoice.ncf,
+          };
+          try {
+            if (finalInvoice.ncf) {
+              await registrarFacturaFiscal({
+                ...finalInvoice,
+                venta_id: resultado.venta_id,
+              });
+            }
+          } catch {
+            /* no bloquear venta si falla el registro fiscal auxiliar */
+          }
+          setLastFiscalInvoice(finalInvoice);
+          toast.success(`Venta completada — NCF: ${finalInvoice.ncf || '—'}`);
+        }
+        setOrderCompleted(true);
       } catch (e) {
         toast.error(e instanceof Error ? e.message : 'Error al registrar la venta');
         return;
       }
-
-      cart.forEach((cartItem) => {
-        if (cartItem.isCombo && cartItem.comboId) {
-          const combo = getCombos().find((c) => c.id === cartItem.comboId);
-          if (combo) {
-            recordComboSale(combo, cartItem.qty, activeCash.label);
-          }
-        }
-      });
-
-      setLastPayments(_payments);
-      if (fiscalInvoice) {
-        setLastFiscalInvoice(fiscalInvoice);
-      }
-      setOrderCompleted(true);
     },
     onNewSale: clearCart,
   };

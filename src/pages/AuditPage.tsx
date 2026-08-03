@@ -1,8 +1,10 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
-import { getAuditLogs, type AuditLog, type AuditActionType } from '@/lib/auditStore';
+import type { AuditLog, AuditActionType } from '@/lib/auditStore';
+import { obtenerAuditoria } from '@/services/auditoria.service';
 import { exportTableToPdf, exportTableToExcel } from '@/lib/exportPdf';
 import { ShieldCheck, Search, Download, FileSpreadsheet, Eye, X, Filter, User, Clock } from 'lucide-react';
+import { toast } from 'sonner';
 
 const actionBadgeMap: Record<AuditActionType, string> = {
   Venta: 'badge-success',
@@ -22,11 +24,27 @@ const actionTypes: AuditActionType[] = [
 ];
 
 export default function AuditPage() {
-  const [logs] = useState<AuditLog[]>(() => getAuditLogs());
+  const [logs, setLogs] = useState<AuditLog[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [actionFilter, setActionFilter] = useState<string>('all');
   const [dateFilter, setDateFilter] = useState<string>('');
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
+
+  useEffect(() => {
+    const ac = new AbortController();
+    setLoading(true);
+    obtenerAuditoria({ limite: 300, signal: ac.signal })
+      .then(setLogs)
+      .catch((e) => {
+        if ((e as Error)?.name === 'AbortError') return;
+        toast.error(e instanceof Error ? e.message : 'No se pudo cargar la auditoría');
+      })
+      .finally(() => {
+        if (!ac.signal.aborted) setLoading(false);
+      });
+    return () => ac.abort();
+  }, []);
 
   const filteredLogs = useMemo(() => {
     return logs.filter((log) => {
@@ -184,7 +202,13 @@ export default function AuditPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredLogs.length === 0 ? (
+                {loading ? (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-10 text-center text-muted-foreground">
+                      Cargando auditoría…
+                    </td>
+                  </tr>
+                ) : filteredLogs.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="px-4 py-12 text-center text-muted-foreground">
                       <ShieldCheck size={32} className="mx-auto mb-2 opacity-30" />

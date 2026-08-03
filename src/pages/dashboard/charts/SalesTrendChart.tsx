@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   AreaChart,
   Area,
@@ -8,34 +8,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
-
-const data7d = [
-  { day: 'Lun 14', ventas: 62400, meta: 70000 },
-  { day: 'Mar 15', ventas: 78900, meta: 70000 },
-  { day: 'Mié 16', ventas: 54200, meta: 70000 },
-  { day: 'Jue 17', ventas: 91300, meta: 70000 },
-  { day: 'Vie 18', ventas: 103800, meta: 70000 },
-  { day: 'Sáb 19', ventas: 128400, meta: 70000 },
-  { day: 'Dom 20', ventas: 87420, meta: 70000 },
-];
-
-const data30d = [
-  { day: '21 Jun', ventas: 58200, meta: 65000 },
-  { day: '23 Jun', ventas: 71400, meta: 65000 },
-  { day: '25 Jun', ventas: 63800, meta: 65000 },
-  { day: '27 Jun', ventas: 88200, meta: 65000 },
-  { day: '29 Jun', ventas: 54100, meta: 65000 },
-  { day: '01 Jul', ventas: 79600, meta: 70000 },
-  { day: '03 Jul', ventas: 92300, meta: 70000 },
-  { day: '05 Jul', ventas: 67800, meta: 70000 },
-  { day: '07 Jul', ventas: 84500, meta: 70000 },
-  { day: '09 Jul', ventas: 110200, meta: 70000 },
-  { day: '11 Jul', ventas: 73400, meta: 70000 },
-  { day: '13 Jul', ventas: 95700, meta: 70000 },
-  { day: '15 Jul', ventas: 88100, meta: 70000 },
-  { day: '17 Jul', ventas: 61200, meta: 70000 },
-  { day: '19 Jul', ventas: 87420, meta: 70000 },
-];
+import { obtenerTendenciaVentas, type PuntoTendenciaVenta } from '@/services/dashboard.service';
 
 const formatDOP = (v: number) => `RD$ ${(v / 1000).toFixed(0)}k`;
 
@@ -64,7 +37,30 @@ function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
 }
 
 export default function SalesTrendChart({ period }: { period: '7d' | '30d' }) {
-  const data = period === '7d' ? data7d : data30d;
+  const [data, setData] = useState<PuntoTendenciaVenta[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    (async () => {
+      try {
+        const rows = await obtenerTendenciaVentas(period === '7d' ? 7 : 30);
+        if (alive) setData(rows);
+      } catch {
+        if (alive) setData([]);
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [period]);
+
+  if (loading) {
+    return <div className="h-60 animate-pulse rounded-lg bg-secondary" />;
+  }
 
   return (
     <ResponsiveContainer width="100%" height={240}>
@@ -73,10 +69,6 @@ export default function SalesTrendChart({ period }: { period: '7d' | '30d' }) {
           <linearGradient id="gradVentas" x1="0" y1="0" x2="0" y2="1">
             <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.25} />
             <stop offset="95%" stopColor="var(--primary)" stopOpacity={0} />
-          </linearGradient>
-          <linearGradient id="gradMeta" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="var(--muted-foreground)" stopOpacity={0.12} />
-            <stop offset="95%" stopColor="var(--muted-foreground)" stopOpacity={0} />
           </linearGradient>
         </defs>
         <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
@@ -95,16 +87,6 @@ export default function SalesTrendChart({ period }: { period: '7d' | '30d' }) {
           width={60}
         />
         <Tooltip content={<CustomTooltip />} />
-        <Area
-          type="monotone"
-          dataKey="meta"
-          name="Meta"
-          stroke="var(--muted-foreground)"
-          strokeWidth={1.5}
-          strokeDasharray="4 4"
-          fill="url(#gradMeta)"
-          dot={false}
-        />
         <Area
           type="monotone"
           dataKey="ventas"

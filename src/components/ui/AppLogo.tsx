@@ -1,7 +1,7 @@
 import React, { memo, useEffect, useMemo, useState } from 'react';
 import AppIcon from './AppIcon';
 import AppImage from './AppImage';
-import { getCompanyLogo, subscribeLogoChange } from '@/lib/companyLogo';
+import { getCompanyLogo, subscribeLogoChange, syncCompanyLogoFromDb } from '@/lib/companyLogo';
 
 const DEFAULT_LOGO = '/assets/images/app_logo.png';
 
@@ -23,6 +23,7 @@ const AppLogo = memo(function AppLogo({
   const [storedLogo, setStoredLogo] = useState<string | null>(() => getCompanyLogo());
 
   useEffect(() => {
+    void syncCompanyLogoFromDb().then((url) => setStoredLogo(url));
     return subscribeLogoChange(() => setStoredLogo(getCompanyLogo()));
   }, []);
 

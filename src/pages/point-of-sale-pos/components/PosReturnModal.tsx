@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
 import { X, Printer, Search, RotateCcw, Clock, Shield, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
-import { addPosReturn, getPosReturns, nextCode } from '@/lib/posStore';
 import { logAuditEvent } from '@/lib/auditStore';
+import { obtenerVentaPorNumeroFactura } from '@/services/ventas.service';
+import { crearDevolucion } from '@/services/devoluciones.service';
+import { useAuth } from '@/context/AuthContext';
 
 interface SaleItem {
+  producto_id: string | null;
   sku: string;
   name: string;
   price: number;
@@ -13,126 +16,140 @@ interface SaleItem {
 }
 
 interface SaleLookup {
+  ventaId: string;
   code: string;
   customer: string;
+  clienteId: string | null;
   date: string;
   items: SaleItem[];
 }
 
-const mockExistingInvoices: Record<string, SaleLookup> = {
-  'FAC-001': {
-    code: 'FAC-001',
-    customer: 'Juan Pérez',
-    date: '2026-07-25',
-    items: [
-      { sku: 'ARR-SEL-5LB', name: 'Arroz Selecto 5lb', price: 285, cost: 210, maxQty: 3 },
-      { sku: 'ACE-VEG-1L', name: 'Aceite Vegetal 1L', price: 195, cost: 140, maxQty: 2 },
-      { sku: 'LEC-EVA-410', name: 'Leche Evaporada 410g', price: 145, cost: 100, maxQty: 4 },
-    ],
-  },
-  'FAC-002': {
-    code: 'FAC-002',
-    customer: 'Empresa ABC S.R.L.',
-    date: '2026-07-25',
-    items: [
-      { sku: 'AZU-BLA-2LB', name: 'Azúcar Blanca 2lb', price: 110, cost: 80, maxQty: 10 },
-      { sku: 'HAB-ROJ-1LB', name: 'Habichuelas Rojas 1lb', price: 75, cost: 50, maxQty: 8 },
-    ],
-  },
-  'FAC-003': {
-    code: 'FAC-003',
-    customer: 'Rosa Jiménez',
-    date: '2026-07-24',
-    items: [
-      { sku: 'POL-ENT-1KG', name: 'Pollo Entero Fresco', price: 320, cost: 230, maxQty: 2 },
-      { sku: 'LEC-ENT-1L', name: 'Leche Entera 1L', price: 85, cost: 60, maxQty: 6 },
-    ],
-  },
-};
-
 export default function PosReturnModal({ onClose }: { onClose: () => void }) {
-  const [searchCode, setSearchCode] = useState('FAC-001');
-  const [loadedSale, setLoadedSale] = useState<SaleLookup | null>(mockExistingInvoices['FAC-001']);
-  const [customer, setCustomer] = useState('Juan Pérez');
+  const { user } = useAuth();
+  const [searchCode, setSearchCode] = useState('');
+  const [loadedSale, setLoadedSale] = useState<SaleLookup | null>(null);
+  const [customer, setCustomer] = useState('');
   const [reason, setReason] = useState('Producto defectuoso');
   const [method, setMethod] = useState<'cash' | 'card' | 'credit_note' | 'exchange'>('cash');
   const [qty, setQty] = useState<Record<string, number>>({});
   const [registeredReturnCode, setRegisteredReturnCode] = useState<string | null>(null);
+  const [lookingUp, setLookingUp] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleLookup = () => {
-    const codeKey = searchCode.trim().toUpperCase();
-    const found = mockExistingInvoices[codeKey];
-    if (found) {
-      setLoadedSale(found);
-      setCustomer(found.customer);
-      setQty({});
-      toast.success(`Factura ${found.code} cargada`);
-    } else {
-      const fallback: SaleLookup = {
-        code: codeKey || 'FAC-DEV',
-        customer: customer || 'Cliente General',
-        date: new Date().toISOString().slice(0, 10),
-        items: [
-          { sku: 'ARR-SEL-5LB', name: 'Arroz Selecto 5lb', price: 285, cost: 210, maxQty: 5 },
-          { sku: 'ACE-VEG-1L', name: 'Aceite Vegetal 1L', price: 195, cost: 140, maxQty: 3 },
-        ],
+  const handleLookup = async () => {
+    const codeKey = searchCode.trim();
+    if (!codeKey) {
+      toast.error('Ingresa el número de factura');
+      return;
+    }
+    setLookingUp(true);
+    try {
+      const venta = await obtenerVentaPorNumeroFactura(codeKey);
+      if (!venta || venta.estado === 'anulada') {
+        setLoadedSale(null);
+        toast.error(`No se encontró la factura ${codeKey.toUpperCase()}`);
+        return;
+      }
+      const items: SaleItem[] = (venta.detalle_ventas ?? []).map((d) => ({
+        producto_id: d.producto_id,
+        sku: d.producto_id ? d.nombre_item.slice(0, 12) : d.nombre_item,
+        name: d.nombre_item,
+        price: d.precio_unitario,
+        cost: d.costo_unitario,
+        maxQty: d.cantidad,
+      }));
+      if (items.length === 0) {
+        toast.error('La factura no tiene ítems para devolver');
+        setLoadedSale(null);
+        return;
+      }
+      const sale: SaleLookup = {
+        ventaId: venta.id,
+        code: venta.numero_factura,
+        customer: venta.cliente_nombre ?? 'Cliente general',
+        clienteId: venta.cliente_id,
+        date: venta.creado_en.slice(0, 10),
+        items,
       };
-      setLoadedSale(fallback);
-      toast.info(`Cargados productos de muestra para factura ${codeKey}`);
+      setLoadedSale(sale);
+      setCustomer(sale.customer);
+      setQty({});
+      toast.success(`Factura ${sale.code} cargada`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Error al buscar la factura');
+    } finally {
+      setLookingUp(false);
     }
   };
 
   const currentItems = loadedSale?.items ?? [];
 
   const selectedItems = currentItems
-    .map((l) => ({ ...l, qty: qty[l.sku] || 0 }))
+    .map((l, idx) => ({ ...l, key: `${l.sku}-${idx}`, qty: qty[`${l.sku}-${idx}`] || 0 }))
     .filter((l) => l.qty > 0);
 
   const totalReturnAmount = selectedItems.reduce((s, l) => s + l.qty * l.price, 0);
   const isFullReturn =
     currentItems.length > 0 &&
-    selectedItems.length === currentItems.length &&
-    selectedItems.every((l) => l.qty === l.maxQty);
+    currentItems.every((item, idx) => (qty[`${item.sku}-${idx}`] || 0) === item.maxQty);
 
-  const handleProcessReturn = () => {
+  const methodDb =
+    method === 'cash'
+      ? 'efectivo'
+      : method === 'card'
+        ? 'tarjeta'
+        : method === 'credit_note'
+          ? 'nota_credito'
+          : 'cambio';
+
+  const handleProcessReturn = async () => {
+    if (!loadedSale) {
+      toast.error('Carga una factura primero');
+      return;
+    }
     if (selectedItems.length === 0) {
       toast.error('Selecciona al menos un producto e indica la cantidad a devolver');
       return;
     }
 
-    const now = new Date();
-    const code = nextCode('DEV', getPosReturns().length);
+    setSubmitting(true);
+    try {
+      const dev = await crearDevolucion({
+        venta_id: loadedSale.ventaId,
+        numero_factura: loadedSale.code,
+        cliente_id: loadedSale.clienteId,
+        cajero_id: user?.id ?? null,
+        monto_total: totalReturnAmount,
+        motivo: reason,
+        metodo_reembolso: methodDb,
+        tipo: isFullReturn ? 'total' : 'parcial',
+        items: selectedItems.map((l) => ({
+          producto_id: l.producto_id,
+          sku: l.sku,
+          nombre_item: l.name,
+          cantidad: l.qty,
+          precio_unitario: l.price,
+          subtotal: l.qty * l.price,
+        })),
+      });
 
-    addPosReturn({
-      id: `ret-${Date.now()}`,
-      code,
-      saleCode: loadedSale?.code ?? searchCode,
-      customer,
-      date: now.toISOString().slice(0, 10),
-      time: now.toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit' }),
-      user: 'Cajero POS',
-      cashier: 'Caja #1',
-      products: selectedItems.map((l) => ({ sku: l.sku, name: l.name, qty: l.qty, price: l.price })),
-      total: totalReturnAmount,
-      reason,
-      method,
-      type: isFullReturn ? 'full' : 'partial',
-      status: 'pending',
-    });
+      logAuditEvent({
+        user: user?.name || user?.email || 'Cajero POS',
+        role: 'Cajero',
+        action: 'Devolución',
+        module: 'Devoluciones',
+        details: `Solicitud de devolución ${dev.codigo} (Pendiente) por RD$ ${totalReturnAmount.toLocaleString()} sobre factura ${loadedSale.code}`,
+        before: { invoice: loadedSale.code, customer },
+        after: { returnCode: dev.codigo, status: 'pendiente', total: totalReturnAmount },
+      });
 
-    // System Audit Event
-    logAuditEvent({
-      user: 'Cajero POS',
-      role: 'Cajero',
-      action: 'Devolución',
-      module: 'Devoluciones',
-      details: `Solicitud de devolución ${code} (Pendiente de Aprobación Admin) por RD$ ${totalReturnAmount.toLocaleString()} sobre factura ${loadedSale?.code}`,
-      before: { invoice: loadedSale?.code, customer },
-      after: { returnCode: code, status: 'pending', total: totalReturnAmount, items: selectedItems },
-    });
-
-    setRegisteredReturnCode(code);
-    toast.info(`Solicitud ${code} enviada al módulo de Devoluciones para aprobación del administrador`);
+      setRegisteredReturnCode(dev.codigo);
+      toast.info(`Solicitud ${dev.codigo} enviada para aprobación del administrador`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'No se pudo registrar la devolución');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (registeredReturnCode) {
@@ -144,7 +161,7 @@ export default function PosReturnModal({ onClose }: { onClose: () => void }) {
           </div>
           <h3 className="text-xl font-bold text-foreground">Solicitud de Devolución Enviada</h3>
           <p className="text-sm font-mono text-primary font-bold">{registeredReturnCode}</p>
-          
+
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 text-xs font-bold">
             <Clock size={14} />
             <span>Pendiente de Aprobación por Administrador</span>
@@ -196,26 +213,27 @@ export default function PosReturnModal({ onClose }: { onClose: () => void }) {
           </div>
         </div>
 
-        {/* Invoice Lookup */}
         <div className="flex gap-2">
           <div className="flex-1">
             <label className="text-xs font-semibold text-muted-foreground mb-1 block">Buscar Factura Original</label>
             <div className="relative">
               <input
                 className="input-field font-mono uppercase !pl-9"
-                placeholder="Ej: FAC-001"
+                placeholder="Ej: FAC-20260803-..."
                 value={searchCode}
                 onChange={(e) => setSearchCode(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') void handleLookup();
+                }}
               />
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground z-10" />
             </div>
           </div>
-          <button type="button" onClick={handleLookup} className="btn-secondary self-end py-2">
-            Cargar Factura
+          <button type="button" onClick={() => void handleLookup()} disabled={lookingUp} className="btn-secondary self-end py-2">
+            {lookingUp ? 'Buscando…' : 'Cargar Factura'}
           </button>
         </div>
 
-        {/* Invoice Info */}
         <div className="grid grid-cols-2 gap-3 text-xs bg-secondary/30 rounded-xl p-3">
           <div>
             <span className="text-muted-foreground block">Cliente</span>
@@ -237,7 +255,6 @@ export default function PosReturnModal({ onClose }: { onClose: () => void }) {
           </div>
         </div>
 
-        {/* Refund Method */}
         <div>
           <label className="text-xs font-semibold text-muted-foreground mb-1 block">Método de Reembolso</label>
           <select className="input-field text-xs" value={method} onChange={(e) => setMethod(e.target.value as typeof method)}>
@@ -248,43 +265,48 @@ export default function PosReturnModal({ onClose }: { onClose: () => void }) {
           </select>
         </div>
 
-        {/* Product selection list for partial return */}
         <div className="space-y-2">
           <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
             Productos de la Factura (Selecciona Cantidades a Devolver)
           </p>
 
           <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-            {currentItems.map((l) => (
-              <div key={l.sku} className="flex items-center justify-between border border-border rounded-xl p-2.5 bg-card">
-                <div className="flex-1 min-w-0 pr-2">
-                  <p className="text-sm font-semibold text-foreground truncate">{l.name}</p>
-                  <p className="text-xs text-muted-foreground font-mono">
-                    {l.sku} · Precio: RD$ {l.price} · Comprados: <span className="font-bold text-foreground">{l.maxQty}</span>
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground">Cant. a devolver:</span>
-                  <input
-                    type="number"
-                    min={0}
-                    max={l.maxQty}
-                    className="input-field w-20 text-center font-bold"
-                    value={qty[l.sku] ?? 0}
-                    onChange={(e) =>
-                      setQty((q) => ({
-                        ...q,
-                        [l.sku]: Math.min(l.maxQty, Math.max(0, parseInt(e.target.value, 10) || 0)),
-                      }))
-                    }
-                  />
-                </div>
-              </div>
-            ))}
+            {currentItems.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-6">Busca y carga una factura real para continuar</p>
+            ) : (
+              currentItems.map((l, idx) => {
+                const key = `${l.sku}-${idx}`;
+                return (
+                  <div key={key} className="flex items-center justify-between border border-border rounded-xl p-2.5 bg-card">
+                    <div className="flex-1 min-w-0 pr-2">
+                      <p className="text-sm font-semibold text-foreground truncate">{l.name}</p>
+                      <p className="text-xs text-muted-foreground font-mono">
+                        Precio: RD$ {l.price} · Comprados: <span className="font-bold text-foreground">{l.maxQty}</span>
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">Cant. a devolver:</span>
+                      <input
+                        type="number"
+                        min={0}
+                        max={l.maxQty}
+                        className="input-field w-20 text-center font-bold"
+                        value={qty[key] ?? 0}
+                        onChange={(e) =>
+                          setQty((q) => ({
+                            ...q,
+                            [key]: Math.min(l.maxQty, Math.max(0, parseInt(e.target.value, 10) || 0)),
+                          }))
+                        }
+                      />
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
 
-        {/* Total Return Summary */}
         <div className="bg-primary/5 border border-primary/20 rounded-xl p-3 flex items-center justify-between">
           <div>
             <span className="text-xs font-semibold text-muted-foreground block">Tipo: {isFullReturn ? 'Devolución Total' : 'Devolución Parcial'}</span>
@@ -298,14 +320,18 @@ export default function PosReturnModal({ onClose }: { onClose: () => void }) {
           </div>
         </div>
 
-        {/* Footer Actions */}
         <div className="flex justify-end gap-2 pt-2 border-t border-border">
           <button type="button" className="btn-secondary" onClick={onClose}>
             Cancelar
           </button>
-          <button type="button" className="btn-primary flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white" onClick={handleProcessReturn}>
+          <button
+            type="button"
+            disabled={submitting || !loadedSale}
+            className="btn-primary flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white"
+            onClick={() => void handleProcessReturn()}
+          >
             <RotateCcw size={16} />
-            Solicitar Devolución
+            {submitting ? 'Enviando…' : 'Solicitar Devolución'}
           </button>
         </div>
       </div>

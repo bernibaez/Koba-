@@ -1,3 +1,5 @@
+import { isSupabaseConfigured } from '@/services/clienteSupabase';
+
 const LOGO_STORAGE_KEY = 'marketerp_company_logo';
 const LOGO_CHANGE_EVENT = 'marketerp-logo-change';
 
@@ -15,11 +17,46 @@ export function getCompanyLogo(): string | null {
 export function setCompanyLogo(dataUrl: string) {
   localStorage.setItem(LOGO_STORAGE_KEY, dataUrl);
   window.dispatchEvent(new Event(LOGO_CHANGE_EVENT));
+
+  if (isSupabaseConfigured()) {
+    void import('@/services/empresa.service')
+      .then(({ guardarLogoEmpresa }) => guardarLogoEmpresa(dataUrl))
+      .catch(() => {
+        /* cache local ya guardado */
+      });
+  }
 }
 
 export function clearCompanyLogo() {
   localStorage.removeItem(LOGO_STORAGE_KEY);
   window.dispatchEvent(new Event(LOGO_CHANGE_EVENT));
+
+  if (isSupabaseConfigured()) {
+    void import('@/services/empresa.service')
+      .then(({ guardarLogoEmpresa }) => guardarLogoEmpresa(null))
+      .catch(() => {
+        /* ignore */
+      });
+  }
+}
+
+/** Carga logo desde Supabase y actualiza caché local. */
+export async function syncCompanyLogoFromDb(): Promise<string | null> {
+  if (!isSupabaseConfigured()) return getCompanyLogo();
+  try {
+    const { obtenerLogoEmpresa } = await import('@/services/empresa.service');
+    const url = await obtenerLogoEmpresa();
+    if (url) {
+      localStorage.setItem(LOGO_STORAGE_KEY, url);
+      window.dispatchEvent(new Event(LOGO_CHANGE_EVENT));
+      return url;
+    }
+    localStorage.removeItem(LOGO_STORAGE_KEY);
+    window.dispatchEvent(new Event(LOGO_CHANGE_EVENT));
+    return null;
+  } catch {
+    return getCompanyLogo();
+  }
 }
 
 export function readLogoFile(file: File): Promise<string> {

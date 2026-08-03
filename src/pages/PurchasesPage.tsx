@@ -5,6 +5,7 @@ import { ShoppingBag, RotateCcw, Plus, Search, Filter, Download, Eye, Edit2, Tra
 import { exportTableToPdf, formatMoneyPdf } from '@/lib/exportPdf';
 import type { ProductItem } from '@/lib/productStore';
 import { useProductos } from '@/hooks/useProductos';
+import { useProveedores } from '@/hooks/useProveedores';
 import { crearProducto, uiAProductoInsert } from '@/services/productos.service';
 import { crearCompra, obtenerCompras, obtenerDetalleCompra, anularCompra, type CompraDetalle } from '@/services/compras.service';
 import { toast } from 'sonner';
@@ -76,9 +77,10 @@ export default function PurchasesPage() {
   const [search, setSearch] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
   const [invoiceNumber, setInvoiceNumber] = useState(() => nextPurchaseInvoice());
-  const [supplier, setSupplier] = useState('');
+  const [supplierId, setSupplierId] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('Transferencia');
   const [purchaseDate, setPurchaseDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const { proveedores } = useProveedores();
 
   const [purchaseItems, setPurchaseItems] = useState<PurchaseLineItem[]>([]);
 
@@ -290,6 +292,7 @@ export default function PurchasesPage() {
         return;
       }
 
+      const supplierName = proveedores.find((p) => p.id === supplierId)?.nombre ?? '';
       try {
         const created = await crearProducto(
           uiAProductoInsert({
@@ -299,7 +302,7 @@ export default function PurchasesPage() {
             category: newCategory.trim() || 'General',
             brand: '',
             unit: newUnit.trim() || 'Unidad',
-            supplier,
+            supplier: supplierName,
             costPrice: modalPrice,
             salePrice: modalSalePrice,
             wholesalePrice: modalSalePrice,
@@ -320,7 +323,7 @@ export default function PurchasesPage() {
           category: created.categoria,
           brand: created.marca ?? '',
           unit: created.unidad,
-          supplier: supplier || '',
+          supplier: supplierName,
           costPrice: Number(created.precio_costo),
           salePrice: Number(created.precio_venta),
           wholesalePrice: Number(created.precio_mayorista),
@@ -392,8 +395,8 @@ export default function PurchasesPage() {
       toast.error('Agrega al menos un producto a la compra');
       return;
     }
-    if (!supplier.trim()) {
-      toast.error('Indica el proveedor');
+    if (!supplierId) {
+      toast.error('Selecciona un proveedor');
       return;
     }
 
@@ -401,7 +404,7 @@ export default function PurchasesPage() {
     try {
       const created = await crearCompra({
         codigo: invoiceNumber,
-        proveedor_nombre: supplier.trim(),
+        proveedor_id: supplierId,
         metodo_pago: paymentMethod,
         estado: 'recibida',
         lineas: purchaseItems.map((item) => ({
@@ -498,14 +501,16 @@ export default function PurchasesPage() {
                   <div>
                     <label className="text-xs font-medium text-muted-foreground mb-1 block">Proveedor *</label>
                     <select
-                      value={supplier}
-                      onChange={(e) => setSupplier(e.target.value)}
+                      value={supplierId}
+                      onChange={(e) => setSupplierId(e.target.value)}
                       className="input-field"
                     >
-                      <option value="Distribuidora Nacional S.A.">Distribuidora Nacional S.A.</option>
-                      <option value="Importadora del Caribe">Importadora del Caribe</option>
-                      <option value="Alimentos Frescos RD">Alimentos Frescos RD</option>
-                      <option value="Bebidas y Más">Bebidas y Más</option>
+                      <option value="">Seleccionar proveedor…</option>
+                      {proveedores.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.nombre}
+                        </option>
+                      ))}
                     </select>
                   </div>
                   <div>
@@ -1158,7 +1163,7 @@ export default function PurchasesPage() {
             onClick={() => {
               setInvoiceNumber(nextPurchaseInvoice());
               setPurchaseItems([]);
-              setSupplier('');
+              setSupplierId('');
               setShowAddForm(true);
             }}
             className="btn-primary flex items-center gap-2 w-fit shadow-md"

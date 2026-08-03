@@ -1,47 +1,58 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { Briefcase, Download, Eye, Plus, Printer } from 'lucide-react';
 import { toast } from 'sonner';
-import {
-  addMaletaCut,
-  getCashExpenses,
-  getMaletaCuts,
-  getPosReturns,
-  nextCode,
-  type MaletaCut,
-} from '@/lib/posStore';
+import { getCashExpenses, nextCode, type MaletaCut } from '@/lib/posStore';
 import { exportTableToPdf, formatMoneyPdf } from '@/lib/exportPdf';
 import RegisterDetailsModal from './point-of-sale-pos/components/RegisterDetailsModal';
-
-const mockProductsSold = [
-  { sku: 'ARR-SEL-5LB', barcode: '7891000100103', name: 'Arroz Selecto 5lb', qty: 42, total: 11970 },
-  { sku: 'ACE-VEG-1L', barcode: '7891000200104', name: 'Aceite Vegetal 1L', qty: 28, total: 5460 },
-  { sku: 'POL-ENT-LB', barcode: '7891000300105', name: 'Pollo Entero', qty: 65, total: 6370 },
-  { sku: 'LEC-EVA-410', barcode: '7891000400106', name: 'Leche Evaporada', qty: 33, total: 4785 },
-];
-
-const mockBrands = [
-  { brand: 'Molinos Modernos', qty: 42, total: 11970 },
-  { brand: 'Mazola', qty: 28, total: 5460 },
-  { brand: 'Pollo Rey', qty: 65, total: 6370 },
-  { brand: 'Carnation', qty: 33, total: 4785 },
-];
+import {
+  crearCorteMaleta,
+  obtenerCortesMaleta,
+  obtenerResumenCajaHoy,
+} from '@/services/maleta.service';
+import { useAuth } from '@/context/AuthContext';
 
 export default function MaletaPage() {
-  const [cuts, setCuts] = useState<MaletaCut[]>(() => getMaletaCuts());
+  const { user } = useAuth();
+  const [cuts, setCuts] = useState<MaletaCut[]>([]);
   const [bagAmount, setBagAmount] = useState('70000');
   const [selected, setSelected] = useState<MaletaCut | null>(null);
   const [tab, setTab] = useState<'cut' | 'history'>('cut');
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [payments, setPayments] = useState({ cash: 0, card: 0, transfer: 0, credit: 0 });
+  const [salesTotal, setSalesTotal] = useState(0);
+  const [refundsTotal, setRefundsTotal] = useState(0);
+  const [productsSold, setProductsSold] = useState<
+    { sku: string; barcode: string; name: string; qty: number; total: number }[]
+  >([]);
+  const [brandsSold, setBrandsSold] = useState<{ brand: string; qty: number; total: number }[]>([]);
 
-  const payments = { cash: 52429.65, card: 18200, transfer: 6400, credit: 3200 };
-  const salesTotal = payments.cash + payments.card + payments.transfer + payments.credit;
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const [cortes, resumen] = await Promise.all([obtenerCortesMaleta(), obtenerResumenCajaHoy()]);
+      setCuts(cortes);
+      setPayments(resumen.payments);
+      setSalesTotal(resumen.salesTotal);
+      setRefundsTotal(resumen.refundsTotal);
+      setProductsSold(resumen.productsSold);
+      setBrandsSold(resumen.brandsSold);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'No se pudo cargar maleta');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadData();
+  }, []);
+
   const expensesToday = getCashExpenses()
     .filter((e) => e.date === new Date().toISOString().slice(0, 10))
     .reduce((s, e) => s + e.amount, 0);
-  const refundsTotal = getPosReturns()
-    .filter((r) => r.date === new Date().toISOString().slice(0, 10))
-    .reduce((s, r) => s + r.total, 0);
   const initialCash = 5000;
   const expectedCash = initialCash + payments.cash - expensesToday - refundsTotal;
   const bag = parseFloat(bagAmount) || 0;
@@ -53,7 +64,7 @@ export default function MaletaPage() {
   );
   const dayCashClose = previousBags + (cuts.length ? remaining : expectedCash);
 
-  const registerCut = () => {
+  const registerCut = async () => {
     if (bag <= 0) {
       toast.error('Indica el monto a enviar a maleta');
       return;
@@ -68,7 +79,7 @@ export default function MaletaPage() {
       cutNumber: nextCode('MAL', cuts.length),
       date: now.toISOString().slice(0, 10),
       time: now.toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit' }),
-      user: 'Admin General',
+      user: user?.name || 'Usuario',
       cashier: 'Caja #1',
       branch: 'Sucursal Principal',
       expectedCash,
@@ -78,14 +89,22 @@ export default function MaletaPage() {
       expensesTotal: expensesToday,
       refundsTotal,
       payments,
-      productsSold: mockProductsSold,
-      brandsSold: mockBrands,
+      productsSold,
+      brandsSold,
       status: 'completed',
     };
-    addMaletaCut(cut);
-    setCuts(getMaletaCuts());
-    setSelected(cut);
-    toast.success(`Maleta ${cut.cutNumber} registrada — ${formatMoneyPdf(bag)}`);
+
+    setSaving(true);
+    try {
+      const saved = await crearCorteMaleta(cut);
+      setCuts(await obtenerCortesMaleta());
+      setSelected(saved);
+      toast.success(`Maleta ${saved.cutNumber} registrada — ${formatMoneyPdf(bag)}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'No se pudo registrar el corte');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const exportCut = (cut: MaletaCut) => {
@@ -131,7 +150,9 @@ export default function MaletaPage() {
           </div>
         </div>
 
-        {tab === 'cut' ? (
+        {loading ? (
+          <p className="text-sm text-muted-foreground py-10 text-center">Cargando resumen de caja…</p>
+        ) : tab === 'cut' ? (
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
             <div className="xl:col-span-2 space-y-4">
               <div className="card p-5">
@@ -167,8 +188,8 @@ export default function MaletaPage() {
                   <span className="text-muted-foreground">Efectivo restante en caja</span>
                   <span className={`font-bold ${remaining < 0 ? 'text-danger' : 'text-primary'}`}>{formatMoneyPdf(remaining)}</span>
                 </div>
-                <button type="button" className="btn-primary w-full flex items-center justify-center gap-2" onClick={registerCut}>
-                  <Plus size={16} /> Registrar retiro a maleta
+                <button type="button" disabled={saving} className="btn-primary w-full flex items-center justify-center gap-2" onClick={() => void registerCut()}>
+                  <Plus size={16} /> {saving ? 'Guardando…' : 'Registrar retiro a maleta'}
                 </button>
               </div>
 
@@ -178,7 +199,9 @@ export default function MaletaPage() {
                   <table className="w-full text-sm">
                     <thead><tr className="border-b border-border text-xs text-muted-foreground uppercase"><th className="py-2 text-left">SKU</th><th className="text-left">Código</th><th className="text-left">Producto</th><th className="text-right">Cant.</th><th className="text-right">Total</th></tr></thead>
                     <tbody>
-                      {mockProductsSold.map((p) => (
+                      {productsSold.length === 0 ? (
+                        <tr><td colSpan={5} className="py-6 text-center text-muted-foreground">Sin ventas registradas hoy</td></tr>
+                      ) : productsSold.map((p) => (
                         <tr key={p.sku} className="border-b border-border"><td className="py-2 font-mono text-xs">{p.sku}</td><td className="font-mono text-xs">{p.barcode}</td><td>{p.name}</td><td className="text-right">{p.qty}</td><td className="text-right font-medium">{formatMoneyPdf(p.total)}</td></tr>
                       ))}
                     </tbody>
@@ -189,7 +212,9 @@ export default function MaletaPage() {
               <div className="card p-5">
                 <h3 className="font-semibold text-foreground mb-3">Productos por marca</h3>
                 <div className="space-y-2">
-                  {mockBrands.map((b) => (
+                  {brandsSold.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Sin datos de marca hoy</p>
+                  ) : brandsSold.map((b) => (
                     <div key={b.brand} className="flex justify-between text-sm border-b border-border pb-2">
                       <span>{b.brand} · {b.qty} uds</span>
                       <span className="font-semibold">{formatMoneyPdf(b.total)}</span>
@@ -202,7 +227,7 @@ export default function MaletaPage() {
             <div className="space-y-4">
               <div className="card p-5 space-y-2">
                 <h3 className="font-semibold text-foreground">Información del corte</h3>
-                <p className="text-sm text-muted-foreground">Usuario: Admin General</p>
+                <p className="text-sm text-muted-foreground">Usuario: {user?.name || '—'}</p>
                 <p className="text-sm text-muted-foreground">Caja: #1</p>
                 <p className="text-sm text-muted-foreground">Sucursal: Principal</p>
                 <p className="text-sm text-muted-foreground">Fecha: {new Date().toLocaleString('es-DO')}</p>

@@ -1,10 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { Search, Download, RotateCcw, FileSpreadsheet, Eye, Printer, X, Check, XCircle, Clock, Shield, CheckCircle, BellRing } from 'lucide-react';
-import { getPosReturns, updatePosReturnStatus, type PosReturn, type PosReturnStatus } from '@/lib/posStore';
+import type { PosReturn, PosReturnStatus } from '@/lib/posStore';
 import { exportTableToPdf, exportTableToExcel, formatMoneyPdf } from '@/lib/exportPdf';
 import { logAuditEvent } from '@/lib/auditStore';
 import { toast } from 'sonner';
+import { useDevoluciones } from '@/hooks/useDevoluciones';
+import type { DevolucionConDetalle } from '@/services/devoluciones.service';
+import { useAuth } from '@/context/AuthContext';
 
 const methodLabel: Record<PosReturn['method'], string> = {
   cash: 'Efectivo',
@@ -18,8 +21,50 @@ const typeLabel: Record<PosReturn['type'], string> = {
   full: 'Total',
 };
 
+function mapDevolucionToPosReturn(d: DevolucionConDetalle): PosReturn {
+  const creado = new Date(d.creado_en);
+  const methodMap: Record<string, PosReturn['method']> = {
+    efectivo: 'cash',
+    tarjeta: 'card',
+    nota_credito: 'credit_note',
+    cambio: 'exchange',
+  };
+  const statusMap: Record<string, PosReturnStatus> = {
+    pendiente: 'pending',
+    aprobada: 'approved',
+    rechazada: 'rejected',
+  };
+  return {
+    id: d.id,
+    code: d.codigo,
+    saleCode: d.numero_factura ?? '—',
+    customer: d.cliente_nombre ?? 'Cliente',
+    date: creado.toISOString().slice(0, 10),
+    time: creado.toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit' }),
+    user: d.cajero_nombre ?? 'Cajero',
+    cashier: d.cajero_nombre ?? 'Caja',
+    products: (d.items ?? []).map((i) => ({
+      sku: i.sku ?? '',
+      name: i.nombre_item,
+      qty: i.cantidad,
+      price: i.precio_unitario,
+    })),
+    total: Number(d.monto_total),
+    reason: d.motivo,
+    method: methodMap[d.metodo_reembolso] ?? 'cash',
+    type: d.tipo === 'total' ? 'full' : 'partial',
+    status: statusMap[d.estado] ?? 'pending',
+    reviewedBy: d.revisado_por_nombre,
+    rejectionReason: d.motivo_rechazo ?? undefined,
+  };
+}
+
 export default function ReturnsHistoryPage() {
-  const [returns, setReturns] = useState<PosReturn[]>(() => getPosReturns());
+  const { user: authUser } = useAuth();
+  const { devoluciones, loading, refetch, procesarEstado, procesando } = useDevoluciones({
+    limite: 200,
+  });
+  const returns = useMemo(() => devoluciones.map(mapDevolucionToPosReturn), [devoluciones]);
   const [selectedReturn, setSelectedReturn] = useState<PosReturn | null>(null);
   const [statusTab, setStatusTab] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
   const [autoModalDismissed, setAutoModalDismissed] = useState(false);
@@ -34,8 +79,6 @@ export default function ReturnsHistoryPage() {
   const [customer, setCustomer] = useState('');
   const [cashier, setCashier] = useState('');
   const [product, setProduct] = useState('');
-
-  const refreshReturns = () => setReturns(getPosReturns());
 
   const pendingReturns = useMemo(() => returns.filter((r) => r.status === 'pending'), [returns]);
   const pendingCount = pendingReturns.length;
@@ -68,22 +111,27 @@ export default function ReturnsHistoryPage() {
   }, [returns, statusTab, date, user, customer, cashier, product]);
 
   const totalAmount = filtered.reduce((s, r) => s + r.total, 0);
+  const reviewerName = authUser?.name || authUser?.email || 'Administrador';
 
-  const handleApproveReturn = (r: PosReturn) => {
-    updatePosReturnStatus(r.id, 'approved', 'Admin General');
-    logAuditEvent({
-      user: 'Admin General',
-      role: 'Administrador',
-      action: 'Devolución',
-      module: 'Devoluciones',
-      details: `Devolución ${r.code} (Factura: ${r.saleCode}) por RD$ ${r.total.toLocaleString()} APROBADA por Administrador`,
-      before: { id: r.id, status: r.status },
-      after: { id: r.id, status: 'approved', reviewedBy: 'Admin General' },
-    });
-    toast.success(`Devolución ${r.code} APROBADA exitosamente`);
-    refreshReturns();
-    if (selectedReturn?.id === r.id) {
-      setSelectedReturn((prev) => (prev ? { ...prev, status: 'approved', reviewedBy: 'Admin General' } : null));
+  const handleApproveReturn = async (r: PosReturn) => {
+    try {
+      await procesarEstado(r.id, 'aprobada');
+      logAuditEvent({
+        user: reviewerName,
+        role: 'Administrador',
+        action: 'Devolución',
+        module: 'Devoluciones',
+        details: `Devolución ${r.code} (Factura: ${r.saleCode}) por RD$ ${r.total.toLocaleString()} APROBADA`,
+        before: { id: r.id, status: r.status },
+        after: { id: r.id, status: 'approved', reviewedBy: reviewerName },
+      });
+      toast.success(`Devolución ${r.code} APROBADA exitosamente`);
+      await refetch();
+      if (selectedReturn?.id === r.id) {
+        setSelectedReturn((prev) => (prev ? { ...prev, status: 'approved', reviewedBy: reviewerName } : null));
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'No se pudo aprobar la devolución');
     }
   };
 
@@ -92,28 +140,34 @@ export default function ReturnsHistoryPage() {
     setRejectReasonInput('No cumple con las políticas de devolución de tienda');
   };
 
-  const handleConfirmRejection = (e: React.FormEvent) => {
+  const handleConfirmRejection = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!rejectingReturn) return;
 
     const reasonText = rejectReasonInput.trim() || 'Rechazada por administración';
 
-    updatePosReturnStatus(rejectingReturn.id, 'rejected', 'Admin General', reasonText);
-    logAuditEvent({
-      user: 'Admin General',
-      role: 'Administrador',
-      action: 'Devolución',
-      module: 'Devoluciones',
-      details: `Devolución ${rejectingReturn.code} (Factura: ${rejectingReturn.saleCode}) por RD$ ${rejectingReturn.total.toLocaleString()} RECHAZADA. Motivo: ${reasonText}`,
-      before: { id: rejectingReturn.id, status: rejectingReturn.status },
-      after: { id: rejectingReturn.id, status: 'rejected', reviewedBy: 'Admin General', rejectionReason: reasonText },
-    });
-    toast.error(`Devolución ${rejectingReturn.code} RECHAZADA`);
-    refreshReturns();
-    if (selectedReturn?.id === rejectingReturn.id) {
-      setSelectedReturn((prev) => (prev ? { ...prev, status: 'rejected', reviewedBy: 'Admin General', rejectionReason: reasonText } : null));
+    try {
+      await procesarEstado(rejectingReturn.id, 'rechazada', reasonText);
+      logAuditEvent({
+        user: reviewerName,
+        role: 'Administrador',
+        action: 'Devolución',
+        module: 'Devoluciones',
+        details: `Devolución ${rejectingReturn.code} (Factura: ${rejectingReturn.saleCode}) por RD$ ${rejectingReturn.total.toLocaleString()} RECHAZADA. Motivo: ${reasonText}`,
+        before: { id: rejectingReturn.id, status: rejectingReturn.status },
+        after: { id: rejectingReturn.id, status: 'rejected', reviewedBy: reviewerName, rejectionReason: reasonText },
+      });
+      toast.error(`Devolución ${rejectingReturn.code} RECHAZADA`);
+      await refetch();
+      if (selectedReturn?.id === rejectingReturn.id) {
+        setSelectedReturn((prev) =>
+          prev ? { ...prev, status: 'rejected', reviewedBy: reviewerName, rejectionReason: reasonText } : null
+        );
+      }
+      setRejectingReturn(null);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'No se pudo rechazar la devolución');
     }
-    setRejectingReturn(null);
   };
 
   const renderStatusBadge = (status?: PosReturnStatus) => {
@@ -342,7 +396,13 @@ export default function ReturnsHistoryPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.length === 0 ? (
+                {loading ? (
+                  <tr>
+                    <td colSpan={9} className="px-4 py-12 text-center text-muted-foreground">
+                      Cargando devoluciones…
+                    </td>
+                  </tr>
+                ) : filtered.length === 0 ? (
                   <tr>
                     <td colSpan={9} className="px-4 py-12 text-center text-muted-foreground">
                       <RotateCcw size={28} className="mx-auto mb-2 opacity-40" />
@@ -376,8 +436,9 @@ export default function ReturnsHistoryPage() {
                             <>
                               <button
                                 type="button"
-                                onClick={() => handleApproveReturn(r)}
-                                className="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20 text-xs font-bold flex items-center gap-1 transition-all shadow-xs"
+                                onClick={() => void handleApproveReturn(r)}
+                                disabled={procesando}
+                                className="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20 text-xs font-bold flex items-center gap-1 transition-all shadow-xs disabled:opacity-50"
                                 title="Aprobar Devolución"
                               >
                                 <Check size={14} /> Aprobar
@@ -522,8 +583,9 @@ export default function ReturnsHistoryPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => handleApproveReturn(selectedReturn)}
-                      className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm"
+                      onClick={() => void handleApproveReturn(selectedReturn)}
+                      disabled={procesando}
+                      className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm disabled:opacity-50"
                     >
                       <CheckCircle size={16} /> Aprobar Devolución
                     </button>

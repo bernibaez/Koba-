@@ -1,4 +1,6 @@
 import { getStoredProducts, updateProductStockInStore } from './productStore';
+import { isSupabaseConfigured } from '@/services/clienteSupabase';
+import type { ProductItem } from './productStore';
 
 export interface ComboItem {
   id: string;
@@ -252,6 +254,9 @@ export const DEFAULT_COMBO_SALES: ComboSaleRecord[] = [
 ];
 
 export function getCombos(): Combo[] {
+  // Con Supabase activo no sembramos catálogo demo local.
+  if (isSupabaseConfigured()) return [];
+
   try {
     const raw = localStorage.getItem(COMBOS_KEY);
     if (!raw) {
@@ -413,11 +418,15 @@ export function recordComboSale(
 }
 
 /** Check if combo has enough stock in components */
-export function checkComboStockAvailability(combo: Combo, qtyMultiplier: number = 1): {
+export function checkComboStockAvailability(
+  combo: Combo,
+  qtyMultiplier: number = 1,
+  catalog?: ProductItem[]
+): {
   available: boolean;
   missingItems: { productId: string; sku: string; name: string; required: number; available: number }[];
 } {
-  const products = getStoredProducts();
+  const products = catalog ?? (isSupabaseConfigured() ? [] : getStoredProducts());
   const missingItems: { productId: string; sku: string; name: string; required: number; available: number }[] = [];
 
   for (const item of combo.items) {

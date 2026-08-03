@@ -163,7 +163,7 @@ export default function ProductPanel({ onAddToCart, onOpenScale }: ProductPanelP
   };
 
   const handleComboClick = (combo: Combo) => {
-    const stockCheck = checkComboStockAvailability(combo, 1);
+    const stockCheck = checkComboStockAvailability(combo, 1, productosUi as any);
     if (!stockCheck.available) {
       setAlertComboName(combo.name);
       setMissingItems(stockCheck.missingItems);

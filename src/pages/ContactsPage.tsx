@@ -4,6 +4,7 @@ import { Users, Truck, Tag, Plus, Search, Filter, Edit2, Trash2, Download, Eye, 
 import { exportTableToPdf, formatMoneyPdf } from '@/lib/exportPdf';
 import { useClientes } from '@/hooks/useClientes';
 import { useProveedores } from '@/hooks/useProveedores';
+import { useGrupos } from '@/hooks/useGrupos';
 import { toast } from 'sonner';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 import type { TipoCliente } from '@/types/database';
@@ -22,16 +23,6 @@ interface Supplier {
   id: string; name: string; phone: string; email: string; address: string;
   contact: string; purchases: number; balance: number; status: 'active' | 'inactive';
 }
-interface Group {
-  id: number; name: string; discount: number; customers: number; description: string;
-}
-
-const mockGroups: Group[] = [
-  { id: 1, name: 'VIP', discount: 10, customers: 25, description: 'Clientes con alto volumen de compras' },
-  { id: 2, name: 'Mayorista', discount: 15, customers: 12, description: 'Clientes que compran al por mayor' },
-  { id: 3, name: 'Regular', discount: 0, customers: 180, description: 'Clientes regulares sin descuento especial' },
-  { id: 4, name: 'Empleados', discount: 20, customers: 8, description: 'Descuento especial para empleados' },
-];
 
 type Tab = 'customers' | 'suppliers' | 'groups';
 type FormMode = 'create' | 'edit' | 'view';
@@ -44,7 +35,7 @@ export default function ContactsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<{ type: 'customer' | 'supplier'; id: string; name: string } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ type: 'customer' | 'supplier' | 'group'; id: string; name: string } | null>(null);
 
   const [formNombre, setFormNombre] = useState('');
   const [formTelefono, setFormTelefono] = useState('');
@@ -52,9 +43,12 @@ export default function ContactsPage() {
   const [formDireccion, setFormDireccion] = useState('');
   const [formCredito, setFormCredito] = useState('');
   const [formGrupo, setFormGrupo] = useState('');
+  const [formDescuento, setFormDescuento] = useState('');
+  const [formDescripcion, setFormDescripcion] = useState('');
 
   const { clientes, crear: crearCliente, actualizar: actualizarCliente, eliminar: eliminarCliente } = useClientes(search);
   const { proveedores, crear: crearProveedor, actualizar: actualizarProveedor, eliminar: eliminarProveedor } = useProveedores(search);
+  const { grupos, crear: crearGrupo, actualizar: actualizarGrupo, eliminar: eliminarGrupo } = useGrupos();
 
   const filteredCustomers: Customer[] = useMemo(
     () =>
@@ -116,6 +110,8 @@ export default function ContactsPage() {
     setFormDireccion('');
     setFormCredito('');
     setFormGrupo('');
+    setFormDescuento('');
+    setFormDescripcion('');
     setEditingId(null);
     setFormMode('create');
   };
@@ -176,6 +172,15 @@ export default function ContactsPage() {
     setShowModal(true);
   };
 
+  const openEditGroup = (g: { id: string; nombre: string; porcentaje_descuento: number; descripcion: string | null }) => {
+    setFormNombre(g.nombre);
+    setFormDescuento(String(g.porcentaje_descuento ?? 0));
+    setFormDescripcion(g.descripcion ?? '');
+    setEditingId(g.id);
+    setFormMode('edit');
+    setShowModal(true);
+  };
+
   const formatK = (n: number) => {
     if (n >= 1000) return `RD$ ${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}K`;
     return `RD$ ${n.toLocaleString()}`;
@@ -223,25 +228,43 @@ export default function ContactsPage() {
       title: 'Grupos de Clientes',
       filename: 'grupos-clientes',
       headers: ['Grupo', 'Descuento', 'Clientes', 'Descripción'],
-      rows: mockGroups.map((g) => [g.name, `${g.discount}%`, g.customers, g.description]),
+      rows: grupos.map((g) => [
+        g.nombre,
+        `${g.porcentaje_descuento}%`,
+        g.clientes_count ?? 0,
+        g.descripcion ?? '',
+      ]),
     });
   };
 
   const handleSave = async () => {
-    if (tab === 'groups') {
-      toast.info('Grupos: próximamente');
-      closeFormModal();
-      return;
-    }
-
     if (!formNombre.trim()) {
-      toast.error(tab === 'customers' ? 'Ingresa el nombre del cliente' : 'Ingresa el nombre del proveedor');
+      toast.error(
+        tab === 'customers'
+          ? 'Ingresa el nombre del cliente'
+          : tab === 'suppliers'
+            ? 'Ingresa el nombre del proveedor'
+            : 'Ingresa el nombre del grupo'
+      );
       return;
     }
 
     setSaving(true);
     try {
-      if (tab === 'customers') {
+      if (tab === 'groups') {
+        const payload = {
+          nombre: formNombre.trim(),
+          porcentaje_descuento: formDescuento ? Number(formDescuento) : 0,
+          descripcion: formDescripcion.trim() || null,
+        };
+        if (formMode === 'edit' && editingId) {
+          await actualizarGrupo(editingId, payload);
+          toast.success('Grupo actualizado');
+        } else {
+          await crearGrupo(payload);
+          toast.success('Grupo creado');
+        }
+      } else if (tab === 'customers') {
         const tipo = TIPO_CLIENTE_OPTIONS.some((o) => o.value === formGrupo)
           ? (formGrupo as TipoCliente)
           : undefined;
@@ -303,9 +326,12 @@ export default function ContactsPage() {
       if (deleteTarget.type === 'customer') {
         await eliminarCliente(deleteTarget.id);
         toast.success('Cliente eliminado');
-      } else {
+      } else if (deleteTarget.type === 'supplier') {
         await eliminarProveedor(deleteTarget.id);
         toast.success('Proveedor eliminado');
+      } else {
+        await eliminarGrupo(deleteTarget.id);
+        toast.success('Grupo eliminado');
       }
       setDeleteTarget(null);
     } catch (e) {
@@ -427,11 +453,22 @@ export default function ContactsPage() {
               )}
               {tab === 'groups' && (
                 <>
-                  <input className="input-field" placeholder="Descuento (%)" type="number" disabled={isReadonly} />
+                  <input
+                    className="input-field"
+                    placeholder="Descuento (%)"
+                    type="number"
+                    value={formDescuento}
+                    onChange={(e) => setFormDescuento(e.target.value)}
+                    readOnly={isReadonly}
+                    disabled={isReadonly}
+                  />
                   <textarea
                     className="input-field sm:col-span-2"
                     placeholder="Descripción"
                     rows={3}
+                    value={formDescripcion}
+                    onChange={(e) => setFormDescripcion(e.target.value)}
+                    readOnly={isReadonly}
                     disabled={isReadonly}
                   />
                 </>
@@ -501,8 +538,8 @@ export default function ContactsPage() {
             <div className="card p-4"><p className="text-xs text-muted-foreground">Saldo por pagar</p><p className="text-2xl font-bold text-warning mt-1">—</p></div>
           </>}
           {tab === 'groups' && <>
-            <div className="card p-4"><p className="text-xs text-muted-foreground">Total Grupos</p><p className="text-2xl font-bold text-foreground mt-1">{mockGroups.length}</p></div>
-            <div className="card p-4"><p className="text-xs text-muted-foreground">Clientes Asignados</p><p className="text-2xl font-bold text-success mt-1">{customerStats.total}</p></div>
+            <div className="card p-4"><p className="text-xs text-muted-foreground">Total Grupos</p><p className="text-2xl font-bold text-foreground mt-1">{grupos.length}</p></div>
+            <div className="card p-4"><p className="text-xs text-muted-foreground">Clientes Asignados</p><p className="text-2xl font-bold text-success mt-1">{grupos.reduce((s, g) => s + (g.clientes_count ?? 0), 0)}</p></div>
           </>}
         </div>
 
@@ -651,20 +688,49 @@ export default function ContactsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {mockGroups.map((g, i) => (
-                    <tr key={g.id} className={`border-b border-border hover:bg-secondary/30 transition-colors ${i % 2 === 0 ? '' : 'bg-secondary/10'}`}>
-                      <td className="px-4 py-3 font-medium text-foreground">{g.name}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{g.description}</td>
-                      <td className="px-4 py-3 hidden md:table-cell"><span className="badge-success">{g.discount}%</span></td>
-                      <td className="px-4 py-3 hidden md:table-cell text-muted-foreground">{g.customers} clientes</td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-end gap-1">
-                          <button type="button" onClick={() => toast.info('Grupos: próximamente')} className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"><Edit2 size={14} /></button>
-                          <button type="button" onClick={() => toast.info('Grupos: próximamente')} className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-danger transition-colors"><Trash2 size={14} /></button>
-                        </div>
+                  {grupos.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
+                        No hay grupos registrados en la base de datos
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    grupos.map((g, i) => (
+                      <tr
+                        key={g.id}
+                        className={`border-b border-border hover:bg-secondary/30 transition-colors ${i % 2 === 0 ? '' : 'bg-secondary/10'}`}
+                      >
+                        <td className="px-4 py-3 font-medium text-foreground">{g.nombre}</td>
+                        <td className="px-4 py-3 text-muted-foreground">{g.descripcion || '—'}</td>
+                        <td className="px-4 py-3 hidden md:table-cell">
+                          <span className="badge-success">{g.porcentaje_descuento}%</span>
+                        </td>
+                        <td className="px-4 py-3 hidden md:table-cell text-muted-foreground">
+                          {g.clientes_count ?? 0} clientes
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              type="button"
+                              onClick={() => openEditGroup(g)}
+                              className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+                            >
+                              <Edit2 size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setDeleteTarget({ type: 'group', id: g.id, name: g.nombre })
+                              }
+                              className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-danger transition-colors"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -676,7 +742,13 @@ export default function ContactsPage() {
         open={!!deleteTarget}
         onClose={() => !deleting && setDeleteTarget(null)}
         onConfirm={handleDeleteConfirm}
-        title={deleteTarget?.type === 'supplier' ? 'Eliminar proveedor' : 'Eliminar cliente'}
+        title={
+          deleteTarget?.type === 'supplier'
+            ? 'Eliminar proveedor'
+            : deleteTarget?.type === 'group'
+              ? 'Eliminar grupo'
+              : 'Eliminar cliente'
+        }
         description={`¿Eliminar "${deleteTarget?.name ?? ''}"? Esta acción lo desactivará del sistema.`}
         confirmLabel="Eliminar"
         loading={deleting}

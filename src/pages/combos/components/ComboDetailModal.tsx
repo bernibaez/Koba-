@@ -1,8 +1,6 @@
 import React from 'react';
-import { X, Layers, Calendar, Store, CheckCircle, PackageCheck, AlertTriangle } from 'lucide-react';
+import { X, Layers, Calendar, Store, CheckCircle, PackageCheck } from 'lucide-react';
 import { Combo } from '@/lib/comboStore';
-import { getStoredProducts } from '@/lib/productStore';
-
 import CategoryIcon from '@/components/ui/CategoryIcon';
 
 interface ComboDetailModalProps {
@@ -20,7 +18,6 @@ export default function ComboDetailModal({
 }: ComboDetailModalProps) {
   if (!isOpen || !combo) return null;
 
-  const products = getStoredProducts();
   const formatCurrency = (val: number) => `RD$ ${val.toLocaleString('es-DO', { minimumFractionDigits: 2 })}`;
 
   return (
@@ -114,23 +111,12 @@ export default function ComboDetailModal({
                 </thead>
                 <tbody className="divide-y divide-border/60">
                   {combo.items.map((item) => {
-                    const prod = products.find((p) => p.id === item.productId || p.sku === item.sku);
-                    const stock = prod ? prod.currentStock : 0;
-                    const isLow = stock < item.quantity;
                     return (
                       <tr key={item.id}>
-                        <td className="p-2.5 font-bold text-foreground">{item.name}</td>
-                        <td className="p-2.5 font-mono text-muted-foreground">{item.sku}</td>
+                        <td className="p-2.5 font-bold text-foreground">{item.name || 'Producto'}</td>
+                        <td className="p-2.5 font-mono text-muted-foreground">{item.sku || '—'}</td>
                         <td className="p-2.5 text-center font-extrabold text-primary">{item.quantity} unds</td>
-                        <td className="p-2.5 text-center font-bold">
-                          {isLow ? (
-                            <span className="text-danger flex items-center justify-center gap-1">
-                              <AlertTriangle size={12} /> {stock}
-                            </span>
-                          ) : (
-                            <span className="text-emerald-600">{stock}</span>
-                          )}
-                        </td>
+                        <td className="p-2.5 text-center font-bold text-muted-foreground">—</td>
                         <td className="p-2.5 text-right font-semibold text-muted-foreground">RD$ {item.costPrice.toFixed(2)}</td>
                         <td className="p-2.5 text-right font-semibold text-emerald-600 dark:text-emerald-400">RD$ {item.unitPrice.toFixed(2)}</td>
                         <td className="p-2.5 text-right font-bold text-slate-600 dark:text-slate-300">RD$ {(item.costPrice * item.quantity).toFixed(2)}</td>

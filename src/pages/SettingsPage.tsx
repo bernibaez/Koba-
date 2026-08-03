@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import AppLayout from '@/components/AppLayout';
 import {
@@ -10,6 +10,7 @@ import {
   getCompanyLogo,
   readLogoFile,
   setCompanyLogo,
+  syncCompanyLogoFromDb,
 } from '@/lib/companyLogo';
 import NCFSettingsTab from './settings/NCFSettingsTab';
 import PermissionsSettingsTab from './settings/PermissionsSettingsTab';
@@ -35,6 +36,10 @@ export default function SettingsPage() {
   const [logoPreview, setLogoPreview] = useState<string | null>(() => getCompanyLogo());
   const [logoError, setLogoError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    void syncCompanyLogoFromDb().then((url) => setLogoPreview(url));
+  }, []);
 
   const openFilePicker = () => {
     setLogoError(null);

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import {
-  Plus, Search, Download, Eye, Wallet, Clock, AlertTriangle, CheckCircle2, Printer, FileSpreadsheet, X, FileText,
+  Plus, Search, Download, Eye, Wallet, Clock, AlertTriangle, CheckCircle2, Printer, FileSpreadsheet, FileText,
 } from 'lucide-react';
 import { exportTableToPdf, exportTableToExcel, formatMoneyPdf } from '@/lib/exportPdf';
 import { logAuditEvent } from '@/lib/auditStore';
@@ -9,7 +9,6 @@ import { toast } from 'sonner';
 import { useCxp } from '@/hooks/useCxp';
 import type { CuentaPagarUi, CxStatusUi } from '@/services/cxp.service';
 import { ButtonSpinner, InlineLoader, PageContentSkeleton } from '@/components/ui/LoadingSkeleton';
-import ModalShell from '@/components/ui/ModalShell';
 
 const statusMap: Record<CxStatusUi, { label: string; cls: string }> = {
   pending: { label: 'Pendiente', cls: 'badge-warning' },
@@ -93,6 +92,20 @@ export default function AccountsPayablePage() {
     });
   };
 
+  const closeCreateForm = () => {
+    setShowModal(false);
+    setFormProveedor('');
+    setFormMonto('');
+    setFormEmision(today());
+    setFormVence(plusDays(15));
+  };
+
+  const closeDetail = () => {
+    setSelected(null);
+    setPaymentAmount('');
+    setPaymentNote('');
+  };
+
   const handleProcessPayment = async () => {
     if (!selected) return;
     const amount = parseFloat(paymentAmount);
@@ -118,9 +131,7 @@ export default function AccountsPayablePage() {
         after: { paid: selected.paid + amount },
       });
       toast.success(`Pago de RD$ ${amount.toLocaleString()} registrado`);
-      setSelected(null);
-      setPaymentAmount('');
-      setPaymentNote('');
+      closeDetail();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'No se pudo registrar el pago');
     } finally {
@@ -147,9 +158,7 @@ export default function AccountsPayablePage() {
         fecha_vencimiento: formVence,
       });
       toast.success('Cuenta por pagar registrada');
-      setShowModal(false);
-      setFormProveedor('');
-      setFormMonto('');
+      closeCreateForm();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'No se pudo crear la cuenta');
     } finally {
@@ -161,6 +170,218 @@ export default function AccountsPayablePage() {
     return (
       <AppLayout>
         <PageContentSkeleton kpiCount={4} tableCols={10} tableRows={6} />
+      </AppLayout>
+    );
+  }
+
+  if (showModal) {
+    return (
+      <AppLayout>
+        <div className="space-y-6 slide-up">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div>
+              <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+                <Wallet className="text-warning" size={24} />
+                Nueva Cuenta por Pagar
+              </h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                Registra una factura de proveedor con emisión y vencimiento
+              </p>
+            </div>
+            <button type="button" onClick={closeCreateForm} className="btn-secondary" disabled={saving}>
+              ← Volver a Cuentas por Pagar
+            </button>
+          </div>
+
+          <div className="card p-5 sm:p-6 space-y-4 max-w-2xl">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="sm:col-span-2">
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Proveedor *</label>
+                <select
+                  className="input-field"
+                  value={formProveedor}
+                  onChange={(e) => setFormProveedor(e.target.value)}
+                >
+                  <option value="">Seleccionar proveedor…</option>
+                  {proveedores.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.nombre}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="sm:col-span-2">
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Monto Total *</label>
+                <input
+                  className="input-field"
+                  type="number"
+                  placeholder="0.00"
+                  value={formMonto}
+                  onChange={(e) => setFormMonto(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Emisión</label>
+                <input
+                  className="input-field"
+                  type="date"
+                  value={formEmision}
+                  onChange={(e) => setFormEmision(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Vencimiento</label>
+                <input
+                  className="input-field"
+                  type="date"
+                  value={formVence}
+                  onChange={(e) => setFormVence(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2 border-t border-border">
+              <button type="button" className="btn-secondary" disabled={saving} onClick={closeCreateForm}>
+                Cancelar
+              </button>
+              <button type="button" className="btn-primary" disabled={saving} onClick={handleCreate}>
+                {saving ? 'Guardando…' : 'Guardar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  if (selected) {
+    return (
+      <AppLayout>
+        <div className="space-y-6 slide-up">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div>
+              <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+                <FileText className="text-warning" size={24} />
+                Estado de Cuenta — {selected.supplier}
+              </h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                Consulta saldo, registra pagos y revisa el historial
+              </p>
+            </div>
+            <button type="button" onClick={closeDetail} className="btn-secondary" disabled={saving}>
+              ← Volver a Cuentas por Pagar
+            </button>
+          </div>
+
+          <div className="card p-5 sm:p-6 space-y-4 max-w-3xl">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 bg-secondary/40 rounded-xl p-3 text-xs">
+              <div>
+                <span className="text-muted-foreground block">Compra Ref.</span>
+                <span className="font-bold text-primary">{selected.purchase}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground block">Monto Total</span>
+                <span className="font-bold text-foreground">RD$ {selected.total.toLocaleString()}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground block">Saldo Pendiente</span>
+                <span className="font-bold text-danger">RD$ {selected.balance.toLocaleString()}</span>
+              </div>
+            </div>
+
+            {selected.balance > 0 && (
+              <div className="border border-warning/20 bg-warning/5 rounded-xl p-4 space-y-3">
+                <p className="text-xs font-bold uppercase tracking-wider text-warning">
+                  Registrar Pago a Proveedor
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-semibold text-foreground mb-1 block">
+                      Monto a Pagar (RD$) *
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      className="input-field font-bold tabular-nums"
+                      value={paymentAmount}
+                      onChange={(e) => setPaymentAmount(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-foreground mb-1 block">Método de Pago</label>
+                    <select
+                      className="input-field text-xs"
+                      value={paymentMethod}
+                      onChange={(e) => setPaymentMethod(e.target.value)}
+                    >
+                      <option value="Transferencia">Transferencia Banco</option>
+                      <option value="Cheque">Cheque Empresarial</option>
+                      <option value="Efectivo">Efectivo Caja</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground mb-1 block">
+                    Nota / Comprobante
+                  </label>
+                  <input
+                    className="input-field text-xs"
+                    placeholder="Ej: Transf. #456123 o recibo firmado..."
+                    value={paymentNote}
+                    onChange={(e) => setPaymentNote(e.target.value)}
+                  />
+                </div>
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={handleProcessPayment}
+                  className="btn-primary w-full py-2 font-bold flex items-center justify-center gap-1.5"
+                >
+                  {saving ? <ButtonSpinner /> : <Wallet size={16} />}
+                  {saving ? 'Registrando…' : `Confirmar Pago de RD$ ${parseFloat(paymentAmount) || 0}`}
+                </button>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                Historial de Pagos Efectuados
+              </p>
+              {selected.payments.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic py-2">No hay pagos previos registrados.</p>
+              ) : (
+                <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
+                  {selected.payments.map((p) => (
+                    <div
+                      key={p.id}
+                      className="flex justify-between items-center bg-card border border-border p-2 rounded-lg text-xs"
+                    >
+                      <div>
+                        <span className="font-bold text-foreground">{p.date}</span> ·{' '}
+                        <span className="text-muted-foreground">{p.method}</span>
+                        <p className="text-[11px] text-muted-foreground">{p.note}</p>
+                      </div>
+                      <span className="font-bold text-success text-sm">+ RD$ {p.amount.toLocaleString()}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-border">
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="btn-secondary flex items-center gap-1.5 text-xs"
+              >
+                <Printer size={14} /> Imprimir Estado de Cuenta
+              </button>
+              <button type="button" disabled={saving} onClick={closeDetail} className="btn-primary text-xs">
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
       </AppLayout>
     );
   }
@@ -328,146 +549,6 @@ export default function AccountsPayablePage() {
           </div>
         </div>
 
-        <ModalShell
-          open={!!selected}
-          onClose={() => setSelected(null)}
-          size="xl"
-          busy={saving}
-          busyLabel="Registrando pago…"
-          busyVariant="processing"
-          className="p-6 space-y-4"
-        >
-          {selected && (
-            <>
-              <div className="flex items-center justify-between border-b border-border pb-3">
-                <div className="flex items-center gap-2">
-                  <FileText className="text-warning" size={20} />
-                  <h3 className="font-bold text-foreground text-lg">Estado de Cuenta Proveedor — {selected.supplier}</h3>
-                </div>
-                <button type="button" disabled={saving} onClick={() => setSelected(null)} className="p-1 text-muted-foreground hover:text-foreground">
-                  <X size={18} />
-                </button>
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 bg-secondary/40 rounded-xl p-3 text-xs">
-                <div><span className="text-muted-foreground block">Compra Ref.</span><span className="font-bold text-primary">{selected.purchase}</span></div>
-                <div><span className="text-muted-foreground block">Monto Total</span><span className="font-bold text-foreground">RD$ {selected.total.toLocaleString()}</span></div>
-                <div><span className="text-muted-foreground block">Saldo Pendiente</span><span className="font-bold text-danger">RD$ {selected.balance.toLocaleString()}</span></div>
-              </div>
-
-              {selected.balance > 0 && (
-                <div className="border border-warning/20 bg-warning/5 rounded-xl p-4 space-y-3">
-                  <p className="text-xs font-bold uppercase tracking-wider text-warning">Registrar Pago a Proveedor</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs font-semibold text-foreground mb-1 block">Monto a Pagar (RD$) *</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        placeholder="0.00"
-                        className="input-field font-bold tabular-nums"
-                        value={paymentAmount}
-                        onChange={(e) => setPaymentAmount(e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-semibold text-foreground mb-1 block">Método de Pago</label>
-                      <select className="input-field text-xs" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
-                        <option value="Transferencia">Transferencia Banco</option>
-                        <option value="Cheque">Cheque Empresarial</option>
-                        <option value="Efectivo">Efectivo Caja</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold text-muted-foreground mb-1 block">Nota / Comprobante</label>
-                    <input
-                      className="input-field text-xs"
-                      placeholder="Ej: Transf. #456123 o recibo firmado..."
-                      value={paymentNote}
-                      onChange={(e) => setPaymentNote(e.target.value)}
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={handleProcessPayment}
-                    className="btn-primary w-full py-2 font-bold flex items-center justify-center gap-1.5"
-                  >
-                    {saving ? <ButtonSpinner /> : <Wallet size={16} />}
-                    {saving ? 'Registrando…' : `Confirmar Pago de RD$ ${parseFloat(paymentAmount) || 0}`}
-                  </button>
-                </div>
-              )}
-
-              <div className="space-y-2">
-                <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Historial de Pagos Efectuados</p>
-                {selected.payments.length === 0 ? (
-                  <p className="text-xs text-muted-foreground italic py-2">No hay pagos previos registrados.</p>
-                ) : (
-                  <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
-                    {selected.payments.map((p) => (
-                      <div key={p.id} className="flex justify-between items-center bg-card border border-border p-2 rounded-lg text-xs">
-                        <div>
-                          <span className="font-bold text-foreground">{p.date}</span> · <span className="text-muted-foreground">{p.method}</span>
-                          <p className="text-[11px] text-muted-foreground">{p.note}</p>
-                        </div>
-                        <span className="font-bold text-success text-sm">+ RD$ {p.amount.toLocaleString()}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="flex justify-end gap-2 pt-3 border-t border-border">
-                <button type="button" onClick={() => window.print()} className="btn-secondary flex items-center gap-1.5 text-xs">
-                  <Printer size={14} /> Imprimir Estado de Cuenta
-                </button>
-                <button type="button" disabled={saving} onClick={() => setSelected(null)} className="btn-primary text-xs">Cerrar</button>
-              </div>
-            </>
-          )}
-        </ModalShell>
-
-        <ModalShell
-          open={showModal}
-          onClose={() => setShowModal(false)}
-          size="lg"
-          busy={saving}
-          busyLabel="Guardando cuenta…"
-          className="p-6 space-y-4"
-        >
-          <h3 className="text-lg font-bold text-foreground">Nueva Cuenta por Pagar</h3>
-          <div className="grid grid-cols-2 gap-3 text-xs">
-            <div className="col-span-2">
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">Proveedor *</label>
-              <select className="input-field text-xs" value={formProveedor} onChange={(e) => setFormProveedor(e.target.value)}>
-                <option value="">Seleccionar proveedor…</option>
-                {proveedores.map((p) => (
-                  <option key={p.id} value={p.id}>{p.nombre}</option>
-                ))}
-              </select>
-            </div>
-            <div className="col-span-2">
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">Monto Total *</label>
-              <input className="input-field text-xs" type="number" placeholder="0.00" value={formMonto} onChange={(e) => setFormMonto(e.target.value)} />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">Emisión</label>
-              <input className="input-field text-xs" type="date" value={formEmision} onChange={(e) => setFormEmision(e.target.value)} />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">Vencimiento</label>
-              <input className="input-field text-xs" type="date" value={formVence} onChange={(e) => setFormVence(e.target.value)} />
-            </div>
-          </div>
-          <div className="flex justify-end gap-2 pt-2 border-t border-border">
-            <button type="button" className="btn-secondary text-xs" disabled={saving} onClick={() => setShowModal(false)}>Cancelar</button>
-            <button type="button" className="btn-primary text-xs" disabled={saving} onClick={handleCreate}>
-              Guardar
-            </button>
-          </div>
-        </ModalShell>
       </div>
     </AppLayout>
   );

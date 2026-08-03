@@ -123,6 +123,31 @@ export async function obtenerDevoluciones(params: {
     cajero_nombre: row.perfiles?.nombre_completo ?? 'Cajero',
   }));
 
+  if (datos.length > 0) {
+    const ids = datos.map((d) => d.id);
+    const { data: det } = await sb
+      .from('detalle_devoluciones')
+      .select('id, devolucion_id, producto_id, sku, nombre_item, cantidad, precio_unitario, subtotal')
+      .in('devolucion_id', ids);
+    const byDev = new Map<string, NonNullable<DevolucionConDetalle['items']>>();
+    for (const row of det ?? []) {
+      const list = byDev.get(String(row.devolucion_id)) ?? [];
+      list.push({
+        id: String(row.id),
+        producto_id: row.producto_id,
+        sku: row.sku,
+        nombre_item: row.nombre_item,
+        cantidad: Number(row.cantidad),
+        precio_unitario: Number(row.precio_unitario),
+        subtotal: Number(row.subtotal),
+      });
+      byDev.set(String(row.devolucion_id), list);
+    }
+    for (const d of datos) {
+      d.items = byDev.get(d.id) ?? [];
+    }
+  }
+
   return { datos, total: count ?? 0 };
 }
 

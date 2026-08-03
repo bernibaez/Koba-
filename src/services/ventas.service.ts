@@ -230,6 +230,30 @@ export async function obtenerHistorialVentas(params: {
   return { datos, total: count ?? 0 };
 }
 
+export async function obtenerVentaPorNumeroFactura(
+  numeroFactura: string
+): Promise<VentaConDetalle | null> {
+  const codigo = numeroFactura.trim();
+  if (!codigo) return null;
+
+  const sb = tryGetSupabase();
+  if (!sb) {
+    const list = getLocalVentas();
+    return list.find((v) => v.numero_factura.toUpperCase() === codigo.toUpperCase()) ?? null;
+  }
+
+  const { data: venta, error } = await sb
+    .from('ventas')
+    .select('id')
+    .ilike('numero_factura', codigo)
+    .order('creado_en', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  if (!venta?.id) return null;
+  return obtenerVentaPorId(String(venta.id));
+}
+
 export async function obtenerVentaPorId(ventaId: string): Promise<VentaConDetalle | null> {
   const sb = tryGetSupabase();
   if (!sb) {

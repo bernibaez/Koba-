@@ -1,17 +1,48 @@
-import React, { useState } from 'react';
-import { ShieldCheck, Plus, RefreshCw, AlertTriangle, CheckCircle2, Calendar, FileText } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { ShieldCheck, Plus, Calendar, FileText } from 'lucide-react';
 import { toast } from 'sonner';
-import { getNCFRanges, saveNCFRanges, NCF_TYPES, type NCFRange, type NCFType } from '@/lib/ncfStore';
+import { NCF_TYPES, type NCFRange, type NCFType } from '@/lib/ncfStore';
+import { obtenerRangosNcf, guardarRangosNcf } from '@/services/ncf.service';
 
 export default function NCFSettingsTab() {
-  const [ranges, setRanges] = useState<NCFRange[]>(() => getNCFRanges());
+  const [ranges, setRanges] = useState<NCFRange[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [editingRange, setEditingRange] = useState<NCFRange | null>(null);
+
+  const loadRanges = async () => {
+    setLoading(true);
+    try {
+      const data = await obtenerRangosNcf();
+      setRanges(data);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'No se pudieron cargar las secuencias NCF');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadRanges();
+  }, []);
+
+  const persist = async (updated: NCFRange[], successMsg: string) => {
+    setSaving(true);
+    try {
+      await guardarRangosNcf(updated);
+      const refreshed = await obtenerRangosNcf();
+      setRanges(refreshed);
+      toast.success(successMsg);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Error al guardar secuencias NCF');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const handleToggleActive = (id: string) => {
     const updated = ranges.map((r) => (r.id === id ? { ...r, active: !r.active } : r));
-    setRanges(updated);
-    saveNCFRanges(updated);
-    toast.success('Estado de secuencia NCF actualizado');
+    void persist(updated, 'Estado de secuencia NCF actualizado');
   };
 
   const handleSaveRange = (e: React.FormEvent) => {
@@ -19,17 +50,13 @@ export default function NCFSettingsTab() {
     if (!editingRange) return;
 
     const exists = ranges.some((r) => r.id === editingRange.id);
-    let updated: NCFRange[];
-    if (exists) {
-      updated = ranges.map((r) => (r.id === editingRange.id ? editingRange : r));
-    } else {
-      updated = [...ranges, editingRange];
-    }
+    const updated = exists
+      ? ranges.map((r) => (r.id === editingRange.id ? editingRange : r))
+      : [...ranges, editingRange];
 
-    setRanges(updated);
-    saveNCFRanges(updated);
-    setEditingRange(null);
-    toast.success(`Secuencia ${editingRange.prefix} guardada correctamente`);
+    void persist(updated, `Secuencia ${editingRange.prefix} guardada correctamente`).then(() => {
+      setEditingRange(null);
+    });
   };
 
   return (
@@ -47,6 +74,7 @@ export default function NCFSettingsTab() {
 
         <button
           type="button"
+          disabled={saving}
           onClick={() =>
             setEditingRange({
               id: `ncf-${Date.now()}`,
@@ -65,86 +93,98 @@ export default function NCFSettingsTab() {
         </button>
       </div>
 
-      {/* Grid of Active Ranges */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {ranges.map((r) => {
-          const info = NCF_TYPES[r.type];
-          const remaining = r.maxNumber - r.currentNumber;
-          const percentUsed = Math.min(100, Math.round((r.currentNumber / r.maxNumber) * 100));
+      {loading ? (
+        <p className="text-sm text-muted-foreground py-8 text-center">Cargando secuencias NCF…</p>
+      ) : ranges.length === 0 ? (
+        <p className="text-sm text-muted-foreground py-8 text-center">
+          No hay rangos NCF configurados. Crea una secuencia o ejecuta el seed de Supabase.
+        </p>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {ranges.map((r) => {
+            const info = NCF_TYPES[r.type];
+            const remaining = r.maxNumber - r.currentNumber;
+            const percentUsed = Math.min(100, Math.round((r.currentNumber / Math.max(1, r.maxNumber)) * 100));
 
-          return (
-            <div
-              key={r.id}
-              className={`p-4 rounded-2xl border transition-all ${
-                r.active
-                  ? 'border-border bg-card shadow-2xs'
-                  : 'border-border/50 bg-secondary/30 opacity-75'
-              }`}
-            >
-              <div className="flex items-start justify-between gap-2 mb-2">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono font-black text-lg text-primary">{r.prefix}</span>
-                    <span className="text-xs font-bold px-2 py-0.5 rounded bg-primary/10 text-primary">
-                      {info?.name.split('(')[0] || r.type}
+            return (
+              <div
+                key={r.id}
+                className={`p-4 rounded-2xl border transition-all ${
+                  r.active
+                    ? 'border-border bg-card shadow-2xs'
+                    : 'border-border/50 bg-secondary/30 opacity-75'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-black text-lg text-primary">{r.prefix}</span>
+                      <span className="text-xs font-bold px-2 py-0.5 rounded bg-primary/10 text-primary">
+                        {info?.name.split('(')[0] || r.type}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">{info?.description}</p>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => handleToggleActive(r.id)}
+                    className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${
+                      r.active ? 'bg-emerald-500/15 text-emerald-600' : 'bg-secondary text-muted-foreground'
+                    }`}
+                  >
+                    {r.active ? 'Activa' : 'Inactiva'}
+                  </button>
+                </div>
+
+                <div className="space-y-1 my-3">
+                  <div className="flex justify-between text-xs font-mono font-semibold">
+                    <span>
+                      Actual: {r.prefix}
+                      {String(r.currentNumber).padStart(8, '0')}
+                    </span>
+                    <span>
+                      Límite: {r.prefix}
+                      {String(r.maxNumber).padStart(8, '0')}
                     </span>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">{info?.description}</p>
+                  <div className="w-full h-2 bg-secondary rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all ${
+                        remaining < 50 ? 'bg-rose-500' : percentUsed > 80 ? 'bg-amber-500' : 'bg-primary'
+                      }`}
+                      style={{ width: `${percentUsed}%` }}
+                    />
+                  </div>
+                  <div className="flex justify-between text-[11px] text-muted-foreground pt-0.5">
+                    <span>Usado: {percentUsed}%</span>
+                    <span className={remaining < 50 ? 'font-bold text-rose-500' : ''}>
+                      Restantes: {remaining}
+                    </span>
+                  </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => handleToggleActive(r.id)}
-                  className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${
-                    r.active ? 'bg-emerald-500/15 text-emerald-600' : 'bg-secondary text-muted-foreground'
-                  }`}
-                >
-                  {r.active ? 'Activa' : 'Inactiva'}
-                </button>
-              </div>
-
-              {/* Progress bar */}
-              <div className="space-y-1 my-3">
-                <div className="flex justify-between text-xs font-mono font-semibold">
-                  <span>Actual: {r.prefix}{String(r.currentNumber).padStart(8, '0')}</span>
-                  <span>Límite: {r.prefix}{String(r.maxNumber).padStart(8, '0')}</span>
-                </div>
-                <div className="w-full h-2 bg-secondary rounded-full overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all ${
-                      remaining < 50 ? 'bg-rose-500' : percentUsed > 80 ? 'bg-amber-500' : 'bg-primary'
-                    }`}
-                    style={{ width: `${percentUsed}%` }}
-                  />
-                </div>
-                <div className="flex justify-between text-[11px] text-muted-foreground pt-0.5">
-                  <span>Usado: {percentUsed}%</span>
-                  <span className={remaining < 50 ? 'font-bold text-rose-500' : ''}>
-                    Restantes: {remaining}
+                <div className="flex items-center justify-between pt-2 border-t border-border/60 text-xs">
+                  <span className="flex items-center gap-1 text-muted-foreground">
+                    <Calendar size={13} /> Vence:{' '}
+                    <strong className="text-foreground font-mono">{r.expirationDate}</strong>
                   </span>
+
+                  <button
+                    type="button"
+                    onClick={() => setEditingRange(r)}
+                    className="text-xs text-primary font-bold hover:underline"
+                  >
+                    Editar Rango
+                  </button>
                 </div>
               </div>
+            );
+          })}
+        </div>
+      )}
 
-              {/* Footer info */}
-              <div className="flex items-center justify-between pt-2 border-t border-border/60 text-xs">
-                <span className="flex items-center gap-1 text-muted-foreground">
-                  <Calendar size={13} /> Vence: <strong className="text-foreground font-mono">{r.expirationDate}</strong>
-                </span>
-
-                <button
-                  type="button"
-                  onClick={() => setEditingRange(r)}
-                  className="text-xs text-primary font-bold hover:underline"
-                >
-                  Editar Rango
-                </button>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Editing Modal / Drawer */}
       {editingRange && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
           <form
@@ -182,7 +222,10 @@ export default function NCFSettingsTab() {
                     type="number"
                     value={editingRange.currentNumber}
                     onChange={(e) =>
-                      setEditingRange({ ...editingRange, currentNumber: parseInt(e.target.value, 10) || 0 })
+                      setEditingRange({
+                        ...editingRange,
+                        currentNumber: parseInt(e.target.value, 10) || 0,
+                      })
                     }
                     className="input-field font-mono"
                   />
@@ -194,7 +237,10 @@ export default function NCFSettingsTab() {
                     type="number"
                     value={editingRange.maxNumber}
                     onChange={(e) =>
-                      setEditingRange({ ...editingRange, maxNumber: parseInt(e.target.value, 10) || 0 })
+                      setEditingRange({
+                        ...editingRange,
+                        maxNumber: parseInt(e.target.value, 10) || 0,
+                      })
                     }
                     className="input-field font-mono"
                   />
@@ -213,15 +259,11 @@ export default function NCFSettingsTab() {
             </div>
 
             <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
-              <button
-                type="button"
-                onClick={() => setEditingRange(null)}
-                className="btn-secondary text-xs"
-              >
+              <button type="button" onClick={() => setEditingRange(null)} className="btn-secondary text-xs">
                 Cancelar
               </button>
-              <button type="submit" className="btn-primary text-xs font-bold">
-                Guardar Secuencia
+              <button type="submit" disabled={saving} className="btn-primary text-xs font-bold">
+                {saving ? 'Guardando…' : 'Guardar Secuencia'}
               </button>
             </div>
           </form>
