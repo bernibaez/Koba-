@@ -14,12 +14,18 @@ export default function InventoryAlerts() {
         </h3>
         <span className="text-xs text-muted-foreground">{alertas.length} alertas</span>
       </div>
-      {loading && <p className="text-sm text-muted-foreground">Cargando…</p>}
+      {loading && (
+        <div className="space-y-2" aria-busy="true">
+          {Array.from({ length: 4 }, (_, i) => (
+            <div key={`alerta-skel-${i}`} className="skeleton-shimmer h-14 rounded-xl" />
+          ))}
+        </div>
+      )}
       {!loading && alertas.length === 0 && (
         <p className="text-sm text-muted-foreground">Sin alertas de stock.</p>
       )}
       <ul className="space-y-2 max-h-80 overflow-y-auto">
-        {alertas.map((a) => {
+        {!loading && alertas.map((a) => {
           const isOut = a.nivel_alerta === 'agotado';
           return (
             <li

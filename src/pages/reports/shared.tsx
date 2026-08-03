@@ -9,9 +9,21 @@ export function formatRD(value: number) {
   return `RD$ ${value.toLocaleString('es-DO', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 }
 
-export function ReportLoading({ message = 'Cargando datos de Supabase…' }: { message?: string }) {
+export function ReportLoading({ message = 'Cargando informe…' }: { message?: string }) {
   return (
-    <div className="card p-12 text-center text-muted-foreground text-sm">{message}</div>
+    <div className="card p-12 flex flex-col items-center justify-center gap-3 text-center fade-in" role="status">
+      <span
+        className="inline-block h-8 w-8 rounded-full border-[3px] border-primary/25 border-t-primary animate-spin"
+        aria-hidden
+      />
+      <p className="text-sm text-muted-foreground">{message}</p>
+      <div className="w-full max-w-md grid grid-cols-3 gap-3 mt-2">
+        <div className="skeleton-shimmer h-16 rounded-xl" />
+        <div className="skeleton-shimmer h-16 rounded-xl" />
+        <div className="skeleton-shimmer h-16 rounded-xl" />
+      </div>
+      <div className="w-full max-w-md skeleton-shimmer h-40 rounded-xl mt-1" />
+    </div>
   );
 }
 

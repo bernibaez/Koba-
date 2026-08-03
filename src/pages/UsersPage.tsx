@@ -27,6 +27,8 @@ import type { UserRole } from '@/lib/auth';
 import { toast } from 'sonner';
 import { isSupabaseConfigured } from '@/services/clienteSupabase';
 import { isMissingRolesTableError } from '@/services/roles.service';
+import { InlineLoader, TableRowSkeleton } from '@/components/ui/LoadingSkeleton';
+import ModalShell from '@/components/ui/ModalShell';
 
 type Tab = 'users' | 'roles' | 'agents';
 
@@ -333,11 +335,12 @@ export default function UsersPage() {
                 </thead>
                 <tbody>
                   {loading && (
-                    <tr>
-                      <td colSpan={5} className="px-4 py-6 text-center text-muted-foreground">
-                        Cargando usuarios…
-                      </td>
-                    </tr>
+                    <>
+                      <InlineLoader colSpan={5} message="Cargando usuarios…" />
+                      <TableRowSkeleton cols={5} />
+                      <TableRowSkeleton cols={5} />
+                      <TableRowSkeleton cols={5} />
+                    </>
                   )}
                   {!loading &&
                     usuarios.map((user, i) => (
@@ -643,15 +646,17 @@ export default function UsersPage() {
         )}
       </div>
 
-      {showModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 fade-in"
-          onClick={() => {
-            setShowModal(false);
-            resetForm();
-          }}
-        >
-          <div className="card p-6 w-full max-w-md mx-4 slide-up" onClick={(e) => e.stopPropagation()}>
+      <ModalShell
+        open={showModal}
+        onClose={() => {
+          setShowModal(false);
+          resetForm();
+        }}
+        size="md"
+        busy={saving}
+        busyLabel="Guardando…"
+        className="p-6"
+      >
             <h2 className="text-lg font-bold text-foreground mb-4">
               {tab === 'users'
                 ? 'Nuevo Usuario'
@@ -769,7 +774,9 @@ export default function UsersPage() {
             </div>
             <div className="flex gap-3 mt-6">
               <button
+                type="button"
                 className="btn-secondary flex-1"
+                disabled={saving}
                 onClick={() => {
                   setShowModal(false);
                   resetForm();
@@ -778,6 +785,7 @@ export default function UsersPage() {
                 Cancelar
               </button>
               <button
+                type="button"
                 className="btn-primary flex-1"
                 disabled={saving}
                 onClick={() => {
@@ -786,12 +794,10 @@ export default function UsersPage() {
                   else if (tab === 'roles') void handleSaveRole();
                 }}
               >
-                {saving ? 'Guardando…' : 'Guardar'}
+                Guardar
               </button>
             </div>
-          </div>
-        </div>
-      )}
+      </ModalShell>
     </AppLayout>
   );
 }

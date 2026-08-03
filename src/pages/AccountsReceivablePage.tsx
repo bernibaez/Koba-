@@ -10,6 +10,8 @@ import { useCxc } from '@/hooks/useCxc';
 import { obtenerClientes } from '@/services/clientes.service';
 import type { CuentaCobrarUi, CxStatusUi } from '@/services/cxc.service';
 import type { Cliente } from '@/types/database';
+import { ButtonSpinner, InlineLoader, PageContentSkeleton } from '@/components/ui/LoadingSkeleton';
+import ModalShell from '@/components/ui/ModalShell';
 
 const statusMap: Record<CxStatusUi, { label: string; cls: string }> = {
   pending: { label: 'Pendiente', cls: 'badge-warning' },
@@ -167,6 +169,14 @@ export default function AccountsReceivablePage() {
     }
   };
 
+  if (loading && cuentas.length === 0) {
+    return (
+      <AppLayout>
+        <PageContentSkeleton kpiCount={4} tableCols={10} tableRows={6} />
+      </AppLayout>
+    );
+  }
+
   return (
     <AppLayout>
       <div className="space-y-6 slide-up">
@@ -231,7 +241,7 @@ export default function AccountsReceivablePage() {
               <p className="text-xs text-muted-foreground">Documentos</p>
               <Clock size={16} className="text-primary" />
             </div>
-            <p className="text-2xl font-bold text-foreground">{loading ? '…' : cuentas.length}</p>
+            <p className="text-2xl font-bold text-foreground">{cuentas.length}</p>
           </div>
         </div>
 
@@ -276,11 +286,7 @@ export default function AccountsReceivablePage() {
                 </tr>
               </thead>
               <tbody>
-                {loading && (
-                  <tr>
-                    <td colSpan={10} className="px-4 py-8 text-center text-muted-foreground">Cargando…</td>
-                  </tr>
-                )}
+                {loading && <InlineLoader colSpan={10} message="Cargando cuentas por cobrar…" />}
                 {!loading && filtered.length === 0 && (
                   <tr>
                     <td colSpan={10} className="px-4 py-8 text-center text-muted-foreground">
@@ -336,15 +342,23 @@ export default function AccountsReceivablePage() {
           </div>
         </div>
 
-        {selected && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/40" onClick={() => setSelected(null)}>
-            <div className="card w-full max-w-xl p-6 space-y-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <ModalShell
+          open={!!selected}
+          onClose={() => setSelected(null)}
+          size="xl"
+          busy={saving}
+          busyLabel="Registrando cobro…"
+          busyVariant="processing"
+          className="p-6 space-y-4"
+        >
+          {selected && (
+            <>
               <div className="flex items-center justify-between border-b border-border pb-3">
                 <div className="flex items-center gap-2">
                   <FileText className="text-primary" size={20} />
                   <h3 className="font-bold text-foreground text-lg">Estado de Cuenta y Cobro — {selected.customer}</h3>
                 </div>
-                <button type="button" onClick={() => setSelected(null)} className="p-1 text-muted-foreground hover:text-foreground">
+                <button type="button" disabled={saving} onClick={() => setSelected(null)} className="p-1 text-muted-foreground hover:text-foreground">
                   <X size={18} />
                 </button>
               </div>
@@ -395,7 +409,8 @@ export default function AccountsReceivablePage() {
                     onClick={handleProcessPayment}
                     className="btn-primary w-full py-2 font-bold flex items-center justify-center gap-1.5"
                   >
-                    <HandCoins size={16} /> Confirmar Cobro de RD$ {parseFloat(paymentAmount) || 0}
+                    {saving ? <ButtonSpinner /> : <HandCoins size={16} />}
+                    {saving ? 'Registrando…' : `Confirmar Cobro de RD$ ${parseFloat(paymentAmount) || 0}`}
                   </button>
                 </div>
               )}
@@ -423,52 +438,55 @@ export default function AccountsReceivablePage() {
                 <button type="button" onClick={() => window.print()} className="btn-secondary flex items-center gap-1.5 text-xs">
                   <Printer size={14} /> Imprimir Estado de Cuenta
                 </button>
-                <button type="button" onClick={() => setSelected(null)} className="btn-primary text-xs">Cerrar</button>
+                <button type="button" disabled={saving} onClick={() => setSelected(null)} className="btn-primary text-xs">Cerrar</button>
               </div>
-            </div>
-          </div>
-        )}
+            </>
+          )}
+        </ModalShell>
 
-        {showModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/40" onClick={() => setShowModal(false)}>
-            <div className="card w-full max-w-lg p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
-              <h3 className="text-lg font-bold text-foreground">Nueva Cuenta por Cobrar</h3>
-              <div className="grid grid-cols-2 gap-3 text-xs">
-                <div className="col-span-2">
-                  <label className="text-xs font-medium text-muted-foreground mb-1 block">Cliente *</label>
-                  <select className="input-field text-xs" value={formCliente} onChange={(e) => setFormCliente(e.target.value)}>
-                    <option value="">Seleccionar cliente…</option>
-                    {clientes.map((c) => (
-                      <option key={c.id} value={c.id}>{c.nombre}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground mb-1 block">Factura</label>
-                  <input className="input-field text-xs" placeholder="FAC-000" value={formFactura} onChange={(e) => setFormFactura(e.target.value)} />
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground mb-1 block">Monto Total *</label>
-                  <input className="input-field text-xs" type="number" placeholder="0.00" value={formMonto} onChange={(e) => setFormMonto(e.target.value)} />
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground mb-1 block">Emisión</label>
-                  <input className="input-field text-xs" type="date" value={formEmision} onChange={(e) => setFormEmision(e.target.value)} />
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground mb-1 block">Vencimiento</label>
-                  <input className="input-field text-xs" type="date" value={formVence} onChange={(e) => setFormVence(e.target.value)} />
-                </div>
-              </div>
-              <div className="flex justify-end gap-2 pt-2 border-t border-border">
-                <button type="button" className="btn-secondary text-xs" onClick={() => setShowModal(false)}>Cancelar</button>
-                <button type="button" className="btn-primary text-xs" disabled={saving} onClick={handleCreate}>
-                  {saving ? 'Guardando…' : 'Guardar'}
-                </button>
-              </div>
+        <ModalShell
+          open={showModal}
+          onClose={() => setShowModal(false)}
+          size="lg"
+          busy={saving}
+          busyLabel="Guardando cuenta…"
+          className="p-6 space-y-4"
+        >
+          <h3 className="text-lg font-bold text-foreground">Nueva Cuenta por Cobrar</h3>
+          <div className="grid grid-cols-2 gap-3 text-xs">
+            <div className="col-span-2">
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Cliente *</label>
+              <select className="input-field text-xs" value={formCliente} onChange={(e) => setFormCliente(e.target.value)}>
+                <option value="">Seleccionar cliente…</option>
+                {clientes.map((c) => (
+                  <option key={c.id} value={c.id}>{c.nombre}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Factura</label>
+              <input className="input-field text-xs" placeholder="FAC-000" value={formFactura} onChange={(e) => setFormFactura(e.target.value)} />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Monto Total *</label>
+              <input className="input-field text-xs" type="number" placeholder="0.00" value={formMonto} onChange={(e) => setFormMonto(e.target.value)} />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Emisión</label>
+              <input className="input-field text-xs" type="date" value={formEmision} onChange={(e) => setFormEmision(e.target.value)} />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Vencimiento</label>
+              <input className="input-field text-xs" type="date" value={formVence} onChange={(e) => setFormVence(e.target.value)} />
             </div>
           </div>
-        )}
+          <div className="flex justify-end gap-2 pt-2 border-t border-border">
+            <button type="button" className="btn-secondary text-xs" disabled={saving} onClick={() => setShowModal(false)}>Cancelar</button>
+            <button type="button" className="btn-primary text-xs" disabled={saving} onClick={handleCreate}>
+              Guardar
+            </button>
+          </div>
+        </ModalShell>
       </div>
     </AppLayout>
   );

@@ -3,6 +3,7 @@ import { Eye, Printer, ExternalLink } from 'lucide-react';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { Link } from 'react-router-dom';
 import { useVentas } from '@/hooks/useVentas';
+import { InlineLoader, TableRowSkeleton } from '@/components/ui/LoadingSkeleton';
 
 export default function RecentTransactions() {
   const { ventas, loading } = useVentas({ pagina: 1, limite: 8 });
@@ -60,11 +61,12 @@ export default function RecentTransactions() {
           </thead>
           <tbody>
             {loading && (
-              <tr>
-                <td colSpan={6} className="py-8 text-center text-muted-foreground">
-                  Cargando…
-                </td>
-              </tr>
+              <>
+                <InlineLoader colSpan={6} message="Cargando transacciones…" />
+                <TableRowSkeleton cols={6} />
+                <TableRowSkeleton cols={6} />
+                <TableRowSkeleton cols={6} />
+              </>
             )}
             {!loading && transactions.length === 0 && (
               <tr>

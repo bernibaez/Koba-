@@ -5,6 +5,13 @@ import { exportTableToPdf, formatMoneyPdf } from '@/lib/exportPdf';
 import { toast } from 'sonner';
 import { useGastos } from '@/hooks/useGastos';
 import type { GastoStatusUi } from '@/services/gastos.service';
+import {
+  InlineLoader,
+  KpiGridSkeleton,
+  PageContentSkeleton,
+  Skeleton,
+} from '@/components/ui/LoadingSkeleton';
+import ModalShell from '@/components/ui/ModalShell';
 
 type Tab = 'list' | 'categories';
 
@@ -117,6 +124,14 @@ export default function ExpensesPage() {
     }
   };
 
+  if (loading && gastos.length === 0) {
+    return (
+      <AppLayout>
+        <PageContentSkeleton kpiCount={4} tableCols={9} tableRows={6} />
+      </AppLayout>
+    );
+  }
+
   return (
     <AppLayout>
       <div className="space-y-6 slide-up">
@@ -142,6 +157,9 @@ export default function ExpensesPage() {
           <div className="rounded-xl border border-danger/30 bg-danger/5 px-4 py-3 text-sm text-danger">{error}</div>
         )}
 
+        {loading ? (
+          <KpiGridSkeleton count={4} />
+        ) : (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="card p-4">
             <p className="text-xs text-muted-foreground">Gastos del mes</p>
@@ -149,7 +167,7 @@ export default function ExpensesPage() {
           </div>
           <div className="card p-4">
             <p className="text-xs text-muted-foreground">Registros</p>
-            <p className="text-2xl font-bold text-info mt-1">{loading ? '…' : gastos.length}</p>
+            <p className="text-2xl font-bold text-info mt-1">{gastos.length}</p>
           </div>
           <div className="card p-4">
             <p className="text-xs text-muted-foreground">Pendientes</p>
@@ -162,6 +180,7 @@ export default function ExpensesPage() {
             <p className="text-2xl font-bold text-primary mt-1">{categorias.length}</p>
           </div>
         </div>
+        )}
 
         <div className="flex gap-1 bg-secondary rounded-xl p-1 w-fit">
           {[
@@ -216,11 +235,7 @@ export default function ExpensesPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {loading && (
-                    <tr>
-                      <td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">Cargando…</td>
-                    </tr>
-                  )}
+                  {loading && <InlineLoader colSpan={9} message="Cargando gastos…" />}
                   {!loading && filtered.length === 0 && (
                     <tr>
                       <td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">No hay gastos registrados</td>
@@ -312,6 +327,14 @@ export default function ExpensesPage() {
 
         {tab === 'categories' && (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {loading &&
+              Array.from({ length: 3 }, (_, i) => (
+                <div key={`cat-skel-${i}`} className="card p-5 space-y-3">
+                  <Skeleton className="h-5 w-32" />
+                  <Skeleton className="h-3 w-48" />
+                  <Skeleton className="h-2 w-full rounded-full" />
+                </div>
+              ))}
             {!loading && categorias.length === 0 && (
               <p className="text-sm text-muted-foreground col-span-full py-8 text-center">
                 No hay categorías. Crea la primera con «Nueva Categoría».
@@ -369,75 +392,78 @@ export default function ExpensesPage() {
         )}
       </div>
 
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 fade-in" onClick={() => setShowModal(false)}>
-          <div className="card p-6 w-full max-w-md mx-4 slide-up" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-bold text-foreground mb-4">
-              {tab === 'list' ? 'Nuevo Gasto' : 'Nueva Categoría'}
-            </h2>
-            <div className="space-y-3">
-              {tab === 'list' ? (
-                <>
-                  <select className="input-field" value={catId} onChange={(e) => setCatId(e.target.value)}>
-                    <option value="">Seleccionar categoría...</option>
-                    {categorias.map((c) => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
-                  <input
-                    className="input-field"
-                    placeholder="Descripción del gasto"
-                    value={descripcion}
-                    onChange={(e) => setDescripcion(e.target.value)}
-                  />
-                  <input
-                    className="input-field"
-                    placeholder="Monto (RD$)"
-                    type="number"
-                    value={monto}
-                    onChange={(e) => setMonto(e.target.value)}
-                  />
-                  <label className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <input type="checkbox" checked={tieneRecibo} onChange={(e) => setTieneRecibo(e.target.checked)} />
-                    Tiene comprobante
-                  </label>
-                </>
-              ) : (
-                <>
-                  <input
-                    className="input-field"
-                    placeholder="Nombre de la categoría"
-                    value={catNombre}
-                    onChange={(e) => setCatNombre(e.target.value)}
-                  />
-                  <textarea
-                    className="input-field"
-                    placeholder="Descripción"
-                    rows={3}
-                    value={catDesc}
-                    onChange={(e) => setCatDesc(e.target.value)}
-                  />
-                  <input
-                    className="input-field"
-                    placeholder="Presupuesto mensual (RD$)"
-                    type="number"
-                    value={catPresupuesto}
-                    onChange={(e) => setCatPresupuesto(e.target.value)}
-                  />
-                </>
-              )}
-            </div>
-            <div className="flex gap-3 mt-6">
-              <button type="button" className="btn-secondary flex-1" onClick={() => setShowModal(false)}>
-                Cancelar
-              </button>
-              <button type="button" className="btn-primary flex-1" disabled={saving} onClick={handleSave}>
-                {saving ? 'Guardando…' : 'Guardar'}
-              </button>
-            </div>
-          </div>
+      <ModalShell
+        open={showModal}
+        onClose={() => setShowModal(false)}
+        size="md"
+        busy={saving}
+        busyLabel="Guardando…"
+        className="p-6"
+      >
+        <h2 className="text-lg font-bold text-foreground mb-4">
+          {tab === 'list' ? 'Nuevo Gasto' : 'Nueva Categoría'}
+        </h2>
+        <div className="space-y-3">
+          {tab === 'list' ? (
+            <>
+              <select className="input-field" value={catId} onChange={(e) => setCatId(e.target.value)}>
+                <option value="">Seleccionar categoría...</option>
+                {categorias.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+              <input
+                className="input-field"
+                placeholder="Descripción del gasto"
+                value={descripcion}
+                onChange={(e) => setDescripcion(e.target.value)}
+              />
+              <input
+                className="input-field"
+                placeholder="Monto (RD$)"
+                type="number"
+                value={monto}
+                onChange={(e) => setMonto(e.target.value)}
+              />
+              <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                <input type="checkbox" checked={tieneRecibo} onChange={(e) => setTieneRecibo(e.target.checked)} />
+                Tiene comprobante
+              </label>
+            </>
+          ) : (
+            <>
+              <input
+                className="input-field"
+                placeholder="Nombre de la categoría"
+                value={catNombre}
+                onChange={(e) => setCatNombre(e.target.value)}
+              />
+              <textarea
+                className="input-field"
+                placeholder="Descripción"
+                rows={3}
+                value={catDesc}
+                onChange={(e) => setCatDesc(e.target.value)}
+              />
+              <input
+                className="input-field"
+                placeholder="Presupuesto mensual (RD$)"
+                type="number"
+                value={catPresupuesto}
+                onChange={(e) => setCatPresupuesto(e.target.value)}
+              />
+            </>
+          )}
         </div>
-      )}
+        <div className="flex gap-3 mt-6">
+          <button type="button" className="btn-secondary flex-1" disabled={saving} onClick={() => setShowModal(false)}>
+            Cancelar
+          </button>
+          <button type="button" className="btn-primary flex-1" disabled={saving} onClick={handleSave}>
+            Guardar
+          </button>
+        </div>
+      </ModalShell>
     </AppLayout>
   );
 }

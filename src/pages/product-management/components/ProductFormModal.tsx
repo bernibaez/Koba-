@@ -196,6 +196,8 @@ export default function ProductFormModal({ open, onClose, product, onSave, onPri
       title={isEdit ? `Editar: ${product?.name}` : 'Nuevo Producto'}
       subtitle={isEdit ? `SKU: ${product?.sku}` : 'Completa todos los campos requeridos'}
       size="2xl"
+      busy={isSubmitting}
+      busyLabel={isEdit ? 'Guardando producto…' : 'Creando producto…'}
       footer={
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">

@@ -5,6 +5,8 @@ import { toast } from 'sonner';
 import { useCajas } from '@/hooks/useCajas';
 import { exportTableToPdf } from '@/lib/exportPdf';
 import type { Caja } from '@/types/database';
+import { InlineLoader, TableRowSkeleton } from '@/components/ui/LoadingSkeleton';
+import ModalShell from '@/components/ui/ModalShell';
 
 const emptyForm = {
   codigo: '',
@@ -21,6 +23,7 @@ export default function CajasPage() {
   const [showModal, setShowModal] = useState(false);
   const [editingCaja, setEditingCaja] = useState<Caja | null>(null);
   const [form, setForm] = useState(emptyForm);
+  const [saving, setSaving] = useState(false);
 
   const openCreate = () => {
     setEditingCaja(null);
@@ -54,6 +57,7 @@ export default function CajasPage() {
       return;
     }
 
+    setSaving(true);
     try {
       if (editingCaja) {
         await actualizarCaja(editingCaja.id, {
@@ -77,6 +81,8 @@ export default function CajasPage() {
       setShowModal(false);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Error al guardar caja');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -211,11 +217,12 @@ export default function CajasPage() {
               </thead>
               <tbody>
                 {loading ? (
-                  <tr>
-                    <td colSpan={6} className="px-4 py-10 text-center text-muted-foreground">
-                      Cargando cajas registradoras...
-                    </td>
-                  </tr>
+                  <>
+                    <InlineLoader colSpan={6} message="Cargando cajas registradoras…" />
+                    <TableRowSkeleton cols={6} />
+                    <TableRowSkeleton cols={6} />
+                    <TableRowSkeleton cols={6} />
+                  </>
                 ) : cajas.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="px-4 py-10 text-center text-muted-foreground">
@@ -292,16 +299,14 @@ export default function CajasPage() {
         </div>
       </div>
 
-      {/* Modal Crear/Editar Caja */}
-      {showModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/40 fade-in"
-          onClick={() => setShowModal(false)}
-        >
-          <div
-            className="card p-6 w-full max-w-md mx-auto slide-up space-y-5"
-            onClick={(e) => e.stopPropagation()}
-          >
+      <ModalShell
+        open={showModal}
+        onClose={() => setShowModal(false)}
+        size="md"
+        busy={saving}
+        busyLabel="Guardando caja…"
+        className="p-6 space-y-5"
+      >
             <div className="flex items-center justify-between border-b border-border pb-3">
               <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
                 <Monitor size={20} className="text-primary" />
@@ -378,18 +383,17 @@ export default function CajasPage() {
                 <button
                   type="button"
                   className="btn-secondary flex-1 font-bold text-xs"
+                  disabled={saving}
                   onClick={() => setShowModal(false)}
                 >
                   Cancelar
                 </button>
-                <button type="submit" className="btn-primary flex-1 font-bold text-xs">
+                <button type="submit" disabled={saving} className="btn-primary flex-1 font-bold text-xs">
                   {editingCaja ? 'Guardar Cambios' : 'Crear Caja'}
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+      </ModalShell>
     </AppLayout>
   );
 }

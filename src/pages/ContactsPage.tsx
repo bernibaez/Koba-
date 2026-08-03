@@ -4,6 +4,7 @@ import { Users, Truck, Tag, Plus, Search, Filter, Edit2, Trash2, Download, Eye, 
 import { exportTableToPdf, formatMoneyPdf } from '@/lib/exportPdf';
 import { useClientes } from '@/hooks/useClientes';
 import { toast } from 'sonner';
+import ModalShell from '@/components/ui/ModalShell';
 
 interface Customer {
   id: string; name: string; phone: string; email: string; address: string;
@@ -37,6 +38,7 @@ export default function ContactsPage() {
   const [tab, setTab] = useState<Tab>('customers');
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [formNombre, setFormNombre] = useState('');
   const [formTelefono, setFormTelefono] = useState('');
   const [formCorreo, setFormCorreo] = useState('');
@@ -324,9 +326,14 @@ export default function ContactsPage() {
         )}
       </div>
 
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 fade-in" onClick={() => setShowModal(false)}>
-          <div className="card p-6 w-full max-w-lg mx-4 slide-up" onClick={e => e.stopPropagation()}>
+      <ModalShell
+        open={showModal}
+        onClose={() => setShowModal(false)}
+        size="lg"
+        busy={saving}
+        busyLabel="Guardando…"
+        className="p-6"
+      >
             <h2 className="text-lg font-bold text-foreground mb-4">
               {tab === 'customers' ? 'Nuevo Cliente' : tab === 'suppliers' ? 'Nuevo Proveedor' : 'Nuevo Grupo'}
             </h2>
@@ -366,9 +373,11 @@ export default function ContactsPage() {
               </>}
             </div>
             <div className="flex gap-3 mt-6">
-              <button className="btn-secondary flex-1" onClick={() => setShowModal(false)}>Cancelar</button>
+              <button type="button" className="btn-secondary flex-1" disabled={saving} onClick={() => setShowModal(false)}>Cancelar</button>
               <button
+                type="button"
                 className="btn-primary flex-1"
+                disabled={saving}
                 onClick={async () => {
                   if (tab !== 'customers') {
                     setShowModal(false);
@@ -378,6 +387,7 @@ export default function ContactsPage() {
                     toast.error('Ingresa el nombre del cliente');
                     return;
                   }
+                  setSaving(true);
                   try {
                     await crear({
                       nombre: formNombre.trim(),
@@ -391,15 +401,15 @@ export default function ContactsPage() {
                     setFormCorreo('');
                   } catch (e) {
                     toast.error(e instanceof Error ? e.message : 'Error al crear cliente');
+                  } finally {
+                    setSaving(false);
                   }
                 }}
               >
                 Guardar
               </button>
             </div>
-          </div>
-        </div>
-      )}
+      </ModalShell>
     </AppLayout>
   );
 }

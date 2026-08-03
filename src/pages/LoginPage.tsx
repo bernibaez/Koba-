@@ -244,8 +244,17 @@ export default function LoginPage() {
               className="w-full flex items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold text-white transition hover:brightness-110 disabled:opacity-70"
               style={{ backgroundColor: '#14532d' }}
             >
-              Iniciar sesión
-              <ArrowRight size={18} />
+              {loading ? (
+                <>
+                  <span className="inline-block h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                  Entrando…
+                </>
+              ) : (
+                <>
+                  Iniciar sesión
+                  <ArrowRight size={18} />
+                </>
+              )}
             </button>
           </form>
 

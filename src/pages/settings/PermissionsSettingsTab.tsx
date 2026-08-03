@@ -208,8 +208,15 @@ export default function PermissionsSettingsTab() {
 
   if (loading) {
     return (
-      <div className="card p-12 text-center text-sm text-muted-foreground">
-        Cargando permisos desde Supabase…
+      <div className="card p-12 flex flex-col items-center justify-center gap-3 text-center fade-in" role="status">
+        <span className="inline-block h-8 w-8 rounded-full border-[3px] border-primary/25 border-t-primary animate-spin" />
+        <p className="text-sm text-muted-foreground">Cargando permisos…</p>
+        <div className="w-full max-w-lg space-y-2 mt-2">
+          <div className="skeleton-shimmer h-10 rounded-xl" />
+          <div className="skeleton-shimmer h-10 rounded-xl" />
+          <div className="skeleton-shimmer h-10 rounded-xl" />
+          <div className="skeleton-shimmer h-24 rounded-xl" />
+        </div>
       </div>
     );
   }

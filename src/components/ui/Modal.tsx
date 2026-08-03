@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { X } from 'lucide-react';
+import BusyOverlay, { type BusyVariant } from './BusyOverlay';
 
 interface ModalProps {
   open: boolean;
@@ -9,6 +10,10 @@ interface ModalProps {
   children: React.ReactNode;
   size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl';
   footer?: React.ReactNode;
+  /** Muestra overlay flotante "Guardando…" etc. */
+  busy?: boolean;
+  busyLabel?: string;
+  busyVariant?: BusyVariant;
 }
 
 const sizeClasses: Record<string, string> = {
@@ -19,52 +24,74 @@ const sizeClasses: Record<string, string> = {
   '2xl': 'max-w-2xl',
 };
 
-export default function Modal({ open, onClose, title, subtitle, children, size = 'lg', footer }: ModalProps) {
+export default function Modal({
+  open,
+  onClose,
+  title,
+  subtitle,
+  children,
+  size = 'lg',
+  footer,
+  busy = false,
+  busyLabel,
+  busyVariant = 'saving',
+}: ModalProps) {
   useEffect(() => {
+    if (!open) return;
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape' && !busy) onClose();
     };
-    if (open) document.addEventListener('keydown', handleKey);
-    return () => document.removeEventListener('keydown', handleKey);
-  }, [open, onClose]);
+    document.addEventListener('keydown', handleKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', handleKey);
+      document.body.style.overflow = prev;
+    };
+  }, [open, onClose, busy]);
 
   if (!open) return null;
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-foreground/50 backdrop-blur-xs fade-in"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 modal-backdrop"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !busy) onClose();
+      }}
       role="dialog"
       aria-modal="true"
       aria-label={title}
+      aria-busy={busy}
     >
-      <div className={`w-full ${sizeClasses[size]} bg-card border border-border/80 rounded-2xl shadow-floating slide-up max-h-[90vh] flex flex-col`}>
-        {/* Header */}
+      <div
+        className={`
+          relative w-full ${sizeClasses[size]} bg-card border border-border/80 rounded-2xl shadow-floating
+          max-h-[90vh] flex flex-col modal-panel
+        `}
+      >
         <div className="flex items-start justify-between px-6 py-5 border-b border-border/80 flex-shrink-0 bg-secondary/20">
           <div>
             <h2 className="text-xl font-extrabold text-foreground tracking-tight">{title}</h2>
             {subtitle && <p className="text-sm font-medium text-muted-foreground mt-1">{subtitle}</p>}
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="p-2 rounded-xl text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors ml-4 flex-shrink-0"
+            disabled={busy}
+            className="p-2 rounded-xl text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors ml-4 flex-shrink-0 disabled:opacity-40"
             aria-label="Cerrar modal"
           >
             <X size={20} />
           </button>
         </div>
 
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto scrollbar-thin px-6 py-6">
-          {children}
-        </div>
+        <div className="flex-1 overflow-y-auto scrollbar-thin px-6 py-6">{children}</div>
 
-        {/* Footer */}
         {footer && (
-          <div className="px-6 py-4 border-t border-border/80 flex-shrink-0 bg-secondary/20">
-            {footer}
-          </div>
+          <div className="px-6 py-4 border-t border-border/80 flex-shrink-0 bg-secondary/20">{footer}</div>
         )}
+
+        <BusyOverlay show={busy} label={busyLabel} variant={busyVariant} contained />
       </div>
     </div>
   );

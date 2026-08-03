@@ -8,6 +8,7 @@ import {
   Layers,
 } from 'lucide-react';
 import { useDashboard } from '@/hooks/useDashboard';
+import { Skeleton } from '@/components/ui/LoadingSkeleton';
 
 interface KpiCardProps {
   id: string;
@@ -41,6 +42,21 @@ function KpiCard({ label, value, subValue, icon, iconBg, iconColor, alert, warni
         <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground truncate">{label}</p>
         <p className="text-xl font-extrabold text-foreground mt-0.5 tabular-nums truncate">{value}</p>
         {subValue && <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{subValue}</p>}
+      </div>
+    </div>
+  );
+}
+
+function KpiCardLoading({ label, icon, iconBg, iconColor }: Pick<KpiCardProps, 'label' | 'icon' | 'iconBg' | 'iconColor'>) {
+  return (
+    <div className="card p-4 flex items-center gap-4">
+      <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${iconBg} ${iconColor}`}>
+        {icon}
+      </div>
+      <div className="min-w-0 flex-1 space-y-2">
+        <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground truncate">{label}</p>
+        <Skeleton className="h-6 w-28" />
+        <Skeleton className="h-3 w-20" />
       </div>
     </div>
   );
@@ -114,9 +130,19 @@ export default function DashboardBentoGrid() {
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-      {kpiData.map((kpi) => (
-        <KpiCard key={kpi.id} {...kpi} />
-      ))}
+      {kpiData.map((kpi) =>
+        loading ? (
+          <KpiCardLoading
+            key={kpi.id}
+            label={kpi.label}
+            icon={kpi.icon}
+            iconBg={kpi.iconBg}
+            iconColor={kpi.iconColor}
+          />
+        ) : (
+          <KpiCard key={kpi.id} {...kpi} />
+        )
+      )}
     </div>
   );
 }

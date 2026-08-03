@@ -67,7 +67,10 @@ export default function AppLayout({ children }: AppLayoutProps) {
         />
 
         <main className="flex-1 overflow-y-auto scrollbar-thin">
-          <div className="max-w-[1700px] mx-auto px-5 sm:px-6 lg:px-8 xl:px-10 py-8">
+          <div
+            key={pathname}
+            className="max-w-[1700px] mx-auto px-5 sm:px-6 lg:px-8 xl:px-10 py-8 page-enter"
+          >
             {children}
           </div>
         </main>
