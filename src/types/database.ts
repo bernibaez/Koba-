@@ -10,6 +10,9 @@ export type TipoItemVenta = 'producto' | 'combo';
 export type TipoCliente = 'final' | 'fiscal' | 'credito';
 export type EstadoCaja = 'abierta' | 'cerrada';
 
+export type SaleType = 'unit' | 'weight' | 'both';
+export type WeightUnit = 'lb' | 'kg' | 'g' | 'oz';
+
 export interface Perfil {
   id: string;
   nombre_completo: string;
@@ -49,6 +52,14 @@ export interface Producto {
   stock_minimo: number;
   stock_actual: number;
   es_pesado: boolean;
+  sale_type?: SaleType;
+  weight_unit?: WeightUnit;
+  price_per_weight?: number;
+  allow_decimal?: boolean;
+  min_weight?: number;
+  max_weight?: number;
+  generate_scale_barcode?: boolean;
+  is_weight_product?: boolean;
   fecha_vencimiento: string | null;
   garantia: string | null;
   imagen_url: string | null;
@@ -196,7 +207,7 @@ export interface PaginacionParams {
 }
 
 export const PRODUCTO_COLUMNS =
-  'id, codigo_barras, sku, nombre, categoria, marca, unidad, proveedor_id, precio_costo, precio_venta, precio_mayorista, porcentaje_impuesto, stock_minimo, stock_actual, es_pesado, fecha_vencimiento, garantia, imagen_url, estado, creado_en, actualizado_en' as const;
+  'id, codigo_barras, sku, nombre, categoria, marca, unidad, proveedor_id, precio_costo, precio_venta, precio_mayorista, porcentaje_impuesto, stock_minimo, stock_actual, es_pesado, sale_type, weight_unit, price_per_weight, allow_decimal, min_weight, max_weight, generate_scale_barcode, is_weight_product, fecha_vencimiento, garantia, imagen_url, estado, creado_en, actualizado_en' as const;
 
 export const COMBO_COLUMNS =
   'id, codigo, codigo_barras, nombre, descripcion, categoria, precio_venta, precio_costo_total, precio_normal, tipo_descuento, valor_descuento, porcentaje_margen, activo, visible_en_pos, permitir_venta_sin_stock, fecha_inicio, fecha_fin, imagen_url, creado_en, actualizado_en' as const;

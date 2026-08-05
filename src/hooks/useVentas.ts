@@ -3,9 +3,11 @@ import {
   obtenerHistorialVentas,
   obtenerVentaPorId,
   anularVenta,
+  actualizarVenta,
   procesarVenta,
   type PayloadVenta,
   type VentaConDetalle,
+  type ActualizarVentaPayload,
 } from '@/services/ventas.service';
 
 export function useVentas(params: {
@@ -78,6 +80,19 @@ export function useVentas(params: {
     [refetch]
   );
 
+  const actualizar = useCallback(
+    async (ventaId: string, payload: ActualizarVentaPayload) => {
+      setProcesando(true);
+      try {
+        await actualizarVenta(ventaId, payload);
+        await refetch();
+      } finally {
+        setProcesando(false);
+      }
+    },
+    [refetch]
+  );
+
   return {
     ventas,
     total,
@@ -88,5 +103,7 @@ export function useVentas(params: {
     cobrar,
     obtenerDetalle,
     anular,
+    actualizar,
   };
 }
+

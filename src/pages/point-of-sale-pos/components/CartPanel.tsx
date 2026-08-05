@@ -11,6 +11,7 @@ interface CartPanelProps {
   onUpdateQty: (id: string, qty: number) => void;
   onUpdateDiscount: (id: string, discount: number) => void;
   onRemove: (id: string) => void;
+  onEditWeight?: (item: CartItem) => void;
   globalDiscount: number;
   onSetGlobalDiscount: (d: number) => void;
   subtotal: number;
@@ -30,6 +31,7 @@ export default function CartPanel({
   onSetCustomer,
   onUpdateQty,
   onRemove,
+  onEditWeight,
   taxTotal,
   total,
   fiscalEnabled = true,
@@ -154,7 +156,7 @@ export default function CartPanel({
           <span>Producto</span>
           <Info size={13} className="text-sky-500" />
         </div>
-        <div className="col-span-3 text-center">Cantidad</div>
+        <div className="col-span-3 text-center">Cantidad / Peso</div>
         <div className="col-span-3 text-right">Subtotal</div>
         <div className="col-span-1 text-center text-red-500">✕</div>
       </div>
@@ -167,56 +169,82 @@ export default function CartPanel({
             <p className="text-xs">Selecciona productos a la derecha o escanea un código</p>
           </div>
         ) : (
-          cart.map((item) => (
-            <div key={item.id} className="grid grid-cols-12 gap-2 px-4 py-3 items-center hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-              <div className="col-span-5 min-w-0">
-                <p className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 truncate">{item.name}</p>
-                <p className="text-[11px] font-mono text-slate-400 truncate">{item.sku}</p>
-              </div>
+          cart.map((item) => {
+            const isWeightItem = item.isWeighted || ['lb', 'kg', 'g', 'oz', 'libra'].some((u) => item.unit.toLowerCase().includes(u));
+            const unitLabel = item.unit || 'lb';
 
-              <div className="col-span-3 flex items-center justify-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => onUpdateQty(item.id, item.qty - 1)}
-                  className="w-6 h-6 rounded bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 font-black text-xs flex items-center justify-center"
-                >
-                  <Minus size={12} />
-                </button>
-                <input
-                  type="number"
-                  min={0}
-                  value={item.qty}
-                  onChange={(e) => onUpdateQty(item.id, Number(e.target.value))}
-                  className="w-10 h-7 text-center text-xs font-bold border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-800 tabular-nums focus:outline-none"
-                />
-                <button
-                  type="button"
-                  onClick={() => onUpdateQty(item.id, item.qty + 1)}
-                  className="w-6 h-6 rounded bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 font-black text-xs flex items-center justify-center"
-                >
-                  <Plus size={12} />
-                </button>
-              </div>
+            return (
+              <div key={item.id} className="grid grid-cols-12 gap-2 px-4 py-3 items-center hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                <div className="col-span-5 min-w-0">
+                  <p className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 truncate">{item.name}</p>
+                  {isWeightItem ? (
+                    <p className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 truncate">
+                      {item.qty} {unitLabel} × RD$ {item.price}
+                    </p>
+                  ) : (
+                    <p className="text-[11px] font-mono text-slate-400 truncate">{item.sku}</p>
+                  )}
+                </div>
 
-              <div className="col-span-3 text-right">
-                <p className="text-xs sm:text-sm font-black tabular-nums text-slate-900 dark:text-white">
-                  {fmt(item.price * item.qty * (1 - item.discount / 100))}
-                </p>
-                <p className="text-[10px] text-slate-400 font-medium">{fmt(item.price)} c/u</p>
-              </div>
+                <div className="col-span-3 flex items-center justify-center gap-1">
+                  {isWeightItem ? (
+                    <button
+                      type="button"
+                      onClick={() => onEditWeight && onEditWeight(item)}
+                      className="px-2 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 rounded-lg text-xs font-black tabular-nums transition-colors cursor-pointer"
+                      title="Haz clic para editar el peso"
+                    >
+                      {item.qty} {unitLabel} ✍
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => onUpdateQty(item.id, item.qty - 1)}
+                        className="w-6 h-6 rounded bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 font-black text-xs flex items-center justify-center"
+                      >
+                        <Minus size={12} />
+                      </button>
+                      <input
+                        type="number"
+                        min={0}
+                        value={item.qty}
+                        onChange={(e) => onUpdateQty(item.id, Number(e.target.value))}
+                        className="w-10 h-7 text-center text-xs font-bold border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-800 tabular-nums focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => onUpdateQty(item.id, item.qty + 1)}
+                        className="w-6 h-6 rounded bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 font-black text-xs flex items-center justify-center"
+                      >
+                        <Plus size={12} />
+                      </button>
+                    </>
+                  )}
+                </div>
 
-              <div className="col-span-1 text-center">
-                <button
-                  type="button"
-                  onClick={() => onRemove(item.id)}
-                  className="text-slate-400 hover:text-red-500 p-1 transition-colors"
-                  title="Eliminar producto"
-                >
-                  <Trash2 size={15} />
-                </button>
+                <div className="col-span-3 text-right">
+                  <p className="text-xs sm:text-sm font-black tabular-nums text-slate-900 dark:text-white">
+                    {fmt(item.price * item.qty * (1 - item.discount / 100))}
+                  </p>
+                  <p className="text-[10px] text-slate-400 font-medium">
+                    {isWeightItem ? `RD$ ${item.price}/${unitLabel}` : `${fmt(item.price)} c/u`}
+                  </p>
+                </div>
+
+                <div className="col-span-1 text-center">
+                  <button
+                    type="button"
+                    onClick={() => onRemove(item.id)}
+                    className="text-slate-400 hover:text-red-500 p-1 transition-colors"
+                    title="Eliminar producto"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
 

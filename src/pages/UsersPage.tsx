@@ -16,6 +16,8 @@ import {
   Eye,
   Sliders,
   AlertTriangle,
+  X,
+  CheckCircle,
 } from 'lucide-react';
 import { exportTableToPdf } from '@/lib/exportPdf';
 import { useUsuarios } from '@/hooks/useUsuarios';
@@ -35,7 +37,7 @@ type Tab = 'users' | 'roles' | 'agents';
 export default function UsersPage() {
   const [tab, setTab] = useState<Tab>('users');
   const [search, setSearch] = useState('');
-  const [showModal, setShowModal] = useState(false);
+  const [showForm, setShowForm] = useState(false);
   const [editingUser, setEditingUser] = useState<Perfil | null>(null);
   const [viewingUser, setViewingUser] = useState<Perfil | null>(null);
   const [viewingAgent, setViewingAgent] = useState<AgenteComercial | null>(null);
@@ -97,7 +99,7 @@ export default function UsersPage() {
 
   const openNewModal = () => {
     resetForm();
-    setShowModal(true);
+    setShowForm(true);
   };
 
   const openEditUser = (user: Perfil) => {
@@ -107,7 +109,7 @@ export default function UsersPage() {
     setFormTelefono(user.telefono ?? '');
     setFormPassword('');
     setFormRol((ROL_DB_A_UI[user.rol] as UserRole) || 'Cajero');
-    setShowModal(true);
+    setShowForm(true);
   };
 
   const openEditAgent = (agent: AgenteComercial) => {
@@ -116,7 +118,7 @@ export default function UsersPage() {
     setFormCorreo(agent.correo ?? '');
     setFormTelefono(agent.telefono ?? '');
     setFormComision(String(agent.porcentaje_comision ?? 0));
-    setShowModal(true);
+    setShowForm(true);
   };
 
   const openEditRole = (role: Rol) => {
@@ -124,7 +126,7 @@ export default function UsersPage() {
     setFormNombre(role.nombre);
     setFormDescRol(role.descripcion ?? '');
     setFormCodigoRol(role.codigo);
-    setShowModal(true);
+    setShowForm(true);
   };
 
   const handleSaveRole = async () => {
@@ -152,7 +154,7 @@ export default function UsersPage() {
         });
         toast.success(`Rol "${formNombre.trim()}" creado exitosamente`);
       }
-      setShowModal(false);
+      setShowForm(false);
       resetForm();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Error al guardar rol');
@@ -240,7 +242,7 @@ export default function UsersPage() {
           rol: ROL_UI_A_DB[formRol] as RolDb,
         });
         toast.success('Usuario actualizado');
-        setShowModal(false);
+        setShowForm(false);
         resetForm();
       } catch (e) {
         toast.error(e instanceof Error ? e.message : 'Error al actualizar usuario');
@@ -263,7 +265,7 @@ export default function UsersPage() {
         telefono: formTelefono.trim() || null,
       });
       toast.success('Usuario creado');
-      setShowModal(false);
+      setShowForm(false);
       resetForm();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Error al crear usuario');
@@ -302,7 +304,7 @@ export default function UsersPage() {
         await crearAgente(payload);
         toast.success('Agente creado en Supabase');
       }
-      setShowModal(false);
+      setShowForm(false);
       resetForm();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Error al guardar agente');
@@ -323,10 +325,18 @@ export default function UsersPage() {
             </p>
           </div>
           <button
-            onClick={openNewModal}
-            className="btn-primary flex items-center gap-2 w-fit"
+            onClick={() => {
+              if (showForm) {
+                setShowForm(false);
+                resetForm();
+              } else {
+                openNewModal();
+              }
+            }}
+            className="btn-primary flex items-center gap-2 w-fit shadow-xs"
           >
-            <Plus size={16} /> Nuevo {tab === 'users' ? 'Usuario' : tab === 'roles' ? 'Rol' : 'Agente'}
+            {showForm ? <X size={16} /> : <Plus size={16} />}
+            <span>{showForm ? 'Cerrar Formulario' : `Nuevo ${tab === 'users' ? 'Usuario' : tab === 'roles' ? 'Rol' : 'Agente'}`}</span>
           </button>
         </div>
 
@@ -376,6 +386,186 @@ export default function UsersPage() {
             </button>
           </div>
         </div>
+
+        {/* FORMULARIO INLINE DE CREACIÓN / EDICIÓN */}
+        {showForm && (
+          <div className="card p-6 border-2 border-primary/40 bg-card shadow-xl space-y-4 animate-in fade-in slide-in-from-top-4">
+            <div className="flex items-center justify-between border-b border-border pb-3">
+              <h2 className="text-lg font-extrabold text-foreground flex items-center gap-2">
+                <UserCheck size={20} className="text-primary" />
+                {tab === 'users'
+                  ? editingUser
+                    ? 'Editar Usuario'
+                    : 'Nuevo Usuario'
+                  : tab === 'roles'
+                  ? editingRole
+                    ? 'Editar Rol'
+                    : 'Nuevo Rol'
+                  : editingAgent
+                  ? 'Editar Agente'
+                  : 'Nuevo Agente'}
+              </h2>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowForm(false);
+                  resetForm();
+                }}
+                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
+              <div>
+                <label className="block font-bold mb-1 text-foreground">
+                  {tab === 'roles' ? 'Nombre del Rol' : 'Nombre Completo'}
+                </label>
+                <input
+                  className="input-field w-full"
+                  placeholder={tab === 'roles' ? 'Ej: Cajero Nocturno' : 'Ej: Juan Pérez'}
+                  value={formNombre}
+                  onChange={(e) => setFormNombre(e.target.value)}
+                />
+              </div>
+
+              {tab !== 'roles' && (
+                <div>
+                  <label className="block font-bold mb-1 text-foreground">Correo Electrónico</label>
+                  <input
+                    className="input-field w-full"
+                    placeholder="correo@ejemplo.com"
+                    type="email"
+                    value={formCorreo}
+                    onChange={(e) => setFormCorreo(e.target.value)}
+                    disabled={tab === 'users' && !!editingUser}
+                  />
+                </div>
+              )}
+
+              {tab !== 'roles' && (
+                <div>
+                  <label className="block font-bold mb-1 text-foreground">Teléfono</label>
+                  <input
+                    className="input-field w-full"
+                    placeholder="(809) 000-0000"
+                    value={formTelefono}
+                    onChange={(e) => setFormTelefono(e.target.value)}
+                  />
+                </div>
+              )}
+
+              {tab === 'agents' && (
+                <div>
+                  <label className="block font-bold mb-1 text-foreground">Comisión (%)</label>
+                  <input
+                    className="input-field w-full font-mono"
+                    type="number"
+                    min={0}
+                    max={100}
+                    step="0.01"
+                    value={formComision}
+                    onChange={(e) => setFormComision(e.target.value)}
+                  />
+                </div>
+              )}
+
+              {tab === 'users' && (
+                <div>
+                  <label className="block font-bold mb-1 text-foreground">Rol del Usuario</label>
+                  <select
+                    className="input-field w-full"
+                    value={formRol}
+                    onChange={(e) => setFormRol(e.target.value as UserRole)}
+                  >
+                    {roles.length > 0
+                      ? roles.map((r) => (
+                          <option
+                            key={r.id}
+                            value={(ROL_DB_A_UI[r.codigo as RolDb] || r.nombre) as UserRole}
+                          >
+                            {r.nombre} ({r.codigo})
+                          </option>
+                        ))
+                      : (
+                          ['Administrador', 'Cajero', 'Vendedor', 'Almacenista', 'Contador'] as UserRole[]
+                        ).map((r) => (
+                          <option key={r} value={r}>
+                            {r}
+                          </option>
+                        ))}
+                  </select>
+                </div>
+              )}
+
+              {tab === 'users' && !editingUser && (
+                <div>
+                  <label className="block font-bold mb-1 text-foreground">Contraseña de Acceso</label>
+                  <input
+                    className="input-field w-full"
+                    placeholder="••••••••"
+                    type="password"
+                    value={formPassword}
+                    onChange={(e) => setFormPassword(e.target.value)}
+                  />
+                </div>
+              )}
+
+              {tab === 'roles' && (
+                <>
+                  <div>
+                    <label className="block font-bold mb-1 text-foreground">Código Identificador</label>
+                    <input
+                      className="input-field font-mono text-xs w-full"
+                      placeholder="ej: cajero_nocturno (opcional)"
+                      disabled={!!editingRole}
+                      value={formCodigoRol}
+                      onChange={(e) => setFormCodigoRol(e.target.value)}
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block font-bold mb-1 text-foreground">Descripción del Rol</label>
+                    <textarea
+                      className="input-field w-full"
+                      placeholder="Descripción de funciones y nivel de acceso..."
+                      rows={2}
+                      value={formDescRol}
+                      onChange={(e) => setFormDescRol(e.target.value)}
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
+              <button
+                type="button"
+                className="btn-secondary text-xs py-2 px-4"
+                disabled={saving}
+                onClick={() => {
+                  setShowForm(false);
+                  resetForm();
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="btn-primary text-xs font-bold py-2 px-5 flex items-center gap-1.5 shadow-sm"
+                disabled={saving}
+                onClick={() => {
+                  if (tab === 'users') void handleCreateUser();
+                  else if (tab === 'agents') void handleSaveAgent();
+                  else if (tab === 'roles') void handleSaveRole();
+                }}
+              >
+                <CheckCircle size={15} />
+                <span>{saving ? 'Guardando…' : 'Guardar'}</span>
+              </button>
+            </div>
+          </div>
+        )}
 
         {tab === 'users' && (
           <div className="card overflow-hidden">
@@ -726,161 +916,7 @@ export default function UsersPage() {
         )}
       </div>
 
-      <ModalShell
-        open={showModal}
-        onClose={() => {
-          setShowModal(false);
-          resetForm();
-        }}
-        size="md"
-        busy={saving}
-        busyLabel="Guardando…"
-        className="p-6"
-      >
-            <h2 className="text-lg font-bold text-foreground mb-4">
-              {tab === 'users'
-                ? editingUser
-                  ? 'Editar Usuario'
-                  : 'Nuevo Usuario'
-                : tab === 'roles'
-                  ? editingRole
-                    ? 'Editar Rol'
-                    : 'Nuevo Rol'
-                  : editingAgent
-                    ? 'Editar Agente'
-                    : 'Nuevo Agente'}
-            </h2>
-            <div className="space-y-3">
-              <input
-                className="input-field"
-                placeholder={tab === 'roles' ? 'Nombre del rol (ej: Cajero Nocturno)' : 'Nombre completo'}
-                value={formNombre}
-                onChange={(e) => setFormNombre(e.target.value)}
-              />
-              {tab !== 'roles' && (
-                <input
-                  className="input-field"
-                  placeholder="Correo electrónico"
-                  type="email"
-                  value={formCorreo}
-                  onChange={(e) => setFormCorreo(e.target.value)}
-                  disabled={tab === 'users' && !!editingUser}
-                />
-              )}
-              {tab !== 'roles' && (
-                <input
-                  className="input-field"
-                  placeholder="Teléfono"
-                  value={formTelefono}
-                  onChange={(e) => setFormTelefono(e.target.value)}
-                />
-              )}
-              {tab === 'agents' && (
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                    Comisión (%)
-                  </label>
-                  <input
-                    className="input-field"
-                    type="number"
-                    min={0}
-                    max={100}
-                    step="0.01"
-                    value={formComision}
-                    onChange={(e) => setFormComision(e.target.value)}
-                  />
-                </div>
-              )}
-              {tab === 'users' && (
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                    Rol del usuario
-                  </label>
-                  <select
-                    className="input-field"
-                    value={formRol}
-                    onChange={(e) => setFormRol(e.target.value as UserRole)}
-                  >
-                    {roles.length > 0
-                      ? roles.map((r) => (
-                          <option
-                            key={r.id}
-                            value={(ROL_DB_A_UI[r.codigo as RolDb] || r.nombre) as UserRole}
-                          >
-                            {r.nombre} ({r.codigo})
-                          </option>
-                        ))
-                      : (
-                          ['Administrador', 'Cajero', 'Vendedor', 'Almacenista', 'Contador'] as UserRole[]
-                        ).map((r) => (
-                          <option key={r} value={r}>
-                            {r}
-                          </option>
-                        ))}
-                  </select>
-                </div>
-              )}
-              {tab === 'users' && !editingUser && (
-                <input
-                  className="input-field"
-                  placeholder="Contraseña"
-                  type="password"
-                  value={formPassword}
-                  onChange={(e) => setFormPassword(e.target.value)}
-                />
-              )}
-              {tab === 'roles' && (
-                <>
-                  <input
-                    className="input-field font-mono text-xs"
-                    placeholder="Código identificador (ej: cajero_nocturno - opcional)"
-                    disabled={!!editingRole}
-                    value={formCodigoRol}
-                    onChange={(e) => setFormCodigoRol(e.target.value)}
-                  />
-                  <textarea
-                    className="input-field"
-                    placeholder="Descripción de funciones y nivel de acceso del rol"
-                    rows={3}
-                    value={formDescRol}
-                    onChange={(e) => setFormDescRol(e.target.value)}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Los permisos detallados se configuran en{' '}
-                    <Link to="/settings" className="text-primary font-semibold hover:underline">
-                      Configuración → Permisos
-                    </Link>
-                    .
-                  </p>
-                </>
-              )}
-            </div>
-            <div className="flex gap-3 mt-6">
-              <button
-                type="button"
-                className="btn-secondary flex-1"
-                disabled={saving}
-                onClick={() => {
-                  setShowModal(false);
-                  resetForm();
-                }}
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                className="btn-primary flex-1"
-                disabled={saving}
-                onClick={() => {
-                  if (tab === 'users') void handleCreateUser();
-                  else if (tab === 'agents') void handleSaveAgent();
-                  else if (tab === 'roles') void handleSaveRole();
-                }}
-              >
-                Guardar
-              </button>
-            </div>
-      </ModalShell>
+
 
       <ModalShell open={!!viewingUser} onClose={() => setViewingUser(null)} size="md" className="p-6">
         {viewingUser && (

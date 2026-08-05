@@ -11,6 +11,8 @@ import { toast } from 'sonner';
 import { exportTableToPdf, formatMoneyPdf } from '@/lib/exportPdf';
 import { useProductos } from '@/hooks/useProductos';
 
+import type { SaleType, WeightUnit } from '@/types/database';
+
 export interface Product {
   id: string;
   barcode: string;
@@ -31,6 +33,14 @@ export interface Product {
   warranty: string;
   status: 'active' | 'inactive' | 'discontinued';
   stockStatus: 'normal' | 'low' | 'out';
+  saleType?: SaleType;
+  weightUnit?: WeightUnit;
+  pricePerWeight?: number;
+  allowDecimal?: boolean;
+  minWeight?: number;
+  maxWeight?: number;
+  generateScaleBarcode?: boolean;
+  isWeightProduct?: boolean;
 }
 
 export const initialProducts: Product[] = [

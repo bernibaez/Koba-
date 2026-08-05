@@ -10,6 +10,9 @@ import { useProductos } from '@/hooks/useProductos';
 import { useCombos } from '@/hooks/useCombos';
 
 import CategoryIcon from '@/components/ui/CategoryIcon';
+import WeightBadge from '@/components/weight/WeightBadge';
+import MixedSaleTypeModal from '@/components/weight/MixedSaleTypeModal';
+import type { SaleType, WeightUnit } from '@/types/database';
 
 interface Product {
   id: string;
@@ -26,6 +29,12 @@ interface Product {
   lowStock: boolean;
   outOfStock: boolean;
   isWeighted?: boolean;
+  saleType?: SaleType;
+  weightUnit?: WeightUnit;
+  pricePerWeight?: number;
+  minWeight?: number;
+  maxWeight?: number;
+  allowDecimal?: boolean;
 }
 
 const categories = [
@@ -57,27 +66,39 @@ export default function ProductPanel({ onAddToCart, onOpenScale }: ProductPanelP
   const [alertComboName, setAlertComboName] = useState('');
   const [missingItems, setMissingItems] = useState<{ productId: string; sku: string; name: string; required: number; available: number }[]>([]);
 
+  // State for Mixed Sale Type Modal
+  const [mixedProduct, setMixedProduct] = useState<Product | null>(null);
+
   const { productosUi } = useProductos({ pagina: 1, limite: 200, busqueda: search, estado: 'activo' });
   const { combos } = useCombos(true);
 
   const products: Product[] = useMemo(() => {
     const fromStore = productosUi.map(
-      (p): Product => ({
-        id: p.id,
-        sku: p.sku,
-        barcode: p.barcode,
-        name: p.name,
-        category: p.category,
-        price: p.salePrice,
-        cost: p.costPrice,
-        stock: p.currentStock,
-        unit: p.unit,
-        tax: p.tax,
-        image: p.image,
-        lowStock: p.stockStatus === 'low',
-        outOfStock: p.stockStatus === 'out',
-        isWeighted: p.unit.toLowerCase().includes('lb') || p.unit.toLowerCase().includes('kg'),
-      })
+      (p): Product => {
+        const isWeight = p.isWeightProduct || p.saleType === 'weight' || p.saleType === 'both' || p.unit.toLowerCase().includes('lb') || p.unit.toLowerCase().includes('kg');
+        return {
+          id: p.id,
+          sku: p.sku,
+          barcode: p.barcode,
+          name: p.name,
+          category: p.category,
+          price: p.salePrice,
+          cost: p.costPrice,
+          stock: p.currentStock,
+          unit: p.unit,
+          tax: p.tax,
+          image: p.image,
+          lowStock: p.stockStatus === 'low',
+          outOfStock: p.stockStatus === 'out',
+          isWeighted: isWeight,
+          saleType: p.saleType ?? (isWeight ? 'weight' : 'unit'),
+          weightUnit: p.weightUnit ?? 'lb',
+          pricePerWeight: p.pricePerWeight ?? p.salePrice,
+          minWeight: p.minWeight ?? 0.01,
+          maxWeight: p.maxWeight ?? 999.99,
+          allowDecimal: p.allowDecimal ?? true,
+        };
+      }
     );
     const weightedExtras = scaleProducts
       .filter((sp) => !fromStore.some((p) => p.sku === sp.sku))
@@ -96,6 +117,9 @@ export default function ProductPanel({ onAddToCart, onOpenScale }: ProductPanelP
         lowStock: false,
         outOfStock: false,
         isWeighted: true,
+        saleType: 'weight' as SaleType,
+        weightUnit: 'lb' as WeightUnit,
+        pricePerWeight: sp.price,
       }));
     return [...fromStore, ...weightedExtras];
   }, [productosUi]);
@@ -144,7 +168,12 @@ export default function ProductPanel({ onAddToCart, onOpenScale }: ProductPanelP
   const handleProductClick = (p: Product) => {
     if (p.outOfStock && p.sku !== DELETE_SKU) return;
 
-    if ((p.isWeighted || p.unit.toLowerCase() === 'libra' || p.unit.toLowerCase() === 'lb' || p.unit.toLowerCase() === 'kg') && onOpenScale) {
+    if (p.saleType === 'both') {
+      setMixedProduct(p);
+      return;
+    }
+
+    if ((p.saleType === 'weight' || p.isWeighted || p.unit.toLowerCase() === 'libra' || p.unit.toLowerCase() === 'lb' || p.unit.toLowerCase() === 'kg') && onOpenScale) {
       onOpenScale(p.id, 1.000);
       return;
     }
@@ -159,6 +188,7 @@ export default function ProductPanel({ onAddToCart, onOpenScale }: ProductPanelP
       tax: p.tax,
       image: p.image,
       unit: p.unit,
+      isWeighted: false,
     });
   };
 
@@ -254,10 +284,10 @@ export default function ProductPanel({ onAddToCart, onOpenScale }: ProductPanelP
                   {/* Icon Box */}
                   <div className="w-full h-16 rounded-lg flex items-center justify-center mb-1.5 relative overflow-hidden">
                     <CategoryIcon category={p.category} name={p.name} size="lg" className="w-full h-full rounded-lg" />
-                    {p.isWeighted && (
-                      <span className="absolute bottom-1 right-1 bg-emerald-600 text-white p-0.5 rounded text-[8px] font-bold z-10 shadow-xs" title="Balanza">
-                        <Scale size={10} />
-                      </span>
+                    {(p.isWeighted || p.saleType === 'weight' || p.saleType === 'both') && (
+                      <div className="absolute bottom-1 right-1 z-10 shadow-xs">
+                        <WeightBadge saleType={p.saleType} weightUnit={p.weightUnit} isWeighted={p.isWeighted} size="sm" />
+                      </div>
                     )}
                   </div>
 
@@ -269,7 +299,7 @@ export default function ProductPanel({ onAddToCart, onOpenScale }: ProductPanelP
                   {/* Price & Stock */}
                   <div className="mt-1 flex flex-col items-center">
                     <p className="text-xs font-black text-slate-900 dark:text-white tabular-nums">
-                      RD$ {p.price.toLocaleString('es-DO')}
+                      RD$ {p.price.toLocaleString('es-DO')} {(p.saleType === 'weight' || p.saleType === 'both') ? `/${p.weightUnit || 'lb'}` : ''}
                     </p>
                     <p className="text-[10px] font-semibold text-slate-400 dark:text-slate-400 tabular-nums">
                       {p.outOfStock ? 'Agotado' : `${p.stock} ${p.unit || 'Und'} en stock`}
@@ -319,6 +349,39 @@ export default function ProductPanel({ onAddToCart, onOpenScale }: ProductPanelP
         comboName={alertComboName}
         missingItems={missingItems}
       />
+
+      {mixedProduct && (
+        <MixedSaleTypeModal
+          productName={mixedProduct.name}
+          productSku={mixedProduct.sku}
+          price={mixedProduct.price}
+          weightUnit={mixedProduct.weightUnit}
+          onClose={() => setMixedProduct(null)}
+          onSelectUnit={() => {
+            const p = mixedProduct;
+            setMixedProduct(null);
+            onAddToCart({
+              id: `cart-${p.id}-${Date.now()}`,
+              productId: p.id,
+              name: p.name,
+              sku: p.sku,
+              price: p.price,
+              cost: p.cost,
+              tax: p.tax,
+              image: p.image,
+              unit: p.unit || 'Unidad',
+              isWeighted: false,
+            });
+          }}
+          onSelectWeight={() => {
+            const p = mixedProduct;
+            setMixedProduct(null);
+            if (onOpenScale) {
+              onOpenScale(p.id, 1.000);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

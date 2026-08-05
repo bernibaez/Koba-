@@ -480,6 +480,192 @@ export default function PurchasesPage() {
     });
   };
 
+  if (viewingPurchase || loadingPurchaseDetail) {
+    return (
+      <AppLayout>
+        <div className="space-y-6 slide-up">
+          {/* Header with back button */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center font-bold">
+                <ShoppingBag size={26} />
+              </div>
+              <div>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <h1 className="text-2xl font-black text-foreground tracking-tight">
+                    Detalle de Compra {viewingPurchase?.codigo || ''}
+                  </h1>
+                  {viewingPurchase && (
+                    <span className={statusMap[mapEstadoUi(viewingPurchase.estado)]?.cls ?? 'badge-neutral'}>
+                      {statusMap[mapEstadoUi(viewingPurchase.estado)]?.label ?? viewingPurchase.estado}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Vista detallada y desglose fiscal de la orden de compra registrada
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setViewingPurchase(null);
+                setLoadingPurchaseDetail(false);
+              }}
+              className="btn-secondary text-xs font-bold py-2.5 px-4 flex items-center gap-2 self-start sm:self-auto shadow-xs"
+            >
+              ← Volver a Compras
+            </button>
+          </div>
+
+          {loadingPurchaseDetail && !viewingPurchase ? (
+            <div className="card p-12 text-center text-sm text-muted-foreground">
+              Cargando detalle de la compra…
+            </div>
+          ) : viewingPurchase ? (
+            <div className="space-y-6">
+              {/* Summary Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="card p-4 space-y-1">
+                  <span className="text-xs text-muted-foreground font-semibold">Proveedor</span>
+                  <p className="text-lg font-black text-foreground truncate">{viewingPurchase.proveedor}</p>
+                </div>
+                <div className="card p-4 space-y-1">
+                  <span className="text-xs text-muted-foreground font-semibold">Fecha de Orden</span>
+                  <p className="text-lg font-bold font-mono text-foreground">{viewingPurchase.fecha}</p>
+                </div>
+                <div className="card p-4 space-y-1">
+                  <span className="text-xs text-muted-foreground font-semibold">Método de Pago</span>
+                  <p className="text-lg font-bold text-foreground">{viewingPurchase.metodo_pago || 'Contado'}</p>
+                </div>
+                <div className="card p-4 space-y-1 bg-primary/5 border-primary/20">
+                  <span className="text-xs text-muted-foreground font-semibold">Monto Total Compra</span>
+                  <p className="text-xl font-black text-primary font-mono">
+                    RD$ {viewingPurchase.total.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+              </div>
+
+              {viewingPurchase.notas && (
+                <div className="card p-4 bg-secondary/30 text-xs">
+                  <span className="font-bold text-muted-foreground block mb-1">Notas u Observaciones:</span>
+                  <p className="text-foreground">{viewingPurchase.notas}</p>
+                </div>
+              )}
+
+              {/* Items Table */}
+              <div className="card overflow-hidden">
+                <div className="p-4 border-b border-border bg-secondary/40 flex justify-between items-center">
+                  <h3 className="font-bold text-foreground text-sm uppercase tracking-wider">
+                    Productos de la Orden ({viewingPurchase.lineas.length})
+                  </h3>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-secondary/50 border-b border-border">
+                      <tr>
+                        <th className="text-left px-4 py-3 font-semibold text-muted-foreground">#</th>
+                        <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Producto / Descripción</th>
+                        <th className="text-center px-4 py-3 font-semibold text-muted-foreground">Cantidad</th>
+                        <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Costo Unit.</th>
+                        <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Subtotal</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {viewingPurchase.lineas.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="p-6 text-center text-muted-foreground">
+                            No hay productos registrados en esta compra
+                          </td>
+                        </tr>
+                      ) : (
+                        viewingPurchase.lineas.map((line, idx) => (
+                          <tr key={line.id || idx} className="hover:bg-secondary/20 transition-colors">
+                            <td className="px-4 py-3 text-muted-foreground font-mono text-xs">{idx + 1}</td>
+                            <td className="px-4 py-3 font-semibold text-foreground">{line.nombre}</td>
+                            <td className="px-4 py-3 text-center font-mono font-bold">{line.cantidad}</td>
+                            <td className="px-4 py-3 text-right font-mono tabular-nums text-muted-foreground">
+                              RD$ {line.precio_costo.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="px-4 py-3 text-right font-mono tabular-nums font-bold text-foreground">
+                              RD$ {line.subtotal.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Fiscal Totals Footer */}
+                <div className="p-4 border-t border-border bg-secondary/20 flex flex-col sm:flex-row justify-between items-end sm:items-center gap-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      exportTableToPdf({
+                        title: `ORDEN DE COMPRA - ${viewingPurchase.codigo}`,
+                        subtitle: `Proveedor: ${viewingPurchase.proveedor} | Fecha: ${viewingPurchase.fecha}`,
+                        filename: `compra-${viewingPurchase.codigo}`,
+                        headers: ['#', 'Producto', 'Cant.', 'Precio Costo', 'Subtotal'],
+                        rows: viewingPurchase.lineas.map((line, idx) => [
+                          idx + 1,
+                          line.nombre,
+                          line.cantidad,
+                          formatMoneyPdf(line.precio_costo),
+                          formatMoneyPdf(line.subtotal),
+                        ]),
+                      });
+                    }}
+                    className="btn-secondary text-xs py-2 px-3 font-semibold flex items-center gap-1.5"
+                  >
+                    <Download size={14} /> Exportar PDF
+                  </button>
+
+                  <div className="w-full sm:w-72 space-y-1.5 text-xs">
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Subtotal Neto:</span>
+                      <span className="font-mono font-medium">
+                        RD$ {viewingPurchase.subtotal.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-amber-600 dark:text-amber-400 font-semibold">
+                      <span>ITBIS (Impuesto):</span>
+                      <span className="font-mono">
+                        RD$ {viewingPurchase.impuesto.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    <div className="flex justify-between border-t border-border pt-2 text-base font-black text-foreground">
+                      <span>Total General:</span>
+                      <span className="text-primary font-mono">
+                        RD$ {viewingPurchase.total.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bottom Actions */}
+              <div className="flex justify-start">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setViewingPurchase(null);
+                    setLoadingPurchaseDetail(false);
+                  }}
+                  className="btn-secondary text-xs font-bold py-2.5 px-5"
+                >
+                  ← Volver a Compras
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </AppLayout>
+    );
+  }
+
   if (showAddForm) {
     return (
       <AppLayout>
@@ -609,10 +795,11 @@ export default function PurchasesPage() {
                               <td className="py-2.5 px-3 text-center">
                                 <input
                                   type="number"
-                                  min={1}
+                                  min={0.001}
+                                  step="0.001"
                                   value={item.qty}
-                                  onChange={(e) => handleUpdateLineQty(item.id, Number(e.target.value))}
-                                  className="input-field w-20 text-center py-1 font-bold"
+                                  onChange={(e) => handleUpdateLineQty(item.id, parseFloat(e.target.value) || 0)}
+                                  className="input-field w-24 text-center py-1 font-bold"
                                 />
                               </td>
                               <td className="py-2.5 px-3 text-right">
@@ -984,9 +1171,10 @@ export default function PurchasesPage() {
                         </button>
                         <input
                           type="number"
-                          min={1}
+                          min={0.001}
+                          step="0.001"
                           value={modalQty}
-                          onChange={(e) => setModalQty(Number(e.target.value))}
+                          onChange={(e) => setModalQty(parseFloat(e.target.value) || 0)}
                           className="input-field text-lg font-black text-center h-12 flex-1 tabular-nums"
                         />
                         <button
@@ -1323,124 +1511,7 @@ export default function PurchasesPage() {
         )}
       </div>
 
-      <ModalShell
-        open={!!viewingPurchase || loadingPurchaseDetail}
-        onClose={() => {
-          setViewingPurchase(null);
-          setLoadingPurchaseDetail(false);
-        }}
-        size="xl"
-        className="p-6 space-y-4"
-        busy={loadingPurchaseDetail}
-        busyLabel="Cargando detalle…"
-      >
-        {viewingPurchase && (
-          <>
-            <div className="flex items-center justify-between border-b border-border pb-3">
-              <div>
-                <h3 className="font-bold text-foreground text-lg flex items-center gap-2">
-                  <ShoppingBag className="text-primary" size={20} />
-                  Compra {viewingPurchase.codigo}
-                </h3>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Estado:{' '}
-                  <span className={statusMap[mapEstadoUi(viewingPurchase.estado)]?.cls ?? 'badge-neutral'}>
-                    {statusMap[mapEstadoUi(viewingPurchase.estado)]?.label ?? viewingPurchase.estado}
-                  </span>
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setViewingPurchase(null)}
-                className="p-1 text-muted-foreground hover:text-foreground"
-              >
-                <X size={18} />
-              </button>
-            </div>
 
-            <div className="grid grid-cols-2 gap-2 bg-secondary/30 rounded-xl p-3 text-xs">
-              <div>
-                <span className="text-muted-foreground block">Proveedor</span>
-                <span className="font-bold text-foreground">{viewingPurchase.proveedor}</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground block">Fecha</span>
-                <span>{viewingPurchase.fecha}</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground block">Método de pago</span>
-                <span>{viewingPurchase.metodo_pago || '—'}</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground block">Ítems</span>
-                <span>{viewingPurchase.items}</span>
-              </div>
-              {viewingPurchase.notas && (
-                <div className="col-span-2">
-                  <span className="text-muted-foreground block">Notas</span>
-                  <span>{viewingPurchase.notas}</span>
-                </div>
-              )}
-            </div>
-
-            <div className="space-y-1 text-xs">
-              <p className="font-bold text-muted-foreground uppercase text-[10px] tracking-wider">
-                Líneas ({viewingPurchase.lineas.length})
-              </p>
-              <div className="bg-secondary/40 rounded-xl p-3 max-h-48 overflow-y-auto space-y-2">
-                {viewingPurchase.lineas.length === 0 ? (
-                  <p className="text-muted-foreground text-center py-2">Sin líneas</p>
-                ) : (
-                  viewingPurchase.lineas.map((line) => (
-                    <div
-                      key={line.id}
-                      className="flex justify-between items-center border-b border-border/40 pb-1.5 last:border-none"
-                    >
-                      <div>
-                        <span className="font-semibold text-foreground">{line.nombre}</span>
-                        <span className="text-[11px] text-muted-foreground block font-mono">
-                          {line.cantidad}x @ RD${' '}
-                          {line.precio_costo.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                        </span>
-                      </div>
-                      <span className="font-bold font-mono text-foreground">
-                        RD$ {line.subtotal.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                      </span>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-
-            <div className="border-t border-border pt-3 space-y-1.5 text-xs">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Subtotal</span>
-                <span className="font-mono">
-                  RD$ {viewingPurchase.subtotal.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">ITBIS</span>
-                <span className="font-mono text-amber-600 dark:text-amber-400 font-bold">
-                  RD$ {viewingPurchase.impuesto.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                </span>
-              </div>
-              <div className="flex justify-between border-t border-border pt-2 text-sm font-bold">
-                <span>Total</span>
-                <span className="text-primary font-black text-base">
-                  RD$ {viewingPurchase.total.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                </span>
-              </div>
-            </div>
-
-            <div className="flex justify-end pt-2">
-              <button type="button" className="btn-primary text-xs py-2" onClick={() => setViewingPurchase(null)}>
-                Cerrar
-              </button>
-            </div>
-          </>
-        )}
-      </ModalShell>
 
       <ModalShell
         open={!!confirmDeleteId}

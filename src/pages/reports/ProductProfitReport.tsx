@@ -60,7 +60,7 @@ export default function ProductProfitReport({ dateFrom, dateTo }: ReportPeriodPr
         p.sku,
         p.name,
         p.category,
-        `${p.qty} uds`,
+        `${p.qty % 1 === 0 ? p.qty.toFixed(0) : p.qty.toFixed(2)} ${p.unit || 'uds'}`,
         formatMoneyPdf(p.totalCost),
         formatMoneyPdf(p.totalSales),
         formatMoneyPdf(p.profit),
@@ -79,7 +79,7 @@ export default function ProductProfitReport({ dateFrom, dateTo }: ReportPeriodPr
         p.sku,
         p.name,
         p.category,
-        p.qty,
+        `${p.qty % 1 === 0 ? p.qty.toFixed(0) : p.qty.toFixed(2)} ${p.unit || 'uds'}`,
         p.totalCost,
         p.totalSales,
         p.profit,
@@ -195,7 +195,9 @@ export default function ProductProfitReport({ dateFrom, dateTo }: ReportPeriodPr
                     <td className="px-4 py-3">
                       <span className="badge-neutral text-xs">{p.category}</span>
                     </td>
-                    <td className="px-4 py-3 text-right font-semibold text-foreground">{p.qty} uds</td>
+                    <td className="px-4 py-3 text-right font-semibold text-foreground">
+                      {p.qty % 1 === 0 ? p.qty.toFixed(0) : p.qty.toFixed(2)} {p.unit || 'uds'}
+                    </td>
                     <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{formatRD(p.totalCost)}</td>
                     <td className="px-4 py-3 text-right tabular-nums font-bold text-foreground">{formatRD(p.totalSales)}</td>
                     <td className="px-4 py-3 text-right tabular-nums font-bold text-success">{formatRD(p.profit)}</td>

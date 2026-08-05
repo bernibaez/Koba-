@@ -78,7 +78,8 @@ export function updateProductPurchaseDataInStore(
   const products = getStoredProducts();
   const updated = products.map((p) => {
     if (p.id === productIdOrSku || p.sku === productIdOrSku || p.barcode === productIdOrSku) {
-      const newStock = Math.max(0, p.currentStock + deltaQty);
+      const rawStock = p.currentStock + deltaQty;
+      const newStock = Math.max(0, Math.round(rawStock * 1000) / 1000);
       let stockStatus: 'normal' | 'low' | 'out' = 'normal';
       if (newStock === 0) stockStatus = 'out';
       else if (newStock <= p.minStock) stockStatus = 'low';

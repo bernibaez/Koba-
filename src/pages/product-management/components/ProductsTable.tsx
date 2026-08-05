@@ -3,6 +3,7 @@ import { ArrowUpDown, ArrowUp, ArrowDown, Edit, Trash2, Eye, Printer, ToggleLeft
 import type { Product } from './ProductManagementScreen';
 import StatusBadge from '@/components/ui/StatusBadge';
 import CategoryIcon from '@/components/ui/CategoryIcon';
+import WeightBadge from '@/components/weight/WeightBadge';
 import { generateUniqueBarcode } from '@/lib/barcodeUtils';
 import { toast } from 'sonner';
 
@@ -22,7 +23,7 @@ interface ProductsTableProps {
   onUpdateProduct?: (product: Product) => void;
 }
 
-const stockBadge = (status: Product['stockStatus'], stock: number) => {
+const stockBadge = (status: Product['stockStatus'], stock: number | string) => {
   if (status === 'out') return <span className="badge-danger">Sin Stock</span>;
   if (status === 'low') return <span className="badge-warning">Bajo ({stock})</span>;
   return <span className="badge-success">Normal ({stock})</span>;
@@ -176,8 +177,16 @@ export default function ProductsTable({
 
                   {/* Name */}
                   <td className="px-4 py-3">
-                    <div>
-                      <p className="font-semibold text-foreground truncate max-w-40">{product.name}</p>
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <p className="font-semibold text-foreground truncate max-w-40">{product.name}</p>
+                        <WeightBadge
+                          saleType={product.saleType}
+                          weightUnit={product.weightUnit}
+                          isWeighted={product.isWeightProduct}
+                          size="sm"
+                        />
+                      </div>
                       <p className="text-xs font-mono text-muted-foreground">{product.sku}</p>
                     </div>
                   </td>
@@ -215,14 +224,26 @@ export default function ProductsTable({
 
                   {/* Sale Price */}
                   <td className="px-4 py-3 text-right">
-                    <span className="tabular-nums text-sm font-semibold text-foreground">
-                      RD$ {product.salePrice.toLocaleString('es-DO')}
-                    </span>
+                    <div className="flex flex-col items-end">
+                      <span className="tabular-nums text-sm font-semibold text-foreground">
+                        RD$ {product.salePrice.toLocaleString('es-DO')}
+                      </span>
+                      {(product.saleType === 'weight' || product.saleType === 'both') && (
+                        <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">
+                          / {product.weightUnit || 'lb'}
+                        </span>
+                      )}
+                    </div>
                   </td>
 
                   {/* Stock */}
                   <td className="px-4 py-3 text-center">
-                    {stockBadge(product.stockStatus, product.currentStock)}
+                    {stockBadge(
+                      product.stockStatus,
+                      product.isWeightProduct || product.saleType === 'weight'
+                        ? `${product.currentStock % 1 === 0 ? product.currentStock.toFixed(0) : product.currentStock.toFixed(2)} ${product.weightUnit || 'lb'}`
+                        : product.currentStock
+                    )}
                   </td>
 
                   {/* Expiry */}

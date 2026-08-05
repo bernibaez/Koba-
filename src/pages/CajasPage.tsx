@@ -1,12 +1,11 @@
 import React, { useState } from 'react';
 import AppLayout from '@/components/AppLayout';
-import { Plus, Download, Edit2, Monitor, Trash2, Power, Star, Search, ShieldCheck } from 'lucide-react';
+import { Plus, Download, Edit2, Monitor, Trash2, Power, Star, Search, ShieldCheck, X, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useCajas } from '@/hooks/useCajas';
 import { exportTableToPdf } from '@/lib/exportPdf';
 import type { Caja } from '@/types/database';
 import { InlineLoader, TableRowSkeleton } from '@/components/ui/LoadingSkeleton';
-import ModalShell from '@/components/ui/ModalShell';
 
 const emptyForm = {
   codigo: '',
@@ -20,7 +19,7 @@ export default function CajasPage() {
   const [busqueda, setBusqueda] = useState('');
   const { cajas, loading, crearCaja, actualizarCaja, eliminarCaja, alternarActivaCaja } = useCajas({ busqueda });
 
-  const [showModal, setShowModal] = useState(false);
+  const [showForm, setShowForm] = useState(false);
   const [editingCaja, setEditingCaja] = useState<Caja | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
@@ -35,7 +34,7 @@ export default function CajasPage() {
       es_caja_principal: cajas.length === 0,
       activa: true,
     });
-    setShowModal(true);
+    setShowForm(true);
   };
 
   const openEdit = (caja: Caja) => {
@@ -47,7 +46,7 @@ export default function CajasPage() {
       es_caja_principal: caja.es_caja_principal ?? false,
       activa: caja.activa ?? caja.activo ?? true,
     });
-    setShowModal(true);
+    setShowForm(true);
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -78,7 +77,7 @@ export default function CajasPage() {
         });
         toast.success('Nueva caja registradora agregada exitosamente');
       }
-      setShowModal(false);
+      setShowForm(false);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Error al guardar caja');
     } finally {
@@ -143,12 +142,126 @@ export default function CajasPage() {
               <Download size={16} />
               Exportar PDF
             </button>
-            <button type="button" onClick={openCreate} className="btn-primary flex items-center gap-2">
-              <Plus size={16} />
-              Nueva Caja
+            <button
+              type="button"
+              onClick={() => {
+                if (showForm) {
+                  setShowForm(false);
+                } else {
+                  openCreate();
+                }
+              }}
+              className="btn-primary flex items-center gap-2 shadow-xs"
+            >
+              {showForm ? <X size={16} /> : <Plus size={16} />}
+              <span>{showForm ? 'Cerrar Formulario' : 'Nueva Caja'}</span>
             </button>
           </div>
         </div>
+
+        {/* FORMULARIO INLINE DE CREACIÓN / EDICIÓN */}
+        {showForm && (
+          <div className="p-5 rounded-2xl border-2 border-primary/40 bg-card shadow-xl space-y-4 animate-in fade-in slide-in-from-top-4">
+            <div className="flex items-center justify-between border-b border-border pb-3">
+              <h2 className="text-base font-extrabold text-foreground flex items-center gap-2">
+                <Monitor size={20} className="text-primary" />
+                <span>{editingCaja ? 'Editar Caja Registradora' : 'Nueva Caja Registradora'}</span>
+              </h2>
+              <button
+                type="button"
+                onClick={() => setShowForm(false)}
+                className="p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSave} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">
+                    Código
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    className="input-field font-mono font-bold w-full"
+                    value={form.codigo}
+                    onChange={(e) => setForm({ ...form, codigo: e.target.value })}
+                    placeholder="1"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">
+                    Nombre de Caja
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    className="input-field font-bold w-full"
+                    value={form.nombre}
+                    onChange={(e) => setForm({ ...form, nombre: e.target.value })}
+                    placeholder="Ej: Caja #1 - Administrador"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">
+                  Descripción (Opcional)
+                </label>
+                <textarea
+                  rows={2}
+                  className="input-field resize-none text-xs w-full"
+                  value={form.descripcion}
+                  onChange={(e) => setForm({ ...form, descripcion: e.target.value })}
+                  placeholder="Ej: Ubicada en mostrador principal..."
+                />
+              </div>
+
+              <div className="flex flex-wrap gap-6 pt-1">
+                <label className="flex items-center gap-2.5 text-xs font-bold text-foreground cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={form.es_caja_principal}
+                    onChange={(e) => setForm({ ...form, es_caja_principal: e.target.checked })}
+                    className="rounded border-border text-primary focus:ring-primary h-4 w-4"
+                  />
+                  <span>Marcar como Caja Principal del sistema</span>
+                </label>
+
+                <label className="flex items-center gap-2.5 text-xs font-bold text-foreground cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={form.activa}
+                    onChange={(e) => setForm({ ...form, activa: e.target.checked })}
+                    className="rounded border-border text-primary focus:ring-primary h-4 w-4"
+                  />
+                  <span>Caja activa y disponible para el POS</span>
+                </label>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-border">
+                <button
+                  type="button"
+                  className="btn-secondary text-xs py-2 px-4"
+                  disabled={saving}
+                  onClick={() => setShowForm(false)}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="btn-primary text-xs font-bold py-2 px-5 flex items-center gap-1.5 shadow-sm"
+                >
+                  <CheckCircle size={15} />
+                  <span>{saving ? 'Guardando…' : editingCaja ? 'Guardar Cambios' : 'Crear Caja'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
 
         {/* Metrics Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -298,102 +411,7 @@ export default function CajasPage() {
           </div>
         </div>
       </div>
-
-      <ModalShell
-        open={showModal}
-        onClose={() => setShowModal(false)}
-        size="md"
-        busy={saving}
-        busyLabel="Guardando caja…"
-        className="p-6 space-y-5"
-      >
-            <div className="flex items-center justify-between border-b border-border pb-3">
-              <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
-                <Monitor size={20} className="text-primary" />
-                <span>{editingCaja ? 'Editar Caja Registradora' : 'Nueva Caja Registradora'}</span>
-              </h2>
-            </div>
-
-            <form onSubmit={handleSave} className="space-y-4">
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">
-                    Código
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    className="input-field font-mono font-bold"
-                    value={form.codigo}
-                    onChange={(e) => setForm({ ...form, codigo: e.target.value })}
-                    placeholder="1"
-                  />
-                </div>
-                <div className="col-span-2">
-                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">
-                    Nombre de Caja
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    className="input-field font-bold"
-                    value={form.nombre}
-                    onChange={(e) => setForm({ ...form, nombre: e.target.value })}
-                    placeholder="Ej: Caja #1 - Administrador"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">
-                  Descripción (Opcional)
-                </label>
-                <textarea
-                  rows={2}
-                  className="input-field resize-none text-xs"
-                  value={form.descripcion}
-                  onChange={(e) => setForm({ ...form, descripcion: e.target.value })}
-                  placeholder="Ej: Ubicada en mostrador principal..."
-                />
-              </div>
-
-              <div className="space-y-2 pt-1">
-                <label className="flex items-center gap-2.5 text-xs font-bold text-foreground cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={form.es_caja_principal}
-                    onChange={(e) => setForm({ ...form, es_caja_principal: e.target.checked })}
-                    className="rounded border-border text-primary focus:ring-primary"
-                  />
-                  <span>Marcar como Caja Principal del sistema</span>
-                </label>
-
-                <label className="flex items-center gap-2.5 text-xs font-bold text-foreground cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={form.activa}
-                    onChange={(e) => setForm({ ...form, activa: e.target.checked })}
-                    className="rounded border-border text-primary focus:ring-primary"
-                  />
-                  <span>Caja activa y disponible para el POS</span>
-                </label>
-              </div>
-
-              <div className="flex gap-3 pt-3 border-t border-border">
-                <button
-                  type="button"
-                  className="btn-secondary flex-1 font-bold text-xs"
-                  disabled={saving}
-                  onClick={() => setShowModal(false)}
-                >
-                  Cancelar
-                </button>
-                <button type="submit" disabled={saving} className="btn-primary flex-1 font-bold text-xs">
-                  {editingCaja ? 'Guardar Cambios' : 'Crear Caja'}
-                </button>
-              </div>
-            </form>
-      </ModalShell>
     </AppLayout>
   );
 }
+

@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import AppLayout from '@/components/AppLayout';
 import {
@@ -20,6 +20,9 @@ import {
   AlertTriangle,
   User,
   Package,
+  Edit,
+  ChevronDown,
+  Receipt,
 } from 'lucide-react';
 import { exportTableToPdf, exportTableToExcel, formatMoneyPdf } from '@/lib/exportPdf';
 import { toast } from 'sonner';
@@ -99,8 +102,25 @@ export default function SalesPage() {
   const [rejectingReturnId, setRejectingReturnId] = useState<string | null>(null);
   const [rejectReturnReason, setRejectReturnReason] = useState('No cumple con las políticas de devolución');
 
+  // Actions dropdown state
+  const [openActionsId, setOpenActionsId] = useState<string | null>(null);
+
+  // Edit Sale modal state
+  const [editingSale, setEditingSale] = useState<VentaConDetalle | null>(null);
+  const [editCustomerId, setEditCustomerId] = useState<string>('');
+  const [editPaymentMethod, setEditPaymentMethod] = useState<MetodoPago>('efectivo');
+  const [editTipoNcf, setEditTipoNcf] = useState<string>('B02');
+  const [editNcf, setEditNcf] = useState<string>('');
+  const [editMontoDescuento, setEditMontoDescuento] = useState<number>(0);
+  const [editEstado, setEditEstado] = useState<string>('completada');
+
+  // Print Sale modal state
+  const [printingSale, setPrintingSale] = useState<VentaConDetalle | null>(null);
+  const [loadingPrintDetail, setLoadingPrintDetail] = useState(false);
+  const [printFormat, setPrintFormat] = useState<'ticket' | 'a4'>('a4');
+
   // Supabase hooks
-  const { ventas, total: totalVentas, loading: loadingVentas, cobrar, obtenerDetalle, anular } = useVentas({
+  const { ventas, total: totalVentas, loading: loadingVentas, cobrar, obtenerDetalle, anular, actualizar } = useVentas({
     busqueda: search,
     fechaInicio: dateFrom || undefined,
     fechaFin: dateTo || undefined,
@@ -210,6 +230,51 @@ export default function SalesPage() {
       setAnulandoSale(null);
     } catch (err: any) {
       toast.error(err.message || 'Error al anular la venta');
+    }
+  };
+
+  // Open Edit Sale Modal
+  const handleOpenEditSale = (s: VentaConDetalle) => {
+    setEditingSale(s);
+    setEditCustomerId(s.cliente_id || '');
+    setEditPaymentMethod(s.metodo_pago || 'efectivo');
+    setEditTipoNcf(s.tipo_ncf || 'B02');
+    setEditNcf(s.ncf || '');
+    setEditMontoDescuento(s.monto_descuento || 0);
+    setEditEstado(s.estado || 'completada');
+  };
+
+  // Save Edited Sale
+  const handleSaveEditSale = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingSale) return;
+    try {
+      await actualizar(editingSale.id, {
+        cliente_id: editCustomerId || null,
+        metodo_pago: editPaymentMethod,
+        tipo_ncf: editTipoNcf || null,
+        ncf: editNcf || null,
+        monto_descuento: Number(editMontoDescuento),
+        estado: editEstado as any,
+      });
+      toast.success(`Factura ${editingSale.numero_factura} actualizada exitosamente`);
+      setEditingSale(null);
+    } catch (err: any) {
+      toast.error(err.message || 'Error al actualizar la factura');
+    }
+  };
+
+  // Open Print Sale Modal
+  const handleOpenPrintSale = async (s: VentaConDetalle) => {
+    setPrintingSale(s);
+    setLoadingPrintDetail(true);
+    try {
+      const full = await obtenerDetalle(s.id);
+      if (full) setPrintingSale(full);
+    } catch {
+      // Keep summary if detail fails
+    } finally {
+      setLoadingPrintDetail(false);
     }
   };
 
@@ -1046,22 +1111,80 @@ export default function SalesPage() {
                           </span>
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <div className="flex items-center justify-end gap-1">
+                          <div className="relative inline-block text-left">
                             <button
-                              onClick={() => handleOpenSaleDetail(s)}
-                              className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
-                              title="Ver Detalle Factura"
+                              type="button"
+                              onClick={() => setOpenActionsId(openActionsId === s.id ? null : s.id)}
+                              className="btn-secondary py-1 px-3 text-xs font-bold flex items-center gap-1.5 hover:border-primary/50 transition-all shadow-xs"
                             >
-                              <Eye size={15} />
+                              <span>Acciones</span>
+                              <ChevronDown
+                                size={14}
+                                className={`transition-transform duration-200 ${
+                                  openActionsId === s.id ? 'rotate-180' : ''
+                                }`}
+                              />
                             </button>
-                            {s.estado !== 'anulada' && (
-                              <button
-                                onClick={() => setAnulandoSale(s)}
-                                className="p-1.5 rounded-lg hover:bg-rose-500/10 text-muted-foreground hover:text-rose-600 transition-colors"
-                                title="Anular Factura"
-                              >
-                                <Trash2 size={15} />
-                              </button>
+
+                            {openActionsId === s.id && (
+                              <>
+                                <div
+                                  className="fixed inset-0 z-30"
+                                  onClick={() => setOpenActionsId(null)}
+                                />
+                                <div className="absolute right-0 mt-1.5 w-48 rounded-xl bg-card border border-border shadow-2xl z-40 py-1 divide-y divide-border/60 text-xs animate-in fade-in zoom-in-95">
+                                  <div className="py-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setOpenActionsId(null);
+                                        void handleOpenSaleDetail(s);
+                                      }}
+                                      className="w-full text-left px-3.5 py-2 text-foreground hover:bg-primary/10 hover:text-primary flex items-center gap-2.5 font-semibold transition-colors"
+                                    >
+                                      <Eye size={15} className="text-primary" />
+                                      <span>Ver Detalle</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setOpenActionsId(null);
+                                        handleOpenEditSale(s);
+                                      }}
+                                      className="w-full text-left px-3.5 py-2 text-foreground hover:bg-amber-500/10 hover:text-amber-600 dark:hover:text-amber-400 flex items-center gap-2.5 font-semibold transition-colors"
+                                    >
+                                      <Edit size={15} className="text-amber-500" />
+                                      <span>Editar Factura</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setOpenActionsId(null);
+                                        void handleOpenPrintSale(s);
+                                      }}
+                                      className="w-full text-left px-3.5 py-2 text-foreground hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-blue-400 flex items-center gap-2.5 font-semibold transition-colors"
+                                    >
+                                      <Printer size={15} className="text-blue-500" />
+                                      <span>Imprimir Factura</span>
+                                    </button>
+                                  </div>
+                                  {s.estado !== 'anulada' && (
+                                    <div className="py-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setOpenActionsId(null);
+                                          setAnulandoSale(s);
+                                        }}
+                                        className="w-full text-left px-3.5 py-2 text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 flex items-center gap-2.5 font-semibold transition-colors"
+                                      >
+                                        <Trash2 size={15} />
+                                        <span>Eliminar / Anular</span>
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              </>
                             )}
                           </div>
                         </td>
@@ -1633,6 +1756,401 @@ export default function SalesPage() {
                   className="btn-primary text-xs py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold flex items-center gap-1.5"
                 >
                   <Trash2 size={14} /> Confirmar Anulación
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* MODAL: EDITAR FACTURA */}
+        {editingSale && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/40 backdrop-blur-xs animate-in fade-in"
+            onClick={() => setEditingSale(null)}
+          >
+            <div
+              className="card w-full max-w-lg p-6 space-y-4 shadow-2xl border-amber-500/20"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between border-b border-border pb-3">
+                <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+                  <Edit size={22} />
+                  <h3 className="font-extrabold text-foreground text-lg">
+                    Editar Factura {editingSale.numero_factura}
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditingSale(null)}
+                  className="p-1 text-muted-foreground hover:text-foreground"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveEditSale} className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                  <div>
+                    <label className="font-bold text-muted-foreground mb-1 block">Cliente</label>
+                    <select
+                      className="input-field w-full"
+                      value={editCustomerId}
+                      onChange={(e) => setEditCustomerId(e.target.value)}
+                    >
+                      <option value="">Cliente General (Contado)</option>
+                      {dbClientes.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.nombre} {c.rnc_cedula ? `(${c.rnc_cedula})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-muted-foreground mb-1 block">Método de Pago</label>
+                    <select
+                      className="input-field w-full"
+                      value={editPaymentMethod}
+                      onChange={(e) => setEditPaymentMethod(e.target.value as MetodoPago)}
+                    >
+                      <option value="efectivo">Efectivo</option>
+                      <option value="tarjeta">Tarjeta de Crédito/Débito</option>
+                      <option value="transferencia">Transferencia Bancaria</option>
+                      <option value="credito">Crédito</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-muted-foreground mb-1 block">Tipo de NCF</label>
+                    <select
+                      className="input-field w-full"
+                      value={editTipoNcf}
+                      onChange={(e) => setEditTipoNcf(e.target.value)}
+                    >
+                      <option value="B02">Factura Consumo (B02)</option>
+                      <option value="B01">Crédito Fiscal (B01)</option>
+                      <option value="B14">Gubernamental (B14)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-muted-foreground mb-1 block">NCF Fiscal</label>
+                    <input
+                      type="text"
+                      className="input-field w-full font-mono"
+                      placeholder="Ej: B0200000001"
+                      value={editNcf}
+                      onChange={(e) => setEditNcf(e.target.value)}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-muted-foreground mb-1 block">Descuento Aplicado (RD$)</label>
+                    <input
+                      type="number"
+                      step="any"
+                      min={0}
+                      className="input-field w-full font-mono"
+                      value={editMontoDescuento}
+                      onChange={(e) => setEditMontoDescuento(Number(e.target.value))}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-muted-foreground mb-1 block">Estado de Factura</label>
+                    <select
+                      className="input-field w-full"
+                      value={editEstado}
+                      onChange={(e) => setEditEstado(e.target.value)}
+                    >
+                      <option value="completada">Completada / Pagada</option>
+                      <option value="pendiente">Pendiente</option>
+                      <option value="anulada">Anulada</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="bg-secondary/30 p-3 rounded-xl text-xs space-y-1">
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Monto Total Actual:</span>
+                    <span className="font-bold text-foreground font-mono">
+                      RD$ {editingSale.monto_total.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Fecha Emisión:</span>
+                    <span>{new Date(editingSale.creado_en).toLocaleString('es-DO')}</span>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-3 border-t border-border">
+                  <button
+                    type="button"
+                    onClick={() => setEditingSale(null)}
+                    className="btn-secondary text-xs py-2"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn-primary text-xs py-2 font-bold flex items-center gap-1.5"
+                  >
+                    <CheckCircle size={15} /> Guardar Cambios
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* MODAL: IMPRIMIR FACTURA */}
+        {printingSale && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/40 backdrop-blur-xs animate-in fade-in print:p-0 print:bg-white print:static"
+            onClick={() => setPrintingSale(null)}
+          >
+            <div
+              className="card w-full max-w-2xl p-6 space-y-4 shadow-2xl border-blue-500/20 max-h-[90vh] overflow-y-auto print:max-h-none print:shadow-none print:border-none print:w-full print:p-0"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between border-b border-border pb-3 print:hidden">
+                <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
+                  <Printer size={22} />
+                  <div>
+                    <h3 className="font-extrabold text-foreground text-lg">
+                      Imprimir Factura {printingSale.numero_factura}
+                    </h3>
+                    {printingSale.ncf && (
+                      <p className="text-xs text-muted-foreground font-mono">NCF: {printingSale.ncf}</p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="flex p-1 bg-secondary rounded-xl text-xs font-bold border border-border">
+                    <button
+                      type="button"
+                      onClick={() => setPrintFormat('a4')}
+                      className={`px-3 py-1 rounded-lg transition-all flex items-center gap-1 ${
+                        printFormat === 'a4'
+                          ? 'bg-card text-foreground shadow-xs'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      <FileText size={13} /> Hoja A4
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPrintFormat('ticket')}
+                      className={`px-3 py-1 rounded-lg transition-all flex items-center gap-1 ${
+                        printFormat === 'ticket'
+                          ? 'bg-card text-foreground shadow-xs'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      <Receipt size={13} /> Ticket 80mm
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setPrintingSale(null)}
+                    className="p-1 text-muted-foreground hover:text-foreground"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+              </div>
+
+              {loadingPrintDetail ? (
+                <div className="py-8 text-center text-sm text-muted-foreground">
+                  Cargando información de impresión...
+                </div>
+              ) : printFormat === 'ticket' ? (
+                /* Ticket Format (Thermal printer 80mm) */
+                <div className="max-w-xs mx-auto bg-card p-5 rounded-2xl border border-border font-mono text-xs space-y-4 print:bg-white print:border-none print:shadow-none print:w-full">
+                  <div className="text-center space-y-1 pb-3 border-b border-dashed border-border">
+                    <h3 className="font-black text-sm uppercase text-foreground">MERCATO SUPERMERCADO</h3>
+                    <p className="text-[11px] text-muted-foreground">RNC: 131-45678-9</p>
+                    <p className="text-[10px] text-muted-foreground">Santo Domingo, Rep. Dom.</p>
+                  </div>
+
+                  <div className="space-y-1 text-[11px] pb-3 border-b border-dashed border-border">
+                    <p className="font-bold text-foreground">Factura: {printingSale.numero_factura}</p>
+                    {printingSale.ncf && (
+                      <p className="font-black text-primary text-xs">NCF: {printingSale.ncf}</p>
+                    )}
+                    <p className="text-muted-foreground">
+                      Fecha: {new Date(printingSale.creado_en).toLocaleString('es-DO')}
+                    </p>
+                    <p className="text-muted-foreground">
+                      Cliente: {printingSale.cliente_nombre || 'Consumidor Final'}
+                    </p>
+                    <p className="text-muted-foreground">
+                      Cajero: {printingSale.cajero_nombre || 'Cajero'}
+                    </p>
+                  </div>
+
+                  <div className="space-y-2 pb-3 border-b border-dashed border-border">
+                    {(printingSale.detalle_ventas || []).map((item, idx) => (
+                      <div key={idx} className="flex justify-between items-start text-[11px]">
+                        <div>
+                          <span className="font-bold text-foreground block">{item.nombre_item}</span>
+                          <span className="text-[10px] text-muted-foreground">
+                            {item.cantidad} x RD$ {item.precio_unitario.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                        <span className="font-bold tabular-nums font-mono">
+                          RD$ {item.subtotal.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="space-y-1 text-[11px] pt-1 font-bold text-right">
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Subtotal:</span>
+                      <span>RD$ {printingSale.subtotal.toLocaleString('es-DO', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    {printingSale.monto_descuento > 0 && (
+                      <div className="flex justify-between text-emerald-600">
+                        <span>Descuento:</span>
+                        <span>- RD$ {printingSale.monto_descuento.toLocaleString('es-DO', { minimumFractionDigits: 2 })}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-amber-600 dark:text-amber-400">
+                      <span>ITBIS (18%):</span>
+                      <span>RD$ {printingSale.monto_impuesto.toLocaleString('es-DO', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="flex justify-between text-foreground font-black text-sm pt-1 border-t border-border">
+                      <span>TOTAL FACTURA:</span>
+                      <span className="text-primary">
+                        RD$ {printingSale.monto_total.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="text-center pt-2 text-[10px] text-muted-foreground space-y-0.5">
+                    <p>Comprobante Emitido según Normas DGII</p>
+                    <p>¡Gracias por su preferencia!</p>
+                  </div>
+                </div>
+              ) : (
+                /* Documento A4 Format */
+                <div className="space-y-5 bg-card p-4 rounded-2xl border border-border print:border-none print:p-0">
+                  <div className="flex justify-between items-start border-b border-border pb-4">
+                    <div>
+                      <h2 className="text-xl font-black text-foreground">MERCATO SUPERMERCADO S.R.L.</h2>
+                      <p className="text-xs text-muted-foreground">RNC: 131-45678-9 | Tel: (809) 555-0199</p>
+                      <p className="text-xs text-muted-foreground">Santo Domingo, República Dominicana</p>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-xs font-bold text-primary bg-primary/10 border border-primary/20 px-3 py-1 rounded-full inline-block">
+                        FACTURA {printingSale.numero_factura}
+                      </span>
+                      {printingSale.ncf && (
+                        <p className="text-xs font-mono font-bold text-foreground mt-1">NCF: {printingSale.ncf}</p>
+                      )}
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Fecha: {new Date(printingSale.creado_en).toLocaleString('es-DO')}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 bg-secondary/30 p-3 rounded-xl text-xs">
+                    <div>
+                      <span className="text-muted-foreground block font-semibold">CLIENTE:</span>
+                      <span className="font-bold text-foreground">{printingSale.cliente_nombre || 'Consumidor Final'}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block font-semibold">MÉTODO DE PAGO:</span>
+                      <span className="font-bold text-foreground uppercase">{metodoLabel[printingSale.metodo_pago] || printingSale.metodo_pago}</span>
+                    </div>
+                  </div>
+
+                  <table className="w-full text-xs">
+                    <thead className="bg-secondary/50 border-b border-border">
+                      <tr>
+                        <th className="text-left py-2 px-3">Ítem / Producto</th>
+                        <th className="text-center py-2 px-3">Cant.</th>
+                        <th className="text-right py-2 px-3">Precio Unit.</th>
+                        <th className="text-right py-2 px-3">Subtotal</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {(printingSale.detalle_ventas || []).map((item, idx) => (
+                        <tr key={idx}>
+                          <td className="py-2.5 px-3 font-medium">{item.nombre_item}</td>
+                          <td className="py-2.5 px-3 text-center font-mono">{item.cantidad}</td>
+                          <td className="py-2.5 px-3 text-right font-mono">
+                            RD$ {item.precio_unitario.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-bold font-mono">
+                            RD$ {item.subtotal.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+
+                  <div className="flex justify-end pt-3 border-t border-border">
+                    <div className="w-64 space-y-1.5 text-xs">
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>Subtotal Neto:</span>
+                        <span className="font-mono font-medium">
+                          RD$ {printingSale.subtotal.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                      {printingSale.monto_descuento > 0 && (
+                        <div className="flex justify-between text-emerald-600">
+                          <span>Descuento:</span>
+                          <span className="font-mono">
+                            - RD$ {printingSale.monto_descuento.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex justify-between text-amber-600 dark:text-amber-400 font-semibold">
+                        <span>ITBIS (18% Transparentado):</span>
+                        <span className="font-mono">
+                          RD$ {printingSale.monto_impuesto.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                      <div className="flex justify-between font-black text-foreground text-sm pt-2 border-t border-border">
+                        <span>Total Factura:</span>
+                        <span className="text-primary font-mono text-base">
+                          RD$ {printingSale.monto_total.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-border print:hidden">
+                <button
+                  type="button"
+                  onClick={() => {
+                    exportTableToPdf({
+                      title: `FACTURA FISCAL - ${printingSale.numero_factura}`,
+                      subtitle: `Cliente: ${printingSale.cliente_nombre || 'Consumidor Final'} | NCF: ${printingSale.ncf || 'N/A'}`,
+                      filename: `factura-${printingSale.numero_factura}`,
+                      headers: ['Producto', 'Cant.', 'Precio Unit.', 'Subtotal'],
+                      rows: (printingSale.detalle_ventas || []).map((it) => [
+                        it.nombre_item,
+                        it.cantidad,
+                        formatMoneyPdf(it.precio_unitario),
+                        formatMoneyPdf(it.subtotal),
+                      ]),
+                    });
+                  }}
+                  className="btn-secondary text-xs py-2 flex items-center gap-1.5"
+                >
+                  <Download size={14} /> PDF
+                </button>
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="btn-primary text-xs py-2 font-bold flex items-center gap-1.5 shadow-md"
+                >
+                  <Printer size={15} /> Imprimir Ahora
                 </button>
               </div>
             </div>

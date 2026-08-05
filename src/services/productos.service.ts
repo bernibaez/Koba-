@@ -45,6 +45,8 @@ export function productoAUi(p: Producto): Product {
     descontinuado: 'discontinued',
   };
 
+  const isWeight = p.is_weight_product || p.es_pesado || p.sale_type === 'weight' || p.sale_type === 'both';
+
   return {
     id: p.id,
     barcode: p.codigo_barras ?? '',
@@ -52,19 +54,27 @@ export function productoAUi(p: Producto): Product {
     name: p.nombre ?? '',
     category: p.categoria ?? 'General',
     brand: p.marca ?? '',
-    unit: p.unidad ?? 'Unidad',
+    unit: p.unidad ?? (p.weight_unit ? p.weight_unit.toUpperCase() : 'Unidad'),
     supplier: '',
     costPrice: Number(p.precio_costo ?? 0),
     salePrice: Number(p.precio_venta ?? 0),
     wholesalePrice: Number(p.precio_mayorista ?? 0),
     tax: Number(p.porcentaje_impuesto ?? 0),
     minStock: p.stock_minimo ?? 10,
-    currentStock: p.stock_actual ?? 0,
+    currentStock: Number(p.stock_actual ?? 0),
     image: p.imagen_url ?? '',
     expiryDate: p.fecha_vencimiento ?? null,
     warranty: p.garantia ?? 'N/A',
     status: estadoMap[p.estado] ?? 'active',
     stockStatus,
+    saleType: p.sale_type ?? (p.es_pesado ? 'weight' : 'unit'),
+    weightUnit: p.weight_unit ?? 'lb',
+    pricePerWeight: p.price_per_weight ? Number(p.price_per_weight) : Number(p.precio_venta ?? 0),
+    allowDecimal: p.allow_decimal ?? true,
+    minWeight: p.min_weight != null ? Number(p.min_weight) : 0.01,
+    maxWeight: p.max_weight != null ? Number(p.max_weight) : 999.99,
+    generateScaleBarcode: p.generate_scale_barcode ?? false,
+    isWeightProduct: isWeight,
   };
 }
 
@@ -81,7 +91,7 @@ export function uiAProductoInsert(p: Omit<Product, 'id' | 'stockStatus'> & { id?
     inactive: 'inactivo',
     discontinued: 'descontinuado',
   };
-  // Supabase usa UUID; los ids locales tipo prod-001 provocan 400 si se envían.
+  const isWeight = p.saleType === 'weight' || p.saleType === 'both' || !!p.isWeightProduct;
   return {
     ...(esUuid(p.id) ? { id: p.id } : {}),
     codigo_barras: p.barcode,
@@ -96,6 +106,15 @@ export function uiAProductoInsert(p: Omit<Product, 'id' | 'stockStatus'> & { id?
     porcentaje_impuesto: p.tax,
     stock_minimo: p.minStock,
     stock_actual: p.currentStock,
+    es_pesado: isWeight,
+    sale_type: p.saleType ?? (isWeight ? 'weight' : 'unit'),
+    weight_unit: p.weightUnit ?? 'lb',
+    price_per_weight: p.pricePerWeight ?? p.salePrice,
+    allow_decimal: p.allowDecimal ?? true,
+    min_weight: p.minWeight ?? 0.01,
+    max_weight: p.maxWeight ?? 999.99,
+    generate_scale_barcode: p.generateScaleBarcode ?? false,
+    is_weight_product: isWeight,
     fecha_vencimiento: p.expiryDate,
     garantia: p.warranty,
     imagen_url: p.image || null,
@@ -104,27 +123,38 @@ export function uiAProductoInsert(p: Omit<Product, 'id' | 'stockStatus'> & { id?
 }
 
 function localAsProductos(): Producto[] {
-  return getStoredProducts().map((p) => ({
-    id: p.id,
-    codigo_barras: p.barcode,
-    sku: p.sku,
-    nombre: p.name,
-    categoria: p.category,
-    marca: p.brand,
-    unidad: p.unit,
-    proveedor_id: null,
-    precio_costo: p.costPrice,
-    precio_venta: p.salePrice,
-    precio_mayorista: p.wholesalePrice,
-    porcentaje_impuesto: p.tax,
-    stock_minimo: p.minStock,
-    stock_actual: p.currentStock,
-    es_pesado: false,
-    fecha_vencimiento: p.expiryDate,
-    garantia: p.warranty,
-    imagen_url: p.image,
-    estado: (p.status === 'active' ? 'activo' : p.status === 'inactive' ? 'inactivo' : 'descontinuado') as EstadoProducto,
-  }));
+  return getStoredProducts().map((p) => {
+    const isWeight = p.saleType === 'weight' || p.saleType === 'both' || !!p.isWeightProduct;
+    return {
+      id: p.id,
+      codigo_barras: p.barcode,
+      sku: p.sku,
+      nombre: p.name,
+      categoria: p.category,
+      marca: p.brand,
+      unidad: p.unit,
+      proveedor_id: null,
+      precio_costo: p.costPrice,
+      precio_venta: p.salePrice,
+      precio_mayorista: p.wholesalePrice,
+      porcentaje_impuesto: p.tax,
+      stock_minimo: p.minStock,
+      stock_actual: p.currentStock,
+      es_pesado: isWeight,
+      sale_type: p.saleType ?? (isWeight ? 'weight' : 'unit'),
+      weight_unit: p.weightUnit ?? 'lb',
+      price_per_weight: p.pricePerWeight ?? p.salePrice,
+      allow_decimal: p.allowDecimal ?? true,
+      min_weight: p.minWeight ?? 0.01,
+      max_weight: p.maxWeight ?? 999.99,
+      generate_scale_barcode: p.generateScaleBarcode ?? false,
+      is_weight_product: isWeight,
+      fecha_vencimiento: p.expiryDate,
+      garantia: p.warranty,
+      imagen_url: p.image,
+      estado: (p.status === 'active' ? 'activo' : p.status === 'inactive' ? 'inactivo' : 'descontinuado') as EstadoProducto,
+    };
+  });
 }
 
 export async function obtenerProductos(params: ProductosFiltro = {}): Promise<ProductosResultado> {

@@ -360,6 +360,7 @@ export default function POSTerminal() {
             onUpdateQty={updateQty}
             onUpdateDiscount={updateDiscount}
             onRemove={removeFromCart}
+            onEditWeight={(item) => handleOpenScale(item.productId, item.qty)}
             globalDiscount={globalDiscount}
             onSetGlobalDiscount={setGlobalDiscount}
             subtotal={subtotal}

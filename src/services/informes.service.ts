@@ -223,6 +223,10 @@ export type ProductoGanancia = {
   sku: string;
   category: string;
   qty: number;
+  unit?: string;
+  saleType?: string;
+  weightUnit?: string;
+  isWeightProduct?: boolean;
   totalCost: number;
   totalSales: number;
   profit: number;
@@ -239,7 +243,7 @@ export async function informeGananciasProducto(p: PeriodoInforme): Promise<Produ
       `
       nombre_item, cantidad, precio_unitario, costo_unitario, subtotal, producto_id,
       ventas!inner ( creado_en, estado ),
-      productos ( sku, categoria, nombre )
+      productos ( sku, categoria, nombre, unidad, sale_type, weight_unit, is_weight_product, es_pesado )
     `
     )
     .gte('ventas.creado_en', p.desde)
@@ -256,17 +260,31 @@ export async function informeGananciasProducto(p: PeriodoInforme): Promise<Produ
 
   const map = new Map<string, ProductoGanancia>();
   for (const row of (data ?? []) as Record<string, unknown>[]) {
-    const prod = row.productos as { sku?: string; categoria?: string; nombre?: string } | null;
+    const prod = row.productos as {
+      sku?: string;
+      categoria?: string;
+      nombre?: string;
+      unidad?: string;
+      sale_type?: string;
+      weight_unit?: string;
+      is_weight_product?: boolean;
+      es_pesado?: boolean;
+    } | null;
     const key = String(row.producto_id ?? row.nombre_item);
     const qty = Number(row.cantidad ?? 0);
     const sales = Number(row.subtotal ?? qty * Number(row.precio_unitario ?? 0));
     const cost = qty * Number(row.costo_unitario ?? 0);
+    const isWeight = prod?.is_weight_product || prod?.es_pesado || prod?.sale_type === 'weight' || prod?.sale_type === 'both';
     const cur = map.get(key) ?? {
       id: key,
       name: prod?.nombre ?? String(row.nombre_item ?? 'Producto'),
       sku: prod?.sku ?? '—',
       category: prod?.categoria ?? 'General',
       qty: 0,
+      unit: prod?.unidad ?? prod?.weight_unit ?? (isWeight ? 'lb' : 'Unidad'),
+      saleType: prod?.sale_type ?? (isWeight ? 'weight' : 'unit'),
+      weightUnit: prod?.weight_unit ?? 'lb',
+      isWeightProduct: isWeight,
       totalCost: 0,
       totalSales: 0,
       profit: 0,

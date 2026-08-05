@@ -1,10 +1,12 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import type { Product } from './ProductManagementScreen';
 import { Package, Printer, Sparkles } from 'lucide-react';
 import { generateUniqueBarcode } from '@/lib/barcodeUtils';
 import { logAuditEvent } from '@/lib/auditStore';
 import { toast } from 'sonner';
+import WeightProductForm, { type WeightFormState } from '@/components/weight/WeightProductForm';
+import type { SaleType, WeightUnit } from '@/types/database';
 
 interface ProductFormModalProps {
   open: boolean;
@@ -52,6 +54,16 @@ function FormField({
 
 export default function ProductFormModal({ open, onClose, product, onSave, onPrintLabel }: ProductFormModalProps) {
   const isEdit = !!product;
+
+  const [weightState, setWeightState] = useState<WeightFormState>({
+    saleType: 'unit',
+    weightUnit: 'lb',
+    pricePerWeight: 0,
+    minWeight: 0.01,
+    maxWeight: 999.99,
+    allowDecimal: true,
+    generateScaleBarcode: false,
+  });
 
   const {
     register,
@@ -104,6 +116,15 @@ export default function ProductFormModal({ open, onClose, product, onSave, onPri
         warranty: product.warranty,
         status: product.status,
       });
+      setWeightState({
+        saleType: product.saleType ?? (product.isWeightProduct ? 'weight' : 'unit'),
+        weightUnit: product.weightUnit ?? 'lb',
+        pricePerWeight: product.pricePerWeight ?? product.salePrice ?? 0,
+        minWeight: product.minWeight ?? 0.01,
+        maxWeight: product.maxWeight ?? 999.99,
+        allowDecimal: product.allowDecimal ?? true,
+        generateScaleBarcode: product.generateScaleBarcode ?? false,
+      });
     } else {
       reset({
         barcode: '',
@@ -124,6 +145,15 @@ export default function ProductFormModal({ open, onClose, product, onSave, onPri
         warranty: 'N/A',
         status: 'active',
       });
+      setWeightState({
+        saleType: 'unit',
+        weightUnit: 'lb',
+        pricePerWeight: 0,
+        minWeight: 0.01,
+        maxWeight: 999.99,
+        allowDecimal: true,
+        generateScaleBarcode: false,
+      });
     }
   }, [product, reset, open]);
 
@@ -142,6 +172,8 @@ export default function ProductFormModal({ open, onClose, product, onSave, onPri
     const stockStatus: Product['stockStatus'] =
       stock === 0 ? 'out' : stock < minStk ? 'low' : 'normal';
 
+    const isWeight = weightState.saleType === 'weight' || weightState.saleType === 'both';
+
     const saved: Product = {
       id: product?.id ?? `prod-${Date.now()}`,
       ...data,
@@ -152,6 +184,14 @@ export default function ProductFormModal({ open, onClose, product, onSave, onPri
       minStock: minStk,
       currentStock: stock,
       stockStatus,
+      saleType: weightState.saleType,
+      weightUnit: weightState.weightUnit,
+      pricePerWeight: isWeight ? (weightState.pricePerWeight > 0 ? weightState.pricePerWeight : sale) : sale,
+      minWeight: weightState.minWeight,
+      maxWeight: weightState.maxWeight,
+      allowDecimal: weightState.allowDecimal,
+      generateScaleBarcode: weightState.generateScaleBarcode,
+      isWeightProduct: isWeight,
     };
 
     // System Audit Event
@@ -294,6 +334,15 @@ export default function ProductFormModal({ open, onClose, product, onSave, onPri
             </FormField>
           </div>
         </div>
+
+        <div className="border-t border-border" />
+
+        {/* Section: Tipo de Venta (Peso / Unidad) */}
+        <WeightProductForm
+          values={weightState}
+          onChange={(updates) => setWeightState((prev) => ({ ...prev, ...updates }))}
+          baseSalePrice={Number(salePrice || 0)}
+        />
 
         <div className="border-t border-border" />
 

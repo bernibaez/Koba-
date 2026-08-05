@@ -342,3 +342,34 @@ export async function anularVenta(ventaId: string, motivo: string = 'Anulación'
 
   if (error) throw error;
 }
+
+export type ActualizarVentaPayload = {
+  cliente_id?: string | null;
+  metodo_pago?: MetodoPago;
+  tipo_ncf?: string | null;
+  ncf?: string | null;
+  monto_descuento?: number;
+  estado?: Venta['estado'];
+};
+
+export async function actualizarVenta(
+  ventaId: string,
+  payload: ActualizarVentaPayload
+): Promise<void> {
+  const sb = tryGetSupabase();
+  if (!sb) {
+    const list = getLocalVentas().map((v) =>
+      v.id === ventaId ? { ...v, ...payload } : v
+    );
+    saveLocalVentas(list);
+    return;
+  }
+
+  const { error } = await sb
+    .from('ventas')
+    .update(payload)
+    .eq('id', ventaId);
+
+  if (error) throw error;
+}
+

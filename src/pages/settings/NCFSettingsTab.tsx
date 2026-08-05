@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ShieldCheck, Plus, Calendar, FileText } from 'lucide-react';
+import { ShieldCheck, Plus, Calendar, FileText, X, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { NCF_TYPES, type NCFRange, type NCFType } from '@/lib/ncfStore';
 import { obtenerRangosNcf, guardarRangosNcf } from '@/services/ncf.service';
@@ -86,12 +86,123 @@ export default function NCFSettingsTab() {
               active: true,
             })
           }
-          className="btn-primary text-xs font-bold flex items-center gap-1.5 self-start sm:self-auto"
+          className="btn-primary text-xs font-bold flex items-center gap-1.5 self-start sm:self-auto shadow-sm"
         >
           <Plus size={16} />
           <span>Nueva Secuencia NCF</span>
         </button>
       </div>
+
+      {/* FORMULARIO INLINE DE CREACIÓN / EDICIÓN */}
+      {editingRange && (
+        <div className="p-5 rounded-2xl border-2 border-primary/40 bg-card shadow-lg space-y-4 animate-in fade-in slide-in-from-top-3">
+          <div className="flex items-center justify-between border-b border-border pb-3">
+            <h3 className="text-base font-extrabold text-foreground flex items-center gap-2">
+              <FileText size={18} className="text-primary" />
+              {ranges.some((r) => r.id === editingRange.id)
+                ? `Editar Secuencia NCF (${editingRange.prefix})`
+                : 'Nueva Secuencia de Comprobante Fiscal (NCF)'}
+            </h3>
+            <button
+              type="button"
+              onClick={() => setEditingRange(null)}
+              className="p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+            >
+              <X size={18} />
+            </button>
+          </div>
+
+          <form onSubmit={handleSaveRange} className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+              <div className="sm:col-span-2">
+                <label className="block font-bold mb-1 text-foreground">Tipo de Comprobante (NCF)</label>
+                <select
+                  value={editingRange.type}
+                  onChange={(e) => {
+                    const t = e.target.value as NCFType;
+                    setEditingRange({ ...editingRange, type: t, prefix: t });
+                  }}
+                  className="input-field w-full"
+                >
+                  {Object.values(NCF_TYPES).map((t) => (
+                    <option key={t.type} value={t.type}>
+                      {t.name} ({t.type})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold mb-1 text-foreground">Número Actual</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={editingRange.currentNumber}
+                  onChange={(e) =>
+                    setEditingRange({
+                      ...editingRange,
+                      currentNumber: parseInt(e.target.value, 10) || 0,
+                    })
+                  }
+                  className="input-field font-mono w-full"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold mb-1 text-foreground">Número Máximo</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={editingRange.maxNumber}
+                  onChange={(e) =>
+                    setEditingRange({
+                      ...editingRange,
+                      maxNumber: parseInt(e.target.value, 10) || 0,
+                    })
+                  }
+                  className="input-field font-mono w-full"
+                />
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="block font-bold mb-1 text-foreground">Fecha Vencimiento autorizada DGII</label>
+                <input
+                  type="date"
+                  value={editingRange.expirationDate}
+                  onChange={(e) => setEditingRange({ ...editingRange, expirationDate: e.target.value })}
+                  className="input-field font-mono w-full"
+                />
+              </div>
+
+              <div className="sm:col-span-2 flex items-center pt-2">
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-foreground">
+                  <input
+                    type="checkbox"
+                    checked={editingRange.active}
+                    onChange={(e) => setEditingRange({ ...editingRange, active: e.target.checked })}
+                    className="rounded border-border text-primary focus:ring-primary h-4 w-4"
+                  />
+                  <span>Secuencia Activa</span>
+                </label>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
+              <button type="button" onClick={() => setEditingRange(null)} className="btn-secondary text-xs py-2">
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className="btn-primary text-xs font-bold py-2 px-4 flex items-center gap-1.5 shadow-sm"
+              >
+                <CheckCircle size={15} />
+                <span>{saving ? 'Guardando…' : 'Guardar Secuencia'}</span>
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {loading ? (
         <p className="text-sm text-muted-foreground py-8 text-center">Cargando secuencias NCF…</p>
@@ -184,91 +295,7 @@ export default function NCFSettingsTab() {
           })}
         </div>
       )}
-
-      {editingRange && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <form
-            onSubmit={handleSaveRange}
-            className="card w-full max-w-md p-6 space-y-4 shadow-2xl border border-border"
-          >
-            <h3 className="text-base font-bold text-foreground flex items-center gap-2">
-              <FileText size={18} className="text-primary" />
-              Configurar Secuencia NCF ({editingRange.prefix})
-            </h3>
-
-            <div className="space-y-3 text-xs">
-              <div>
-                <label className="block font-bold mb-1">Tipo de Comprobante (NCF)</label>
-                <select
-                  value={editingRange.type}
-                  onChange={(e) => {
-                    const t = e.target.value as NCFType;
-                    setEditingRange({ ...editingRange, type: t, prefix: t });
-                  }}
-                  className="input-field"
-                >
-                  {Object.values(NCF_TYPES).map((t) => (
-                    <option key={t.type} value={t.type}>
-                      {t.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold mb-1">Número Actual</label>
-                  <input
-                    type="number"
-                    value={editingRange.currentNumber}
-                    onChange={(e) =>
-                      setEditingRange({
-                        ...editingRange,
-                        currentNumber: parseInt(e.target.value, 10) || 0,
-                      })
-                    }
-                    className="input-field font-mono"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-bold mb-1">Número Máximo</label>
-                  <input
-                    type="number"
-                    value={editingRange.maxNumber}
-                    onChange={(e) =>
-                      setEditingRange({
-                        ...editingRange,
-                        maxNumber: parseInt(e.target.value, 10) || 0,
-                      })
-                    }
-                    className="input-field font-mono"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block font-bold mb-1">Fecha de Vencimiento autorizada DGII</label>
-                <input
-                  type="date"
-                  value={editingRange.expirationDate}
-                  onChange={(e) => setEditingRange({ ...editingRange, expirationDate: e.target.value })}
-                  className="input-field font-mono"
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
-              <button type="button" onClick={() => setEditingRange(null)} className="btn-secondary text-xs">
-                Cancelar
-              </button>
-              <button type="submit" disabled={saving} className="btn-primary text-xs font-bold">
-                {saving ? 'Guardando…' : 'Guardar Secuencia'}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
     </div>
   );
 }
+
