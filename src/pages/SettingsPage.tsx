@@ -397,19 +397,24 @@ export default function SettingsPage() {
                     { key: 'usuario', label: 'Nuevo usuario registrado', desc: 'Notificar cuando se cree un nuevo usuario' },
                   ] as const
                 ).map((n) => {
-                  const enabled = notifPrefs[n.key];
+                  const enabled = Boolean(notifPrefs[n.key]);
                   return (
-                    <div key={n.key} className="flex items-center justify-between py-3 border-b border-border last:border-0">
-                      <div>
+                    <div
+                      key={n.key}
+                      className="flex items-center justify-between gap-4 py-3 border-b border-border last:border-0"
+                    >
+                      <div className="min-w-0 flex-1">
                         <p className="font-medium text-foreground text-sm">{n.label}</p>
                         <p className="text-xs text-muted-foreground">{n.desc}</p>
                       </div>
                       <button
                         type="button"
-                        aria-pressed={enabled}
-                        onClick={() =>
+                        role="switch"
+                        aria-checked={enabled}
+                        aria-label={n.label}
+                        onClick={() => {
                           setNotifPrefs((prev) => {
-                            const next = { ...prev, [n.key]: !prev[n.key] };
+                            const next = { ...prev, [n.key]: !Boolean(prev[n.key]) };
                             try {
                               localStorage.setItem('marketerp_notif_prefs', JSON.stringify(next));
                             } catch {
@@ -417,14 +422,21 @@ export default function SettingsPage() {
                             }
                             toast.success(next[n.key] ? `${n.label} activada` : `${n.label} desactivada`);
                             return next;
-                          })
-                        }
-                        className={`relative w-11 h-6 rounded-full transition-colors ${enabled ? 'bg-primary' : 'bg-border'}`}
+                          });
+                        }}
+                        className={`
+                          relative inline-flex h-6 w-11 shrink-0 items-center rounded-full
+                          overflow-hidden transition-colors duration-200
+                          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40
+                          ${enabled ? 'bg-primary' : 'bg-muted'}
+                        `}
                       >
                         <span
-                          className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
-                            enabled ? 'translate-x-5' : 'translate-x-0.5'
-                          }`}
+                          className={`
+                            pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-sm
+                            transition-transform duration-200 ease-out
+                            ${enabled ? 'translate-x-6' : 'translate-x-1'}
+                          `}
                         />
                       </button>
                     </div>
