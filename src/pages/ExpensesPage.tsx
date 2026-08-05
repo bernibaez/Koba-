@@ -118,6 +118,25 @@ export default function ExpensesPage() {
   };
 
   const handleSave = async () => {
+    if (tab === 'list') {
+      if (!catId) {
+        toast.error('Selecciona una categoría');
+        return;
+      }
+      if (!descripcion.trim()) {
+        toast.error('La descripción es obligatoria');
+        return;
+      }
+      const m = parseFloat(monto);
+      if (!(m > 0)) {
+        toast.error('El monto debe ser mayor a 0');
+        return;
+      }
+    } else if (!catNombre.trim()) {
+      toast.error('El nombre de la categoría es obligatorio');
+      return;
+    }
+
     setSaving(true);
     try {
       if (tab === 'list') {
@@ -606,13 +625,24 @@ export default function ExpensesPage() {
                 )}
               </div>
             </div>
-            <div className="mt-6">
+            <div className="mt-6 flex gap-2">
               <button
                 type="button"
-                className="btn-secondary w-full"
+                className="btn-secondary flex-1"
                 onClick={() => setViewingGasto(null)}
               >
                 Cerrar
+              </button>
+              <button
+                type="button"
+                className="btn-primary flex-1"
+                onClick={() => {
+                  const g = viewingGasto;
+                  setViewingGasto(null);
+                  if (g) openEditGasto(g);
+                }}
+              >
+                Editar
               </button>
             </div>
           </>

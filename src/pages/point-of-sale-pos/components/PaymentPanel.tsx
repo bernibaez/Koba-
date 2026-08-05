@@ -20,6 +20,7 @@ interface PaymentPanelProps {
   onToggleFiscal?: (enabled: boolean) => void;
   onClose?: () => void;
   onNewSale?: () => void;
+  initialMethod?: PaymentMethod;
 }
 
 const paymentMethods = [
@@ -42,8 +43,9 @@ export default function PaymentPanel({
   onToggleFiscal,
   onClose,
   onNewSale,
+  initialMethod,
 }: PaymentPanelProps) {
-  const [method, setMethod] = useState<PaymentMethod>('cash');
+  const [method, setMethod] = useState<PaymentMethod>(initialMethod ?? 'cash');
   const [cashReceived, setCashReceived] = useState('');
   const [processing, setProcessing] = useState(false);
   const [printReceipt, setPrintReceipt] = useState(true);
@@ -54,6 +56,10 @@ export default function PaymentPanel({
   const [ncfType, setNcfType] = useState<NCFType>('B02');
   const [rncClient, setRncClient] = useState('');
   const [companyName, setCompanyName] = useState('');
+
+  React.useEffect(() => {
+    if (initialMethod) setMethod(initialMethod);
+  }, [initialMethod]);
 
   const fmt = (v: number) =>
     `RD$ ${v.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;

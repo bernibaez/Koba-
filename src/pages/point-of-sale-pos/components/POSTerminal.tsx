@@ -27,8 +27,10 @@ import { isSupabaseConfigured } from '@/services/clienteSupabase';
 import { getCombos, recordComboSale } from '@/lib/comboStore';
 import { procesarVenta } from '@/services/ventas.service';
 import { registrarFacturaFiscal } from '@/services/ncf.service';
+import { crearCotizacion } from '@/services/cotizaciones.service';
 import type { MetodoPago } from '@/types/database';
 import { useAuth } from '@/context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 const ADMIN_OWN_CASH: CashRegisterId = '1';
 
@@ -59,10 +61,12 @@ export interface Customer {
 
 export default function POSTerminal() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [cart, setCart] = useState<CartItem[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [globalDiscount, setGlobalDiscount] = useState(0);
   const [paymentOpen, setPaymentOpen] = useState(false);
+  const [preferredPayMethod, setPreferredPayMethod] = useState<'cash' | 'card' | 'transfer' | 'credit' | 'split' | undefined>();
   const [orderCompleted, setOrderCompleted] = useState(false);
   const [lastPayments, setLastPayments] = useState<PaymentSplit | null>(null);
   const [expenseOpen, setExpenseOpen] = useState(false);
@@ -229,6 +233,7 @@ export default function POSTerminal() {
     customer: selectedCustomer,
     orderCompleted,
     fiscalEnabled,
+    initialMethod: preferredPayMethod,
     onToggleFiscal: (val: boolean) => setFiscalEnabled(val),
     onComplete: async (_payments: PaymentSplit, fiscalInvoice?: FiscalInvoiceRecord) => {
       const metodo: MetodoPago =
@@ -394,7 +399,14 @@ export default function POSTerminal() {
           </button>
           <button
             type="button"
-            onClick={() => toast.info('Generando preventa...')}
+            onClick={() => {
+              if (cart.length === 0) {
+                toast.error('Agrega productos para crear una preventa');
+                return;
+              }
+              setHoldOpen(true);
+              toast.info('Guarda la preventa como venta suspendida');
+            }}
             className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 transition-colors"
           >
             <FileText size={15} className="text-sky-500" />
@@ -402,7 +414,34 @@ export default function POSTerminal() {
           </button>
           <button
             type="button"
-            onClick={() => toast.info('Creando cotización...')}
+            onClick={() => {
+              void (async () => {
+                if (cart.length === 0) {
+                  toast.error('Agrega productos para crear una cotización');
+                  return;
+                }
+                try {
+                  const cot = await crearCotizacion({
+                    cliente_id: selectedCustomer?.id ?? null,
+                    vendedor_id: user?.id ?? null,
+                    subtotal,
+                    monto_impuesto: taxTotal,
+                    monto_total: total,
+                    items: cart.map((item) => ({
+                      producto_id: item.isCombo ? null : item.productId,
+                      nombre_item: item.name,
+                      precio_unitario: item.price,
+                      cantidad: item.qty,
+                      subtotal: item.price * item.qty * (1 - item.discount / 100),
+                    })),
+                  });
+                  toast.success(`Cotización ${cot.codigo} creada`);
+                  navigate('/sales');
+                } catch (e) {
+                  toast.error(e instanceof Error ? e.message : 'No se pudo crear la cotización');
+                }
+              })();
+            }}
             className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 transition-colors"
           >
             <FileText size={15} className="text-amber-500" />
@@ -418,7 +457,18 @@ export default function POSTerminal() {
           </button>
           <button
             type="button"
-            onClick={() => toast.info('Venta a crédito seleccionada')}
+            onClick={() => {
+              if (cart.length === 0) {
+                toast.error('El carrito está vacío');
+                return;
+              }
+              if (!selectedCustomer) {
+                toast.error('Selecciona un cliente para venta a crédito');
+                return;
+              }
+              setPreferredPayMethod('credit');
+              setPaymentOpen(true);
+            }}
             className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 transition-colors"
           >
             <CheckCircle size={15} className="text-indigo-500" />
@@ -426,7 +476,10 @@ export default function POSTerminal() {
           </button>
           <button
             type="button"
-            onClick={() => setPaymentOpen(true)}
+            onClick={() => {
+              setPreferredPayMethod('card');
+              setPaymentOpen(true);
+            }}
             className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 transition-colors"
           >
             <CreditCard size={15} className="text-rose-500" />
@@ -482,7 +535,13 @@ export default function POSTerminal() {
         </div>
       )}
 
-      {expenseOpen && <PosExpenseModal onClose={() => setExpenseOpen(false)} />}
+      {expenseOpen && (
+        <PosExpenseModal
+          onClose={() => setExpenseOpen(false)}
+          cajaId={String(activeCashId)}
+          cashierLabel={activeCash.label}
+        />
+      )}
       {holdOpen && (
         <PosHoldModal
           heldSales={heldSales}

@@ -46,3 +46,49 @@ export async function obtenerLogoEmpresa(): Promise<string | null> {
   const cfg = await obtenerConfiguracionEmpresa();
   return cfg?.logo_url ?? null;
 }
+
+export type DatosEmpresaInput = {
+  nombre_comercial: string;
+  razon_social?: string | null;
+  rnc?: string | null;
+  telefono?: string | null;
+  correo?: string | null;
+  direccion?: string | null;
+  moneda?: string | null;
+  itbis_porcentaje?: number | null;
+};
+
+export async function guardarConfiguracionEmpresa(datos: DatosEmpresaInput): Promise<void> {
+  if (!isSupabaseConfigured()) {
+    throw new Error('Supabase no configurado');
+  }
+  if (!datos.nombre_comercial.trim()) {
+    throw new Error('El nombre de la empresa es obligatorio');
+  }
+
+  const sb = getSupabase();
+  const existing = await obtenerConfiguracionEmpresa();
+  const payload = {
+    nombre_comercial: datos.nombre_comercial.trim(),
+    razon_social: datos.razon_social?.trim() || null,
+    rnc: datos.rnc?.trim() || null,
+    telefono: datos.telefono?.trim() || null,
+    correo: datos.correo?.trim() || null,
+    direccion: datos.direccion?.trim() || null,
+    moneda: datos.moneda?.trim() || 'DOP',
+    itbis_porcentaje: datos.itbis_porcentaje ?? 18,
+    actualizado_en: new Date().toISOString(),
+  };
+
+  if (existing?.id) {
+    const { error } = await sb.from('configuracion_empresa').update(payload).eq('id', existing.id);
+    if (error) throw error;
+    return;
+  }
+
+  const { error } = await sb.from('configuracion_empresa').insert({
+    ...payload,
+    logo_url: null,
+  });
+  if (error) throw error;
+}

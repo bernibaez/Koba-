@@ -1,4 +1,5 @@
 ﻿import React, { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import AppLayout from '@/components/AppLayout';
 import {
   ShoppingCart,
@@ -69,10 +70,16 @@ interface CartItem {
 }
 
 export default function SalesPage() {
+  const [searchParams] = useSearchParams();
   const [tab, setTab] = useState<Tab>('sales');
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(() => searchParams.get('q') ?? '');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+
+  useEffect(() => {
+    const q = searchParams.get('q');
+    if (q) setSearch(q);
+  }, [searchParams]);
 
   // Inline forms (reemplazan la lista, como en Compras) & modals de confirmación
   const [showAddSaleForm, setShowAddSaleForm] = useState(false);

@@ -356,7 +356,17 @@ export default function UsersPage() {
             />
           </div>
           <div className="flex gap-2">
-            <button className="btn-secondary flex items-center gap-2">
+            <button
+              type="button"
+              className="btn-secondary flex items-center gap-2"
+              onClick={() => {
+                if (!search.trim()) {
+                  toast.info('Escribe en el buscador para filtrar la lista');
+                  return;
+                }
+                toast.success(`Filtrando por «${search.trim()}»`);
+              }}
+            >
               <Filter size={16} />
               Filtrar
             </button>

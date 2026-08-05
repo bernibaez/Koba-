@@ -1,11 +1,13 @@
 import React from 'react';
 import { Eye, Printer, ExternalLink } from 'lucide-react';
 import StatusBadge from '@/components/ui/StatusBadge';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useVentas } from '@/hooks/useVentas';
 import { InlineLoader, TableRowSkeleton } from '@/components/ui/LoadingSkeleton';
+import { toast } from 'sonner';
 
 export default function RecentTransactions() {
+  const navigate = useNavigate();
   const { ventas, loading } = useVentas({ pagina: 1, limite: 8 });
 
   const transactions = ventas.map((v) => {
@@ -13,9 +15,6 @@ export default function RecentTransactions() {
     return {
       id: v.id,
       ref: v.numero_factura,
-      customer: 'Cliente',
-      cashier: 'Cajero',
-      items: 0,
       total: `RD$ ${Number(v.monto_total).toLocaleString('es-DO', { minimumFractionDigits: 2 })}`,
       method:
         v.metodo_pago === 'efectivo'
@@ -89,10 +88,23 @@ export default function RecentTransactions() {
                 <td className="py-3 px-4 text-right text-muted-foreground">{txn.time}</td>
                 <td className="py-3 px-4 text-center">
                   <div className="inline-flex gap-1">
-                    <button type="button" className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground">
+                    <button
+                      type="button"
+                      title="Ver en Ventas"
+                      className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground"
+                      onClick={() => navigate(`/sales?q=${encodeURIComponent(txn.ref)}`)}
+                    >
                       <Eye size={14} />
                     </button>
-                    <button type="button" className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground">
+                    <button
+                      type="button"
+                      title="Imprimir"
+                      className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground"
+                      onClick={() => {
+                        toast.info(`Abre Ventas para imprimir ${txn.ref}`);
+                        navigate(`/sales?q=${encodeURIComponent(txn.ref)}`);
+                      }}
+                    >
                       <Printer size={14} />
                     </button>
                   </div>

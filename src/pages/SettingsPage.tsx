@@ -37,9 +37,61 @@ export default function SettingsPage() {
   const [logoError, setLogoError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [empresaNombre, setEmpresaNombre] = useState('MarketERP Supermercado');
+  const [empresaRnc, setEmpresaRnc] = useState('');
+  const [empresaTelefono, setEmpresaTelefono] = useState('');
+  const [empresaCorreo, setEmpresaCorreo] = useState('');
+  const [empresaDireccion, setEmpresaDireccion] = useState('');
+  const [empresaMoneda, setEmpresaMoneda] = useState('DOP');
+  const [empresaItbis, setEmpresaItbis] = useState('18');
+  const [savingEmpresa, setSavingEmpresa] = useState(false);
+  const [sucursales, setSucursales] = useState<{ id: string; codigo: string; nombre: string }[]>([]);
+  const [loadingSucursales, setLoadingSucursales] = useState(false);
+  const [notifPrefs, setNotifPrefs] = useState<Record<string, boolean>>(() => {
+    try {
+      const raw = localStorage.getItem('marketerp_notif_prefs');
+      if (raw) return JSON.parse(raw) as Record<string, boolean>;
+    } catch {
+      /* ignore */
+    }
+    return {
+      stock: true,
+      venta: false,
+      compra: true,
+      vencimiento: true,
+      caja: false,
+      usuario: true,
+    };
+  });
+
   useEffect(() => {
     void syncCompanyLogoFromDb().then((url) => setLogoPreview(url));
+    void import('@/services/empresa.service')
+      .then(({ obtenerConfiguracionEmpresa }) => obtenerConfiguracionEmpresa())
+      .then((cfg) => {
+        if (!cfg) return;
+        setEmpresaNombre(cfg.nombre_comercial || '');
+        setEmpresaRnc(cfg.rnc || '');
+        setEmpresaTelefono(cfg.telefono || '');
+        setEmpresaCorreo(cfg.correo || '');
+        setEmpresaDireccion(cfg.direccion || '');
+        setEmpresaMoneda(cfg.moneda || 'DOP');
+        setEmpresaItbis(String(cfg.itbis_porcentaje ?? 18));
+      })
+      .catch(() => {
+        /* keep defaults */
+      });
   }, []);
+
+  useEffect(() => {
+    if (activeSection !== 'locations') return;
+    setLoadingSucursales(true);
+    void import('@/services/transferencias.service')
+      .then(({ obtenerSucursales }) => obtenerSucursales())
+      .then(setSucursales)
+      .catch(() => setSucursales([]))
+      .finally(() => setLoadingSucursales(false));
+  }, [activeSection]);
 
   const openFilePicker = () => {
     setLogoError(null);
@@ -69,6 +121,27 @@ export default function SettingsPage() {
     setLogoPreview(null);
     setLogoError(null);
     toast.success('Logo eliminado');
+  };
+
+  const handleSaveEmpresa = async () => {
+    setSavingEmpresa(true);
+    try {
+      const { guardarConfiguracionEmpresa } = await import('@/services/empresa.service');
+      await guardarConfiguracionEmpresa({
+        nombre_comercial: empresaNombre,
+        rnc: empresaRnc,
+        telefono: empresaTelefono,
+        correo: empresaCorreo,
+        direccion: empresaDireccion,
+        moneda: empresaMoneda,
+        itbis_porcentaje: parseFloat(empresaItbis) || 18,
+      });
+      toast.success('Datos de empresa guardados');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'No se pudo guardar');
+    } finally {
+      setSavingEmpresa(false);
+    }
   };
 
   return (
@@ -151,17 +224,46 @@ export default function SettingsPage() {
                   </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div><label className="text-xs font-medium text-muted-foreground mb-1 block">Nombre de la empresa *</label><input className="input-field" defaultValue="MarketERP Supermercado" /></div>
-                  <div><label className="text-xs font-medium text-muted-foreground mb-1 block">RNC / Cédula *</label><input className="input-field" defaultValue="131-12345-6" /></div>
-                  <div><label className="text-xs font-medium text-muted-foreground mb-1 block">Teléfono</label><input className="input-field" defaultValue="809-555-0000" /></div>
-                  <div><label className="text-xs font-medium text-muted-foreground mb-1 block">Correo electrónico</label><input className="input-field" defaultValue="info@marketerp.do" type="email" /></div>
-                  <div className="md:col-span-2"><label className="text-xs font-medium text-muted-foreground mb-1 block">Dirección</label><input className="input-field" defaultValue="Av. 27 de Febrero #100, Santo Domingo, RD" /></div>
-                  <div><label className="text-xs font-medium text-muted-foreground mb-1 block">Ciudad</label><input className="input-field" defaultValue="Santo Domingo" /></div>
-                  <div><label className="text-xs font-medium text-muted-foreground mb-1 block">País</label><select className="input-field"><option>República Dominicana</option><option>México</option><option>Colombia</option></select></div>
-                  <div><label className="text-xs font-medium text-muted-foreground mb-1 block">Sitio web</label><input className="input-field" defaultValue="www.marketerp.do" /></div>
-                  <div><label className="text-xs font-medium text-muted-foreground mb-1 block">Sector</label><select className="input-field"><option>Supermercado</option><option>Farmacia</option><option>Ferretería</option><option>Otro</option></select></div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground mb-1 block">Nombre de la empresa *</label>
+                    <input className="input-field" value={empresaNombre} onChange={(e) => setEmpresaNombre(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground mb-1 block">RNC / Cédula *</label>
+                    <input className="input-field" value={empresaRnc} onChange={(e) => setEmpresaRnc(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground mb-1 block">Teléfono</label>
+                    <input className="input-field" value={empresaTelefono} onChange={(e) => setEmpresaTelefono(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground mb-1 block">Correo electrónico</label>
+                    <input className="input-field" type="email" value={empresaCorreo} onChange={(e) => setEmpresaCorreo(e.target.value)} />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="text-xs font-medium text-muted-foreground mb-1 block">Dirección</label>
+                    <input className="input-field" value={empresaDireccion} onChange={(e) => setEmpresaDireccion(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground mb-1 block">Moneda</label>
+                    <input className="input-field" value={empresaMoneda} onChange={(e) => setEmpresaMoneda(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground mb-1 block">ITBIS %</label>
+                    <input className="input-field" type="number" value={empresaItbis} onChange={(e) => setEmpresaItbis(e.target.value)} />
+                  </div>
                 </div>
-                <div className="flex justify-end"><button className="btn-primary flex items-center gap-2"><Save size={16} />Guardar cambios</button></div>
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    className="btn-primary flex items-center gap-2"
+                    disabled={savingEmpresa}
+                    onClick={() => void handleSaveEmpresa()}
+                  >
+                    <Save size={16} />
+                    {savingEmpresa ? 'Guardando…' : 'Guardar cambios'}
+                  </button>
+                </div>
               </div>
             )}
 
@@ -169,28 +271,42 @@ export default function SettingsPage() {
               <div className="card p-6 space-y-4">
                 <div className="flex items-center justify-between">
                   <h2 className="text-lg font-bold text-foreground">Ubicaciones Comerciales</h2>
-                  <button className="btn-primary flex items-center gap-2 text-sm"><MapPin size={16} />Nueva Sucursal</button>
+                  <button
+                    type="button"
+                    className="btn-primary flex items-center gap-2 text-sm"
+                    onClick={() =>
+                      toast.info('Crea sucursales desde Supabase (tabla sucursales) o el módulo de transferencias')
+                    }
+                  >
+                    <MapPin size={16} />
+                    Nueva Sucursal
+                  </button>
                 </div>
-                {[
-                  { name: 'Sucursal Principal', address: 'Av. 27 de Febrero #100', phone: '809-555-0001', manager: 'Admin General', status: true },
-                  { name: 'Sucursal Norte', address: 'Calle del Sol #45, Santiago', phone: '809-555-0002', manager: 'Carlos López', status: true },
-                  { name: 'Sucursal Este', address: 'Av. España #200, San Pedro', phone: '809-555-0003', manager: 'Ana Martínez', status: false },
-                ]?.map((loc, i) => (
-                  <div key={i} className="border border-border rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="flex items-start gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0"><MapPin size={18} className="text-primary" /></div>
-                      <div>
-                        <p className="font-semibold text-foreground">{loc?.name}</p>
-                        <p className="text-xs text-muted-foreground">{loc?.address}</p>
-                        <p className="text-xs text-muted-foreground">{loc?.phone} · {loc?.manager}</p>
+                {loadingSucursales ? (
+                  <p className="text-sm text-muted-foreground py-6 text-center">Cargando sucursales…</p>
+                ) : sucursales.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-6 text-center">
+                    No hay sucursales en la base de datos.
+                  </p>
+                ) : (
+                  sucursales.map((loc) => (
+                    <div
+                      key={loc.id}
+                      className="border border-border rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                          <MapPin size={18} className="text-primary" />
+                        </div>
+                        <div>
+                          <p className="font-semibold text-foreground">{loc.nombre}</p>
+                          <p className="text-xs text-muted-foreground font-mono">{loc.codigo}</p>
+                        </div>
                       </div>
+                      <span className="badge-success">Activa</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className={loc?.status ? 'badge-success' : 'badge-danger'}>{loc?.status ? 'Activa' : 'Inactiva'}</span>
-                      <button className="btn-secondary text-xs py-1.5">Editar</button>
-                    </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             )}
 
@@ -198,26 +314,31 @@ export default function SettingsPage() {
               <div className="card p-6 space-y-4">
                 <div className="flex items-center justify-between">
                   <h2 className="text-lg font-bold text-foreground">Tasas de Impuestos</h2>
-                  <button className="btn-primary flex items-center gap-2 text-sm"><Tag size={16} />Nuevo Impuesto</button>
+                  <button
+                    type="button"
+                    className="btn-primary flex items-center gap-2 text-sm"
+                    disabled={savingEmpresa}
+                    onClick={() => void handleSaveEmpresa()}
+                  >
+                    <Tag size={16} />
+                    Guardar ITBIS
+                  </button>
                 </div>
-                {[
-                  { name: 'ITBIS 18%', rate: 18, type: 'Porcentaje', applies: 'Productos generales', active: true },
-                  { name: 'ITBIS 16%', rate: 16, type: 'Porcentaje', applies: 'Servicios', active: true },
-                  { name: 'ISC Bebidas', rate: 10, type: 'Porcentaje', applies: 'Bebidas alcohólicas', active: true },
-                  { name: 'Exento', rate: 0, type: 'Exento', applies: 'Productos básicos', active: true },
-                ]?.map((tax, i) => (
-                  <div key={i} className="border border-border rounded-xl p-4 flex items-center justify-between">
-                    <div>
-                      <p className="font-semibold text-foreground">{tax?.name}</p>
-                      <p className="text-xs text-muted-foreground">{tax?.applies}</p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-lg font-bold text-primary">{tax?.rate}%</span>
-                      <span className={tax?.active ? 'badge-success' : 'badge-danger'}>{tax?.active ? 'Activo' : 'Inactivo'}</span>
-                      <button className="btn-secondary text-xs py-1.5">Editar</button>
-                    </div>
+                <div className="border border-border rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <p className="font-semibold text-foreground">ITBIS general</p>
+                    <p className="text-xs text-muted-foreground">Porcentaje aplicado en ventas y POS</p>
                   </div>
-                ))}
+                  <div className="flex items-center gap-2">
+                    <input
+                      className="input-field w-28 text-right font-bold"
+                      type="number"
+                      value={empresaItbis}
+                      onChange={(e) => setEmpresaItbis(e.target.value)}
+                    />
+                    <span className="text-muted-foreground font-semibold">%</span>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -225,50 +346,109 @@ export default function SettingsPage() {
               <div className="card p-6 space-y-4">
                 <h2 className="text-lg font-bold text-foreground">Moneda y Formato</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div><label className="text-xs font-medium text-muted-foreground mb-1 block">Moneda principal</label><select className="input-field"><option>DOP - Peso Dominicano</option><option>USD - Dólar Americano</option><option>EUR - Euro</option></select></div>
-                  <div><label className="text-xs font-medium text-muted-foreground mb-1 block">Símbolo</label><input className="input-field" defaultValue="RD$" /></div>
-                  <div><label className="text-xs font-medium text-muted-foreground mb-1 block">Decimales</label><select className="input-field"><option>2 decimales</option><option>0 decimales</option></select></div>
-                  <div><label className="text-xs font-medium text-muted-foreground mb-1 block">Separador de miles</label><select className="input-field"><option>Coma (1,000)</option><option>Punto (1.000)</option></select></div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground mb-1 block">Moneda principal</label>
+                    <select
+                      className="input-field"
+                      value={empresaMoneda}
+                      onChange={(e) => setEmpresaMoneda(e.target.value)}
+                    >
+                      <option value="DOP">DOP - Peso Dominicano</option>
+                      <option value="USD">USD - Dólar Americano</option>
+                      <option value="EUR">EUR - Euro</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground mb-1 block">Símbolo</label>
+                    <input
+                      className="input-field"
+                      readOnly
+                      value={empresaMoneda === 'USD' ? 'US$' : empresaMoneda === 'EUR' ? '€' : 'RD$'}
+                    />
+                  </div>
                 </div>
-                <div className="flex justify-end"><button className="btn-primary flex items-center gap-2"><Save size={16} />Guardar</button></div>
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    className="btn-primary flex items-center gap-2"
+                    disabled={savingEmpresa}
+                    onClick={() => void handleSaveEmpresa()}
+                  >
+                    <Save size={16} />
+                    {savingEmpresa ? 'Guardando…' : 'Guardar'}
+                  </button>
+                </div>
               </div>
             )}
 
             {activeSection === 'notifications' && (
               <div className="card p-6 space-y-4">
                 <h2 className="text-lg font-bold text-foreground">Notificaciones</h2>
-                {[
-                  { label: 'Stock mínimo alcanzado', desc: 'Notificar cuando un producto llegue al stock mínimo', enabled: true },
-                  { label: 'Nueva venta registrada', desc: 'Notificar al registrar una nueva venta', enabled: false },
-                  { label: 'Compra recibida', desc: 'Notificar al recibir una orden de compra', enabled: true },
-                  { label: 'Productos próximos a vencer', desc: 'Alertar 30 días antes del vencimiento', enabled: true },
-                  { label: 'Caja abierta/cerrada', desc: 'Notificar apertura y cierre de caja', enabled: false },
-                  { label: 'Nuevo usuario registrado', desc: 'Notificar cuando se cree un nuevo usuario', enabled: true },
-                ]?.map((n, i) => (
-                  <div key={i} className="flex items-center justify-between py-3 border-b border-border last:border-0">
-                    <div>
-                      <p className="font-medium text-foreground text-sm">{n?.label}</p>
-                      <p className="text-xs text-muted-foreground">{n?.desc}</p>
+                <p className="text-xs text-muted-foreground">
+                  Preferencias locales de este navegador (aún no hay tabla de notificaciones en Supabase).
+                </p>
+                {(
+                  [
+                    { key: 'stock', label: 'Stock mínimo alcanzado', desc: 'Notificar cuando un producto llegue al stock mínimo' },
+                    { key: 'venta', label: 'Nueva venta registrada', desc: 'Notificar al registrar una nueva venta' },
+                    { key: 'compra', label: 'Compra recibida', desc: 'Notificar al recibir una orden de compra' },
+                    { key: 'vencimiento', label: 'Productos próximos a vencer', desc: 'Alertar 30 días antes del vencimiento' },
+                    { key: 'caja', label: 'Caja abierta/cerrada', desc: 'Notificar apertura y cierre de caja' },
+                    { key: 'usuario', label: 'Nuevo usuario registrado', desc: 'Notificar cuando se cree un nuevo usuario' },
+                  ] as const
+                ).map((n) => {
+                  const enabled = notifPrefs[n.key];
+                  return (
+                    <div key={n.key} className="flex items-center justify-between py-3 border-b border-border last:border-0">
+                      <div>
+                        <p className="font-medium text-foreground text-sm">{n.label}</p>
+                        <p className="text-xs text-muted-foreground">{n.desc}</p>
+                      </div>
+                      <button
+                        type="button"
+                        aria-pressed={enabled}
+                        onClick={() =>
+                          setNotifPrefs((prev) => {
+                            const next = { ...prev, [n.key]: !prev[n.key] };
+                            try {
+                              localStorage.setItem('marketerp_notif_prefs', JSON.stringify(next));
+                            } catch {
+                              /* ignore */
+                            }
+                            toast.success(next[n.key] ? `${n.label} activada` : `${n.label} desactivada`);
+                            return next;
+                          })
+                        }
+                        className={`relative w-11 h-6 rounded-full transition-colors ${enabled ? 'bg-primary' : 'bg-border'}`}
+                      >
+                        <span
+                          className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                            enabled ? 'translate-x-5' : 'translate-x-0.5'
+                          }`}
+                        />
+                      </button>
                     </div>
-                    <button className={`relative w-11 h-6 rounded-full transition-colors ${n?.enabled ? 'bg-primary' : 'bg-border'}`}>
-                      <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${n?.enabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
-                    </button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 
             {activeSection === 'invoice' && (
               <div className="card p-6 space-y-4">
                 <h2 className="text-lg font-bold text-foreground">Configuración de Factura</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div><label className="text-xs font-medium text-muted-foreground mb-1 block">Prefijo de factura</label><input className="input-field" defaultValue="FAC-" /></div>
-                  <div><label className="text-xs font-medium text-muted-foreground mb-1 block">Número inicial</label><input className="input-field" defaultValue="001" type="number" /></div>
-                  <div><label className="text-xs font-medium text-muted-foreground mb-1 block">Días de crédito por defecto</label><input className="input-field" defaultValue="30" type="number" /></div>
-                  <div><label className="text-xs font-medium text-muted-foreground mb-1 block">Tipo de comprobante DGII</label><select className="input-field"><option>B01 - Crédito Fiscal</option><option>B02 - Consumidor Final</option><option>B14 - Régimen Especial</option></select></div>
-                  <div className="md:col-span-2"><label className="text-xs font-medium text-muted-foreground mb-1 block">Nota al pie de factura</label><textarea className="input-field" rows={3} defaultValue="Gracias por su compra. Conserve su factura." /></div>
+                <p className="text-sm text-muted-foreground">
+                  Las secuencias fiscales se administran en <strong>Secuencias NCF (DGII)</strong>. El prefijo de factura lo genera el POS automáticamente.
+                </p>
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    className="btn-primary flex items-center gap-2"
+                    onClick={() => setActiveSection('ncf')}
+                  >
+                    <Save size={16} />
+                    Ir a NCF
+                  </button>
                 </div>
-                <div className="flex justify-end"><button className="btn-primary flex items-center gap-2"><Save size={16} />Guardar</button></div>
               </div>
             )}
 
@@ -276,14 +456,26 @@ export default function SettingsPage() {
 
             {activeSection === 'permissions' && <PermissionsSettingsTab />}
 
-            {!['company','locations','taxes','currency','notifications','invoice','ncf','permissions']?.includes(activeSection) && (
+            {!['company', 'locations', 'taxes', 'currency', 'notifications', 'invoice', 'ncf', 'permissions'].includes(
+              activeSection
+            ) && (
               <div className="card p-6 flex flex-col items-center justify-center py-16 text-center">
                 <div className="w-16 h-16 rounded-2xl bg-secondary flex items-center justify-center mb-4">
-                  {settingsSections?.find(s => s?.id === activeSection)?.icon}
+                  {settingsSections.find((s) => s.id === activeSection)?.icon}
                 </div>
-                <h3 className="font-semibold text-foreground mb-2">{settingsSections?.find(s => s?.id === activeSection)?.label}</h3>
-                <p className="text-sm text-muted-foreground max-w-xs">Esta sección de configuración está disponible. Selecciona las opciones para personalizar tu sistema.</p>
-                <button className="btn-primary mt-4">Configurar</button>
+                <h3 className="font-semibold text-foreground mb-2">
+                  {settingsSections.find((s) => s.id === activeSection)?.label}
+                </h3>
+                <p className="text-sm text-muted-foreground max-w-xs">
+                  Esta sección aún no tiene persistencia en Supabase. Usa Empresa, NCF o Permisos para configuración operativa.
+                </p>
+                <button
+                  type="button"
+                  className="btn-primary mt-4"
+                  onClick={() => setActiveSection('company')}
+                >
+                  Ir a Empresa
+                </button>
               </div>
             )}
           </div>

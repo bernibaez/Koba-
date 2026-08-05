@@ -121,7 +121,7 @@ export async function obtenerGastos(signal?: AbortSignal): Promise<GastoUi[]> {
       `
       ${GASTO_COLUMNS},
       categorias_gasto ( nombre ),
-      perfiles ( nombre_completo )
+      perfiles!responsable_id ( nombre_completo )
     `
     )
     .order('creado_en', { ascending: false })
