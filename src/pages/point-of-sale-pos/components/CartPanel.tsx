@@ -23,6 +23,7 @@ interface CartPanelProps {
   onToggleFiscal?: () => void;
   searchQuery?: string;
   onSearchChange?: (q: string) => void;
+  onSearchSubmit?: (q: string) => void;
 }
 
 export default function CartPanel({
@@ -38,6 +39,7 @@ export default function CartPanel({
   onToggleFiscal,
   searchQuery = '',
   onSearchChange,
+  onSearchSubmit,
 }: CartPanelProps) {
   const { clientes, refetch } = useClientes('');
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -58,6 +60,15 @@ export default function CartPanel({
     `RD$ ${v.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   const totalItemsCount = cart.reduce((s, i) => s + i.qty, 0);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (onSearchSubmit && searchQuery.trim()) {
+        onSearchSubmit(searchQuery);
+      }
+    }
+  };
 
   return (
     <div className="flex flex-col h-full bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-4 overflow-hidden">
@@ -103,24 +114,21 @@ export default function CartPanel({
           <div className="relative flex-1">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-indigo-600 pointer-events-none" />
             <input
+              id="pos-barcode-search-input"
               type="text"
-              placeholder="Introduzca el nombre del producto / SKU / código de barras..."
+              placeholder="Escanear código de barras o buscar por SKU / Nombre [Enter]..."
               value={searchQuery}
               onChange={(e) => onSearchChange && onSearchChange(e.target.value)}
+              onKeyDown={handleKeyDown}
+              autoFocus
               className="w-full bg-slate-50 dark:bg-slate-800 border border-indigo-500 rounded-xl pl-9 pr-3 h-10 text-xs font-semibold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder:text-slate-400 truncate"
             />
           </div>
           <button
             type="button"
-            className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center justify-center font-bold flex-shrink-0 hover:bg-slate-200 transition-colors"
-            title="Tarjeta / Verifone"
-          >
-            <CreditCard size={17} />
-          </button>
-          <button
-            type="button"
+            onClick={() => onSearchSubmit && searchQuery.trim() && onSearchSubmit(searchQuery)}
             className="w-10 h-10 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center font-bold flex-shrink-0 transition-colors shadow-2xs"
-            title="Agregar rápido"
+            title="Agregar producto escaneado / buscado"
           >
             <PlusCircle size={18} />
           </button>

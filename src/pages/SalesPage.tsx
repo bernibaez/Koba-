@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
 import AppLayout from '@/components/AppLayout';
 import {
@@ -1072,124 +1073,132 @@ export default function SalesPage() {
                       </td>
                     </tr>
                   ) : (
-                    ventas.map((s, i) => (
-                      <tr
-                        key={s.id}
-                        className={`border-b border-border hover:bg-secondary/30 transition-colors ${
-                          i % 2 === 0 ? '' : 'bg-secondary/10'
-                        }`}
-                      >
-                        <td className="px-4 py-3">
-                          <div className="font-mono text-primary font-bold">{s.numero_factura}</div>
-                          {s.ncf && <div className="text-[10px] text-muted-foreground font-mono">NCF: {s.ncf}</div>}
-                        </td>
-                        <td className="px-4 py-3 text-muted-foreground text-xs">
-                          {new Date(s.creado_en).toLocaleString('es-DO')}
-                        </td>
-                        <td className="px-4 py-3 font-medium text-foreground">{s.cliente_nombre || 'Cliente General'}</td>
-                        <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell text-xs">
-                          {s.cajero_nombre || 'Cajero'}
-                        </td>
-                        <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell text-xs">
-                          <span className="badge-neutral">{metodoLabel[s.metodo_pago] || s.metodo_pago}</span>
-                        </td>
-                        <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
-                          RD$ {s.subtotal.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                        </td>
-                        <td className="px-4 py-3 text-right tabular-nums text-amber-600 dark:text-amber-400 font-semibold">
-                          RD$ {s.monto_impuesto.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                        </td>
-                        <td className="px-4 py-3 text-right font-bold text-foreground">
-                          RD$ {s.monto_total.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                        </td>
-                        <td className="px-4 py-3 text-right tabular-nums font-bold text-emerald-600 dark:text-emerald-400 hidden xl:table-cell">
-                          RD$ {(s.monto_total - s.costo_total).toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                        </td>
-                        <td className="px-4 py-3 hidden md:table-cell">
-                          <span className={saleStatusMap[s.estado]?.cls ?? 'badge-neutral'}>
-                            {saleStatusMap[s.estado]?.label ?? s.estado}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <div className="relative inline-block text-left">
-                            <button
-                              type="button"
-                              onClick={() => setOpenActionsId(openActionsId === s.id ? null : s.id)}
-                              className="btn-secondary py-1 px-3 text-xs font-bold flex items-center gap-1.5 hover:border-primary/50 transition-all shadow-xs"
-                            >
-                              <span>Acciones</span>
-                              <ChevronDown
-                                size={14}
-                                className={`transition-transform duration-200 ${
-                                  openActionsId === s.id ? 'rotate-180' : ''
-                                }`}
-                              />
-                            </button>
-
-                            {openActionsId === s.id && (
-                              <>
-                                <div
-                                  className="fixed inset-0 z-30"
-                                  onClick={() => setOpenActionsId(null)}
+                    ventas.map((s, i) => {
+                      const openUpward = i >= ventas.length - 2 || (ventas.length > 3 && i >= ventas.length / 2);
+                      return (
+                        <tr
+                          key={s.id}
+                          className={`border-b border-border hover:bg-secondary/30 transition-colors ${
+                            i % 2 === 0 ? '' : 'bg-secondary/10'
+                          }`}
+                        >
+                          <td className="px-4 py-3">
+                            <div className="font-mono text-primary font-bold">{s.numero_factura}</div>
+                            {s.ncf && <div className="text-[10px] text-muted-foreground font-mono">NCF: {s.ncf}</div>}
+                          </td>
+                          <td className="px-4 py-3 text-muted-foreground text-xs">
+                            {new Date(s.creado_en).toLocaleString('es-DO')}
+                          </td>
+                          <td className="px-4 py-3 font-medium text-foreground">{s.cliente_nombre || 'Cliente General'}</td>
+                          <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell text-xs">
+                            {s.cajero_nombre || 'Cajero'}
+                          </td>
+                          <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell text-xs">
+                            <span className="badge-neutral">{metodoLabel[s.metodo_pago] || s.metodo_pago}</span>
+                          </td>
+                          <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
+                            RD$ {s.subtotal.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="px-4 py-3 text-right tabular-nums text-amber-600 dark:text-amber-400 font-semibold">
+                            RD$ {s.monto_impuesto.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="px-4 py-3 text-right font-bold text-foreground">
+                            RD$ {s.monto_total.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="px-4 py-3 text-right tabular-nums font-bold text-emerald-600 dark:text-emerald-400 hidden xl:table-cell">
+                            RD$ {(s.monto_total - s.costo_total).toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="px-4 py-3 hidden md:table-cell">
+                            <span className={saleStatusMap[s.estado]?.cls ?? 'badge-neutral'}>
+                              {saleStatusMap[s.estado]?.label ?? s.estado}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <div className="relative inline-block text-left">
+                              <button
+                                type="button"
+                                onClick={() => setOpenActionsId(openActionsId === s.id ? null : s.id)}
+                                className="btn-secondary py-1 px-3 text-xs font-bold flex items-center gap-1.5 hover:border-primary/50 transition-all shadow-xs"
+                              >
+                                <span>Acciones</span>
+                                <ChevronDown
+                                  size={14}
+                                  className={`transition-transform duration-200 ${
+                                    openActionsId === s.id ? 'rotate-180' : ''
+                                  }`}
                                 />
-                                <div className="absolute right-0 mt-1.5 w-48 rounded-xl bg-card border border-border shadow-2xl z-40 py-1 divide-y divide-border/60 text-xs animate-in fade-in zoom-in-95">
-                                  <div className="py-1">
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setOpenActionsId(null);
-                                        void handleOpenSaleDetail(s);
-                                      }}
-                                      className="w-full text-left px-3.5 py-2 text-foreground hover:bg-primary/10 hover:text-primary flex items-center gap-2.5 font-semibold transition-colors"
-                                    >
-                                      <Eye size={15} className="text-primary" />
-                                      <span>Ver Detalle</span>
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setOpenActionsId(null);
-                                        handleOpenEditSale(s);
-                                      }}
-                                      className="w-full text-left px-3.5 py-2 text-foreground hover:bg-amber-500/10 hover:text-amber-600 dark:hover:text-amber-400 flex items-center gap-2.5 font-semibold transition-colors"
-                                    >
-                                      <Edit size={15} className="text-amber-500" />
-                                      <span>Editar Factura</span>
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setOpenActionsId(null);
-                                        void handleOpenPrintSale(s);
-                                      }}
-                                      className="w-full text-left px-3.5 py-2 text-foreground hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-blue-400 flex items-center gap-2.5 font-semibold transition-colors"
-                                    >
-                                      <Printer size={15} className="text-blue-500" />
-                                      <span>Imprimir Factura</span>
-                                    </button>
-                                  </div>
-                                  {s.estado !== 'anulada' && (
+                              </button>
+
+                              {openActionsId === s.id && (
+                                <>
+                                  <div
+                                    className="fixed inset-0 z-30"
+                                    onClick={() => setOpenActionsId(null)}
+                                  />
+                                  <div
+                                    className={`absolute right-0 ${
+                                      openUpward ? 'bottom-full mb-1.5' : 'top-full mt-1.5'
+                                    } w-48 rounded-xl bg-card border border-border shadow-2xl z-40 py-1 divide-y divide-border/60 text-xs animate-in fade-in zoom-in-95`}
+                                  >
                                     <div className="py-1">
                                       <button
                                         type="button"
                                         onClick={() => {
                                           setOpenActionsId(null);
-                                          setAnulandoSale(s);
+                                          void handleOpenSaleDetail(s);
                                         }}
-                                        className="w-full text-left px-3.5 py-2 text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 flex items-center gap-2.5 font-semibold transition-colors"
+                                        className="w-full text-left px-3.5 py-2 text-foreground hover:bg-primary/10 hover:text-primary flex items-center gap-2.5 font-semibold transition-colors"
                                       >
-                                        <Trash2 size={15} />
-                                        <span>Eliminar / Anular</span>
+                                        <Eye size={15} className="text-primary" />
+                                        <span>Ver Detalle</span>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setOpenActionsId(null);
+                                          handleOpenEditSale(s);
+                                        }}
+                                        className="w-full text-left px-3.5 py-2 text-foreground hover:bg-amber-500/10 hover:text-amber-600 dark:hover:text-amber-400 flex items-center gap-2.5 font-semibold transition-colors"
+                                      >
+                                        <Edit size={15} className="text-amber-500" />
+                                        <span>Editar Factura</span>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setOpenActionsId(null);
+                                          void handleOpenPrintSale(s);
+                                        }}
+                                        className="w-full text-left px-3.5 py-2 text-foreground hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-blue-400 flex items-center gap-2.5 font-semibold transition-colors"
+                                      >
+                                        <Printer size={15} className="text-blue-500" />
+                                        <span>Imprimir Factura</span>
                                       </button>
                                     </div>
-                                  )}
-                                </div>
-                              </>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))
+                                    {s.estado !== 'anulada' && (
+                                      <div className="py-1">
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setOpenActionsId(null);
+                                            setAnulandoSale(s);
+                                          }}
+                                          className="w-full text-left px-3.5 py-2 text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 flex items-center gap-2.5 font-semibold transition-colors"
+                                        >
+                                          <Trash2 size={15} />
+                                          <span>Eliminar / Anular</span>
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    }
+                    )
                   )}
                 </tbody>
               </table>
@@ -1382,15 +1391,16 @@ export default function SalesPage() {
         )}
 
         {/* MODAL 1: VIEW SALE DETAIL & TAX BREAKDOWN */}
-        {viewingSale && (
-          <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/40 backdrop-blur-xs animate-in fade-in"
-            onClick={() => setViewingSale(null)}
-          >
+        {viewingSale &&
+          createPortal(
             <div
-              className="card w-full max-w-xl p-6 space-y-4 shadow-2xl border-primary/20"
-              onClick={(e) => e.stopPropagation()}
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/50 backdrop-blur-xs animate-in fade-in overflow-y-auto"
+              onClick={() => setViewingSale(null)}
             >
+              <div
+                className="card w-full max-w-xl my-auto max-h-[90vh] overflow-y-auto p-6 space-y-4 shadow-2xl border-primary/20"
+                onClick={(e) => e.stopPropagation()}
+              >
               <div className="flex items-center justify-between border-b border-border pb-3">
                 <div>
                   <h3 className="font-bold text-foreground text-lg flex items-center gap-2">
@@ -1527,19 +1537,21 @@ export default function SalesPage() {
                 </button>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         )}
 
         {/* VIEW QUOTE DETAIL */}
-        {viewingQuote && (
-          <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/40 backdrop-blur-xs animate-in fade-in"
-            onClick={() => setViewingQuote(null)}
-          >
+        {viewingQuote &&
+          createPortal(
             <div
-              className="card w-full max-w-xl p-6 space-y-4 shadow-2xl border-primary/20"
-              onClick={(e) => e.stopPropagation()}
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/50 backdrop-blur-xs animate-in fade-in overflow-y-auto"
+              onClick={() => setViewingQuote(null)}
             >
+              <div
+                className="card w-full max-w-xl my-auto max-h-[90vh] overflow-y-auto p-6 space-y-4 shadow-2xl border-primary/20"
+                onClick={(e) => e.stopPropagation()}
+              >
               <div className="flex items-center justify-between border-b border-border pb-3">
                 <div>
                   <h3 className="font-bold text-foreground text-lg flex items-center gap-2">
@@ -1647,20 +1659,22 @@ export default function SalesPage() {
                 </button>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         )}
 
 
         {/* MODAL 4: CONVERTIR COTIZACIÓN A VENTA */}
-        {convertQuote && (
-          <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/50 backdrop-blur-xs animate-in fade-in"
-            onClick={() => setConvertQuote(null)}
-          >
+        {convertQuote &&
+          createPortal(
             <div
-              className="card w-full max-w-md p-6 space-y-4 shadow-2xl border-primary/30"
-              onClick={(e) => e.stopPropagation()}
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/50 backdrop-blur-xs animate-in fade-in overflow-y-auto"
+              onClick={() => setConvertQuote(null)}
             >
+              <div
+                className="card w-full max-w-md my-auto max-h-[90vh] overflow-y-auto p-6 space-y-4 shadow-2xl border-primary/30"
+                onClick={(e) => e.stopPropagation()}
+              >
               <div className="flex items-center justify-between border-b border-border pb-3">
                 <div className="flex items-center gap-2">
                   <ArrowRightLeft className="text-primary" size={22} />
@@ -1706,19 +1720,21 @@ export default function SalesPage() {
                 </button>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         )}
 
         {/* MODAL 5: ANULAR FACTURA */}
-        {anulandoSale && (
-          <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/50 backdrop-blur-xs animate-in fade-in"
-            onClick={() => setAnulandoSale(null)}
-          >
+        {anulandoSale &&
+          createPortal(
             <div
-              className="card w-full max-w-md p-6 space-y-4 shadow-2xl border-rose-500/30"
-              onClick={(e) => e.stopPropagation()}
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/50 backdrop-blur-xs animate-in fade-in overflow-y-auto"
+              onClick={() => setAnulandoSale(null)}
             >
+              <div
+                className="card w-full max-w-md my-auto max-h-[90vh] overflow-y-auto p-6 space-y-4 shadow-2xl border-rose-500/30"
+                onClick={(e) => e.stopPropagation()}
+              >
               <div className="flex items-center justify-between border-b border-border pb-3">
                 <div className="flex items-center gap-2 text-rose-600 dark:text-rose-400">
                   <AlertTriangle size={24} />
@@ -1759,19 +1775,21 @@ export default function SalesPage() {
                 </button>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         )}
 
         {/* MODAL: EDITAR FACTURA */}
-        {editingSale && (
-          <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/40 backdrop-blur-xs animate-in fade-in"
-            onClick={() => setEditingSale(null)}
-          >
+        {editingSale &&
+          createPortal(
             <div
-              className="card w-full max-w-lg p-6 space-y-4 shadow-2xl border-amber-500/20"
-              onClick={(e) => e.stopPropagation()}
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/50 backdrop-blur-xs animate-in fade-in overflow-y-auto"
+              onClick={() => setEditingSale(null)}
             >
+              <div
+                className="card w-full max-w-lg my-auto max-h-[90vh] overflow-y-auto p-6 space-y-4 shadow-2xl border-amber-500/20"
+                onClick={(e) => e.stopPropagation()}
+              >
               <div className="flex items-center justify-between border-b border-border pb-3">
                 <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
                   <Edit size={22} />
@@ -1900,19 +1918,21 @@ export default function SalesPage() {
                 </div>
               </form>
             </div>
-          </div>
+          </div>,
+          document.body
         )}
 
         {/* MODAL: IMPRIMIR FACTURA */}
-        {printingSale && (
-          <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/40 backdrop-blur-xs animate-in fade-in print:p-0 print:bg-white print:static"
-            onClick={() => setPrintingSale(null)}
-          >
+        {printingSale &&
+          createPortal(
             <div
-              className="card w-full max-w-2xl p-6 space-y-4 shadow-2xl border-blue-500/20 max-h-[90vh] overflow-y-auto print:max-h-none print:shadow-none print:border-none print:w-full print:p-0"
-              onClick={(e) => e.stopPropagation()}
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/50 backdrop-blur-xs animate-in fade-in print:p-0 print:bg-white print:static overflow-y-auto"
+              onClick={() => setPrintingSale(null)}
             >
+              <div
+                className="card w-full max-w-2xl my-auto max-h-[90vh] overflow-y-auto p-6 space-y-4 shadow-2xl border-blue-500/20 print:max-h-none print:shadow-none print:border-none print:w-full print:p-0"
+                onClick={(e) => e.stopPropagation()}
+              >
               <div className="flex items-center justify-between border-b border-border pb-3 print:hidden">
                 <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
                   <Printer size={22} />
@@ -2154,7 +2174,8 @@ export default function SalesPage() {
                 </button>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         )}
       </div>
     </AppLayout>

@@ -24,13 +24,16 @@ import {
 } from '@/lib/posStore';
 import type { FiscalInvoiceRecord } from '@/lib/ncfStore';
 import { isSupabaseConfigured } from '@/services/clienteSupabase';
-import { getCombos, recordComboSale } from '@/lib/comboStore';
+import { getCombos, recordComboSale, checkComboStockAvailability } from '@/lib/comboStore';
 import { procesarVenta } from '@/services/ventas.service';
 import { registrarFacturaFiscal } from '@/services/ncf.service';
 import { crearCotizacion } from '@/services/cotizaciones.service';
 import type { MetodoPago } from '@/types/database';
 import { useAuth } from '@/context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { useProductos } from '@/hooks/useProductos';
+import { useCombos } from '@/hooks/useCombos';
+import { parseScaleBarcode, scaleProducts } from '../utils/scaleUtils';
 
 const ADMIN_OWN_CASH: CashRegisterId = '1';
 
@@ -208,16 +211,232 @@ export default function POSTerminal() {
     }, 0);
   const total = afterDiscount + taxTotal;
 
+
+
+  const { productosUi } = useProductos({ pagina: 1, limite: 200, estado: 'activo' });
+  const { combos } = useCombos(true);
+
+  const handleSearchSubmit = useCallback(
+    (rawQuery: string) => {
+      const q = rawQuery.trim();
+      if (!q) return;
+
+      // 1. Check scale barcode parse (e.g. 2001001015004 or scale barcode)
+      const scaleParsed = parseScaleBarcode(q);
+      if (scaleParsed) {
+        addToCart(
+          {
+            id: `cart-${scaleParsed.product.productId}-${Date.now()}`,
+            productId: scaleParsed.product.productId,
+            name: scaleParsed.product.name,
+            sku: scaleParsed.product.sku,
+            price: scaleParsed.price,
+            cost: scaleParsed.product.cost,
+            tax: scaleParsed.product.tax,
+            image: scaleParsed.product.image || '',
+            unit: scaleParsed.product.unit || 'lb',
+            isWeighted: true,
+          },
+          scaleParsed.weight
+        );
+        toast.success(
+          `Producto balanza agregado: ${scaleParsed.product.name} (${scaleParsed.weight} ${
+            scaleParsed.product.unit || 'lb'
+          })`
+        );
+        setSearchQuery('');
+        return;
+      }
+
+      const qLower = q.toLowerCase();
+
+      // 2. Direct lookup in DB products
+      const storeProducts = productosUi.map((p) => ({
+        id: p.id,
+        sku: p.sku,
+        barcode: p.barcode || '',
+        name: p.name,
+        price: p.salePrice,
+        cost: p.costPrice,
+        stock: p.currentStock,
+        unit: p.unit,
+        tax: p.tax,
+        image: p.image,
+        outOfStock: p.stockStatus === 'out',
+        isWeighted:
+          p.isWeightProduct ||
+          p.saleType === 'weight' ||
+          p.saleType === 'both' ||
+          p.unit.toLowerCase().includes('lb') ||
+          p.unit.toLowerCase().includes('kg'),
+        saleType: p.saleType,
+      }));
+
+      const weightedExtras = scaleProducts
+        .filter((sp) => !storeProducts.some((p) => p.sku === sp.sku))
+        .map((sp) => ({
+          id: sp.productId,
+          sku: sp.sku,
+          barcode: sp.barcode || '',
+          name: sp.name,
+          price: sp.price,
+          cost: sp.cost,
+          stock: 85,
+          unit: sp.unit,
+          tax: sp.tax,
+          image: sp.image || '',
+          outOfStock: false,
+          isWeighted: true,
+          saleType: 'weight' as const,
+        }));
+
+      const allProds = [...storeProducts, ...weightedExtras];
+
+      let matchedProd = allProds.find(
+        (p) => p.barcode.toLowerCase() === qLower || p.sku.toLowerCase() === qLower
+      );
+
+      if (!matchedProd) {
+        matchedProd = allProds.find((p) => p.name.toLowerCase() === qLower);
+      }
+
+      if (!matchedProd) {
+        matchedProd = allProds.find(
+          (p) =>
+            p.barcode.toLowerCase().includes(qLower) ||
+            p.sku.toLowerCase().includes(qLower) ||
+            p.name.toLowerCase().includes(qLower)
+        );
+      }
+
+      if (matchedProd) {
+        if (matchedProd.outOfStock && matchedProd.sku !== DELETE_SKU) {
+          toast.error(`Producto agotado: ${matchedProd.name}`);
+          return;
+        }
+
+        if (
+          matchedProd.isWeighted ||
+          matchedProd.saleType === 'weight' ||
+          matchedProd.unit.toLowerCase().includes('lb') ||
+          matchedProd.unit.toLowerCase().includes('kg')
+        ) {
+          handleOpenScale(matchedProd.id, 1.000);
+          setSearchQuery('');
+          return;
+        }
+
+        addToCart({
+          id: `cart-${matchedProd.id}-${Date.now()}`,
+          productId: matchedProd.id,
+          name: matchedProd.name,
+          sku: matchedProd.sku,
+          price: matchedProd.price,
+          cost: matchedProd.cost,
+          tax: matchedProd.tax,
+          image: matchedProd.image,
+          unit: matchedProd.unit,
+          isWeighted: false,
+        });
+        toast.success(`Agregado: ${matchedProd.name} (${matchedProd.sku || matchedProd.barcode})`);
+        setSearchQuery('');
+        return;
+      }
+
+      // 3. Search combos
+      const activeCombos = combos.filter((c) => c.active);
+      let matchedCombo = activeCombos.find(
+        (c) => c.code.toLowerCase() === qLower || (c.barcode && c.barcode.toLowerCase() === qLower)
+      );
+
+      if (!matchedCombo) {
+        matchedCombo = activeCombos.find(
+          (c) =>
+            c.name.toLowerCase().includes(qLower) ||
+            c.code.toLowerCase().includes(qLower) ||
+            (c.barcode && c.barcode.toLowerCase().includes(qLower))
+        );
+      }
+
+      if (matchedCombo) {
+        const stockCheck = checkComboStockAvailability(matchedCombo, 1, productosUi as any);
+        if (!stockCheck.available) {
+          toast.error(`Stock insuficiente para combo ${matchedCombo.name}`);
+          return;
+        }
+
+        addToCart({
+          id: `cart-combo-${matchedCombo.id}-${Date.now()}`,
+          productId: matchedCombo.id,
+          name: matchedCombo.name,
+          sku: matchedCombo.code,
+          price: matchedCombo.price,
+          cost: Math.round(matchedCombo.normalPrice * 0.7),
+          tax: matchedCombo.applyTax ? 18 : 0,
+          image: matchedCombo.image || '',
+          unit: 'Combo',
+          isCombo: true,
+          comboId: matchedCombo.id,
+          comboItems: matchedCombo.items,
+        });
+        toast.success(`Combo agregado: ${matchedCombo.name}`);
+        setSearchQuery('');
+        return;
+      }
+
+      toast.error(`No se encontró producto ni combo con SKU o código: "${q}"`);
+    },
+    [addToCart, handleOpenScale, productosUi, combos]
+  );
+
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
+    let scanBuffer = '';
+    let lastKeyTime = Date.now();
+
+    const onGlobalKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      const isModalOrOtherInput =
+        (target.tagName === 'INPUT' && target.id !== 'pos-barcode-search-input') ||
+        target.tagName === 'TEXTAREA';
+
       if (e.key === 'F9') {
         e.preventDefault();
         setPaymentOpen(true);
+        return;
+      }
+
+      // Ignore scans if user is editing inside another text field/modal
+      if (isModalOrOtherInput) return;
+
+      const now = Date.now();
+      if (now - lastKeyTime > 80) {
+        scanBuffer = '';
+      }
+      lastKeyTime = now;
+
+      if (e.key === 'Enter') {
+        if (scanBuffer.trim().length >= 2) {
+          e.preventDefault();
+          handleSearchSubmit(scanBuffer);
+          scanBuffer = '';
+          const searchInput = document.getElementById('pos-barcode-search-input') as HTMLInputElement;
+          if (searchInput) {
+            searchInput.focus();
+            searchInput.value = '';
+          }
+        }
+        scanBuffer = '';
+        return;
+      }
+
+      if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        scanBuffer += e.key;
       }
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
+
+    window.addEventListener('keydown', onGlobalKeyDown);
+    return () => window.removeEventListener('keydown', onGlobalKeyDown);
+  }, [handleSearchSubmit]);
 
   const handleQuickCashSale = () => {
     if (cart.length === 0) {
@@ -372,6 +591,7 @@ export default function POSTerminal() {
             onToggleFiscal={() => setFiscalEnabled((prev) => !prev)}
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
+            onSearchSubmit={handleSearchSubmit}
           />
         </div>
 
@@ -381,6 +601,8 @@ export default function POSTerminal() {
             onAddToCart={addToCart}
             onOpenScale={handleOpenScale}
             awaitingDelete={awaitingDeleteScan}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
           />
         </div>
       </div>

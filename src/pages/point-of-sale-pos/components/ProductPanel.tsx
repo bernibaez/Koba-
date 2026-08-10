@@ -54,10 +54,13 @@ interface ProductPanelProps {
   onAddToCart: (product: Omit<CartItem, 'qty' | 'discount'>, qty?: number) => void;
   onOpenScale?: (productId?: string, weight?: number) => void;
   awaitingDelete?: boolean;
+  searchQuery?: string;
+  onSearchChange?: (q: string) => void;
 }
 
-export default function ProductPanel({ onAddToCart, onOpenScale }: ProductPanelProps) {
+export default function ProductPanel({ onAddToCart, onOpenScale, searchQuery }: ProductPanelProps) {
   const [search, setSearch] = useState('');
+  const activeSearch = searchQuery !== undefined ? searchQuery : search;
   const [activeCategory, setActiveCategory] = useState('cat-all');
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 6;
@@ -69,7 +72,7 @@ export default function ProductPanel({ onAddToCart, onOpenScale }: ProductPanelP
   // State for Mixed Sale Type Modal
   const [mixedProduct, setMixedProduct] = useState<Product | null>(null);
 
-  const { productosUi } = useProductos({ pagina: 1, limite: 200, busqueda: search, estado: 'activo' });
+  const { productosUi } = useProductos({ pagina: 1, limite: 200, busqueda: activeSearch, estado: 'activo' });
   const { combos } = useCombos(true);
 
   const products: Product[] = useMemo(() => {
@@ -127,29 +130,31 @@ export default function ProductPanel({ onAddToCart, onOpenScale }: ProductPanelP
   // Reset pagination on category/search change
   useEffect(() => {
     setCurrentPage(1);
-  }, [activeCategory, search]);
+  }, [activeCategory, activeSearch]);
 
   const allCombos = combos.filter((c) => c.active && c.visibleInPos);
 
   const filteredProducts = activeCategory === 'cat-combos' ? [] : products.filter((p) => {
     if (p.sku === DELETE_SKU) return false;
     const matchCat = activeCategory === 'cat-all' || categories.find((c) => c.id === activeCategory)?.label === p.category;
+    const term = activeSearch.trim().toLowerCase();
     const matchSearch =
-      search === '' ||
-      p.name.toLowerCase().includes(search.toLowerCase()) ||
-      p.barcode.includes(search) ||
-      p.sku.toLowerCase().includes(search.toLowerCase());
+      term === '' ||
+      p.name.toLowerCase().includes(term) ||
+      p.barcode.toLowerCase().includes(term) ||
+      p.sku.toLowerCase().includes(term);
     return matchCat && matchSearch;
   });
 
   const filteredCombos = (activeCategory === 'cat-all' || activeCategory === 'cat-combos')
     ? allCombos.filter((c) => {
+        const term = activeSearch.trim().toLowerCase();
         const matchSearch =
-          search === '' ||
-          c.name.toLowerCase().includes(search.toLowerCase()) ||
-          c.code.toLowerCase().includes(search.toLowerCase()) ||
-          c.barcode.includes(search) ||
-          c.category.toLowerCase().includes(search.toLowerCase());
+          term === '' ||
+          c.name.toLowerCase().includes(term) ||
+          c.code.toLowerCase().includes(term) ||
+          c.barcode.toLowerCase().includes(term) ||
+          c.category.toLowerCase().includes(term);
         return matchSearch;
       })
     : [];
