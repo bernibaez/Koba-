@@ -76,7 +76,7 @@ export default function POSTerminal() {
   const [returnOpen, setReturnOpen] = useState(false);
   const [registerDetailsOpen, setRegisterDetailsOpen] = useState(false);
   const [lastFiscalInvoice, setLastFiscalInvoice] = useState<FiscalInvoiceRecord | null>(null);
-  const [fiscalEnabled, setFiscalEnabled] = useState(true);
+  const [fiscalEnabled, setFiscalEnabled] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   const handleOpenScale = (productId?: string, weight?: number) => {
@@ -391,15 +391,6 @@ export default function POSTerminal() {
         <div className="flex items-center gap-2 overflow-x-auto py-0.5">
           <button
             type="button"
-            onClick={() => setPaymentOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black text-indigo-700 dark:text-indigo-300 bg-indigo-100/70 dark:bg-indigo-950/80 border border-indigo-300 dark:border-indigo-800 hover:bg-indigo-200 transition-all shadow-2xs active:scale-95"
-            title="Emitir Factura Fiscal con NCF de la DGII"
-          >
-            <FileText size={16} className="text-indigo-600 dark:text-indigo-400" />
-            <span>Factura Fiscal (NCF)</span>
-          </button>
-          <button
-            type="button"
             onClick={() => {
               if (cart.length === 0) {
                 toast.error('Agrega productos para crear una preventa');
@@ -506,6 +497,36 @@ export default function POSTerminal() {
           >
             <Banknote size={18} />
             <span>Efectivo (F9)</span>
+          </button>
+
+          {/* Factura Fiscal Button - Located strictly between Efectivo and Cancelar */}
+          <button
+            type="button"
+            onClick={() => {
+              const next = !fiscalEnabled;
+              setFiscalEnabled(next);
+              if (next) {
+                toast.info('Factura Fiscal (NCF) activada para esta venta', {
+                  description: 'Se solicitarán los datos del comprobante fiscal al cobrar.',
+                });
+              } else {
+                toast.info('Factura Fiscal desactivada');
+              }
+            }}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-xs shadow-sm transition-all active:scale-95 border ${
+              fiscalEnabled
+                ? 'bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-500 shadow-indigo-500/20 shadow-md ring-2 ring-indigo-400/50'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700'
+            }`}
+            title={fiscalEnabled ? 'Factura Fiscal NCF Activada — Clic para desactivar' : 'Factura Fiscal NCF Desactivada — Clic para activar'}
+          >
+            <FileText size={16} className={fiscalEnabled ? 'text-white animate-bounce' : 'text-indigo-600 dark:text-indigo-400'} />
+            <span>Factura Fiscal</span>
+            <span className={`px-1.5 py-0.5 text-[9px] rounded font-black uppercase tracking-wider ${
+              fiscalEnabled ? 'bg-white/20 text-white shadow-2xs' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+            }`}>
+              {fiscalEnabled ? 'ON' : 'OFF'}
+            </span>
           </button>
 
           <button

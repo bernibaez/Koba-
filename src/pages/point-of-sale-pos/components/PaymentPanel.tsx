@@ -7,6 +7,8 @@ import { logAuditEvent } from '@/lib/auditStore';
 import { validateRNC, NCF_TYPES, type NCFType, type FiscalInvoiceRecord } from '@/lib/ncfStore';
 import { generarSiguienteNcf } from '@/services/ncf.service';
 import { isSupabaseConfigured } from '@/services/clienteSupabase';
+import PrintableInvoice from '@/components/PrintableInvoice';
+import { getInvoiceSettings } from '@/lib/invoiceSettingsStore';
 
 type PaymentMethod = 'cash' | 'card' | 'transfer' | 'credit' | 'split';
 
@@ -39,7 +41,7 @@ export default function PaymentPanel({
   customer,
   onComplete,
   orderCompleted,
-  fiscalEnabled = true,
+  fiscalEnabled = false,
   onToggleFiscal,
   onClose,
   onNewSale,
@@ -60,6 +62,13 @@ export default function PaymentPanel({
   React.useEffect(() => {
     if (initialMethod) setMethod(initialMethod);
   }, [initialMethod]);
+
+  React.useEffect(() => {
+    if (customer) {
+      if (customer.phone && !rncClient) setRncClient(customer.phone);
+      if (customer.name && !companyName) setCompanyName(customer.name);
+    }
+  }, [customer]);
 
   const fmt = (v: number) =>
     `RD$ ${v.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -228,29 +237,77 @@ export default function PaymentPanel({
   };
 
   if (orderCompleted) {
+    const now = new Date();
+    const subtotalNet = total / 1.18;
+    const totalItbis = total - subtotalNet;
+
+    const completedInvoiceData = {
+      invoiceNumber: `FAC-${Date.now().toString().slice(-6)}`,
+      isFiscal: fiscalEnabled,
+      ncf: fiscalEnabled ? 'B0200000001' : null,
+      ncfType: fiscalEnabled ? ncfType : null,
+      ncfTypeName: fiscalEnabled ? NCF_TYPES[ncfType].name : null,
+      expirationDate: '31/12/2027',
+      issueDate: now.toLocaleDateString('es-DO'),
+      issueTime: now.toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit' }),
+      cashier: 'Caja #1 (Admin)',
+      customerName: customer?.name || (companyName.trim() || undefined),
+      customerRnc: rncClient.trim() || customer?.phone || undefined,
+      items: cart.map((item) => ({
+        sku: item.sku,
+        name: item.name,
+        qty: item.qty,
+        price: item.price,
+        subtotal: item.price * item.qty,
+        itbis: (item.price - item.price / 1.18) * item.qty,
+      })),
+      subtotal: Math.round(subtotalNet * 100) / 100,
+      itbis: Math.round(totalItbis * 100) / 100,
+      total,
+      paymentMethod: method,
+      cashReceived: cashAmount || undefined,
+      change: lastChange || undefined,
+    };
+
     return (
-      <div className="flex flex-col h-full items-center justify-center gap-3 p-4 bg-card">
-        <div className="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-          <CheckCircle size={28} />
-        </div>
-        <div className="text-center">
-          <p className="text-base font-black text-foreground">¡Venta Completada!</p>
-          <p className="text-xs text-muted-foreground mt-0.5 font-bold">{fmt(total)}</p>
-        </div>
-        {lastChange > 0 && (
-          <div className="w-full bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3 text-center">
-            <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400">Devuelta / Cambio</p>
-            <p className="text-2xl font-black tabular-nums text-emerald-600 dark:text-emerald-400 mt-0.5">{fmt(lastChange)}</p>
+      <div className="flex flex-col h-full bg-card overflow-y-auto p-4 space-y-4">
+        <div className="flex flex-col items-center justify-center gap-2 p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl text-center">
+          <div className="w-10 h-10 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-md">
+            <CheckCircle size={24} />
           </div>
-        )}
-        <div className="flex flex-col gap-2 w-full mt-2">
-          <button type="button" onClick={() => window.print()} className="btn-secondary flex items-center justify-center gap-1.5 text-xs py-2">
-            <Printer size={14} />
-            Imprimir Recibo
+          <div>
+            <p className="text-base font-black text-foreground">¡Venta Completada!</p>
+            <p className="text-xs text-muted-foreground font-bold">{fmt(total)}</p>
+          </div>
+          {lastChange > 0 && (
+            <div className="w-full bg-white dark:bg-slate-900 border border-emerald-500/40 rounded-xl p-2.5 mt-1">
+              <p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase">Devuelta / Cambio</p>
+              <p className="text-xl font-black tabular-nums text-emerald-600 dark:text-emerald-400">{fmt(lastChange)}</p>
+            </div>
+          )}
+        </div>
+
+        <div className="flex gap-2 w-full">
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="flex-1 btn-primary flex items-center justify-center gap-1.5 text-xs py-2.5 font-black shadow-md"
+          >
+            <Printer size={15} />
+            Imprimir Factura
           </button>
-          <button type="button" onClick={onNewSale} className="btn-primary text-xs py-2 font-bold">
+          <button
+            type="button"
+            onClick={onNewSale}
+            className="flex-1 btn-secondary text-xs py-2.5 font-bold"
+          >
             Nueva Venta
           </button>
+        </div>
+
+        {/* Printable Invoice Container */}
+        <div className="border border-border rounded-xl p-2 bg-white text-slate-900 overflow-x-auto">
+          <PrintableInvoice invoiceData={completedInvoiceData} />
         </div>
       </div>
     );

@@ -342,3 +342,43 @@
   .text-danger { color: var(--danger); }
   .text-info { color: var(--info); }
 }
+
+/* ==========================================================================
+   GLOBAL PRINT STYLES FOR CLEAN INVOICE PRINTING
+   Oculta toda la interfaz de la app (modales, fondos, botones, sidebars) y
+   renderiza ÚNICAMENTE el contenedor de la factura (.printable-invoice-container).
+   ========================================================================== */
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+
+  .printable-invoice-container,
+  .printable-invoice-container * {
+    visibility: visible !important;
+  }
+
+  .printable-invoice-container {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 10px !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    overflow: visible !important;
+  }
+
+  @page {
+    size: auto;
+    margin: 5mm;
+  }
+
+  .print\:hidden {
+    display: none !important;
+  }
+}

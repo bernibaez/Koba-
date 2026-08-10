@@ -34,7 +34,7 @@ export default function CartPanel({
   onEditWeight,
   taxTotal,
   total,
-  fiscalEnabled = true,
+  fiscalEnabled = false,
   onToggleFiscal,
   searchQuery = '',
   onSearchChange,

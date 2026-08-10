@@ -14,6 +14,7 @@ import {
 } from '@/lib/companyLogo';
 import NCFSettingsTab from './settings/NCFSettingsTab';
 import PermissionsSettingsTab from './settings/PermissionsSettingsTab';
+import InvoiceSettingsTab from './settings/InvoiceSettingsTab';
 
 const settingsSections = [
   { id: 'company', label: 'Empresa', icon: <Building2 size={18} /> },
@@ -445,24 +446,7 @@ export default function SettingsPage() {
               </div>
             )}
 
-            {activeSection === 'invoice' && (
-              <div className="card p-6 space-y-4">
-                <h2 className="text-lg font-bold text-foreground">Configuración de Factura</h2>
-                <p className="text-sm text-muted-foreground">
-                  Las secuencias fiscales se administran en <strong>Secuencias NCF (DGII)</strong>. El prefijo de factura lo genera el POS automáticamente.
-                </p>
-                <div className="flex justify-end">
-                  <button
-                    type="button"
-                    className="btn-primary flex items-center gap-2"
-                    onClick={() => setActiveSection('ncf')}
-                  >
-                    <Save size={16} />
-                    Ir a NCF
-                  </button>
-                </div>
-              </div>
-            )}
+            {activeSection === 'invoice' && <InvoiceSettingsTab />}
 
             {activeSection === 'ncf' && <NCFSettingsTab />}
 
