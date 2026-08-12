@@ -449,7 +449,16 @@ export default function POSTerminal() {
       }
       if (e.key === 'F12' && orderCompleted) {
         e.preventDefault();
+        let closed = false;
+        const finish = () => {
+          if (closed) return;
+          closed = true;
+          clearCart();
+          setPaymentOpen(false);
+        };
+        window.addEventListener('afterprint', finish, { once: true });
         window.print();
+        window.setTimeout(finish, 1200);
         return;
       }
       if (e.key === 'F2' && orderCompleted) {

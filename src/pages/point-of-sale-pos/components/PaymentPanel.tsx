@@ -359,7 +359,19 @@ export default function PaymentPanel({
             <div className="space-y-2.5">
               <button
                 type="button"
-                onClick={() => window.print()}
+                onClick={() => {
+                  let closed = false;
+                  const finish = () => {
+                    if (closed) return;
+                    closed = true;
+                    onNewSale?.();
+                    onClose?.();
+                  };
+                  window.addEventListener('afterprint', finish, { once: true });
+                  window.print();
+                  // Fallback por si el navegador no dispara afterprint
+                  window.setTimeout(finish, 1200);
+                }}
                 className="w-full py-3.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-md transition-all active:scale-98 cursor-pointer"
               >
                 <Printer size={18} />
@@ -369,7 +381,10 @@ export default function PaymentPanel({
 
               <button
                 type="button"
-                onClick={onNewSale}
+                onClick={() => {
+                  onNewSale?.();
+                  onClose?.();
+                }}
                 className="w-full py-3 px-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 font-extrabold text-xs flex items-center justify-center gap-2 transition-all active:scale-98 cursor-pointer"
               >
                 <Plus size={16} />
