@@ -2187,7 +2187,7 @@ export default function SalesPage() {
                 </div>
               ) : printFormat === 'ticket' ? (
                 /* Ticket Format (Thermal printer 80mm) */
-                <div className="max-w-xs mx-auto bg-card p-5 rounded-2xl border border-border font-mono text-xs space-y-4 print:bg-white print:border-none print:shadow-none print:w-full">
+                <div className="printable-invoice-container max-w-xs mx-auto bg-card p-5 rounded-2xl border border-border font-mono text-xs space-y-4 print:bg-white print:border-none print:shadow-none print:w-full">
                   <div className="text-center space-y-1 pb-3 border-b border-dashed border-border">
                     <h3 className="font-black text-sm uppercase text-foreground">MERCATO SUPERMERCADO</h3>
                     <p className="text-[11px] text-muted-foreground">RNC: 131-45678-9</p>
@@ -2256,7 +2256,7 @@ export default function SalesPage() {
                 </div>
               ) : (
                 /* Documento A4 Format */
-                <div className="space-y-5 bg-card p-4 rounded-2xl border border-border print:border-none print:p-0">
+                <div className="printable-invoice-container space-y-5 bg-card p-4 rounded-2xl border border-border print:border-none print:p-0">
                   <div className="flex justify-between items-start border-b border-border pb-4">
                     <div>
                       <h2 className="text-xl font-black text-foreground">MERCATO SUPERMERCADO S.R.L.</h2>

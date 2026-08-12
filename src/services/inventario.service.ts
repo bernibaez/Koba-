@@ -15,6 +15,8 @@ export type AjusteItemPayload = {
   codigo?: string;
 };
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export async function procesarAjusteStockBloque(
   items: AjusteItemPayload[]
 ): Promise<{ ajustes: number; ids: string[] }> {
@@ -39,12 +41,46 @@ export async function procesarAjusteStockBloque(
     return { ajustes: result.length, ids: result.map((r) => r.id) };
   }
 
-  const sb = getSupabase();
-  const { data, error } = await sb.rpc('procesar_ajuste_stock_bloque', {
-    p_items: items,
-  });
-  if (error) throw error;
-  return data as { ajustes: number; ids: string[] };
+  const validUuidItems = items
+    .filter((it) => UUID_RE.test(it.producto_id))
+    .map((it) => ({
+      ...it,
+      cantidad_nueva: it.cantidad_nueva != null ? Math.round(it.cantidad_nueva) : undefined,
+      cantidad_variacion: it.cantidad_variacion != null ? Math.round(it.cantidad_variacion) : undefined,
+    }));
+  const nonUuidItems = items.filter((it) => !UUID_RE.test(it.producto_id));
+
+  let dbCount = 0;
+  let dbIds: string[] = [];
+
+  if (validUuidItems.length > 0) {
+    const sb = getSupabase();
+    const { data, error } = await sb.rpc('procesar_ajuste_stock_bloque', {
+      p_items: validUuidItems,
+    });
+    if (error) throw error;
+    if (data) {
+      const res = data as { ajustes?: number; ids?: string[] };
+      dbCount = res.ajustes ?? 0;
+      dbIds = res.ids ?? [];
+    }
+  }
+
+  if (nonUuidItems.length > 0) {
+    const { initialProducts } = await import('@/pages/product-management/components/ProductManagementScreen');
+    const { updateProductStockInStore } = await import('@/lib/productStore');
+
+    nonUuidItems.forEach((it) => {
+      const demoProd = initialProducts.find((p) => p.id === it.producto_id || p.sku === it.producto_id);
+      if (demoProd && it.cantidad_nueva != null) {
+        const delta = it.cantidad_nueva - demoProd.currentStock;
+        updateProductStockInStore(demoProd.id, delta);
+        demoProd.currentStock = it.cantidad_nueva;
+      }
+    });
+  }
+
+  return { ajustes: dbCount + nonUuidItems.length, ids: dbIds };
 }
 
 export async function obtenerHistorialAjustes(params: {

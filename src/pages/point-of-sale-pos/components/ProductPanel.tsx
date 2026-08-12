@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { scaleProducts } from '../utils/scaleUtils';
 import { useProductos } from '@/hooks/useProductos';
 import { useCombos } from '@/hooks/useCombos';
+import { initialProducts } from '@/pages/product-management/components/ProductManagementScreen';
 
 import CategoryIcon from '@/components/ui/CategoryIcon';
 import WeightBadge from '@/components/weight/WeightBadge';
@@ -72,7 +73,7 @@ export default function ProductPanel({ onAddToCart, onOpenScale, searchQuery }: 
   // State for Mixed Sale Type Modal
   const [mixedProduct, setMixedProduct] = useState<Product | null>(null);
 
-  const { productosUi } = useProductos({ pagina: 1, limite: 200, busqueda: activeSearch, estado: 'activo' });
+  const { productosUi } = useProductos({ pagina: 1, limite: 500, busqueda: activeSearch, estado: 'todos' });
   const { combos } = useCombos(true);
 
   const products: Product[] = useMemo(() => {
@@ -103,28 +104,37 @@ export default function ProductPanel({ onAddToCart, onOpenScale, searchQuery }: 
         };
       }
     );
-    const weightedExtras = scaleProducts
-      .filter((sp) => !fromStore.some((p) => p.sku === sp.sku))
-      .map((sp) => ({
-        id: sp.productId,
-        sku: sp.sku,
-        barcode: sp.barcode,
-        name: sp.name,
-        category: sp.category || 'Carnes',
-        price: sp.price,
-        cost: sp.cost,
-        stock: 85,
-        unit: sp.unit,
-        tax: sp.tax,
-        image: sp.image || '',
-        lowStock: false,
-        outOfStock: false,
-        isWeighted: true,
-        saleType: 'weight' as SaleType,
-        weightUnit: 'lb' as WeightUnit,
-        pricePerWeight: sp.price,
-      }));
-    return [...fromStore, ...weightedExtras];
+
+    const storeSkus = new Set(fromStore.map((p) => p.sku.toLowerCase()));
+    const demoExtras: Product[] = initialProducts
+      .filter((ip) => !storeSkus.has(ip.sku.toLowerCase()))
+      .map((ip) => {
+        const isWeight = ip.isWeightProduct || ip.saleType === 'weight' || ip.saleType === 'both' || ip.unit.toLowerCase().includes('lb') || ip.unit.toLowerCase().includes('kg');
+        return {
+          id: ip.id,
+          sku: ip.sku,
+          barcode: ip.barcode,
+          name: ip.name,
+          category: ip.category,
+          price: ip.salePrice,
+          cost: ip.costPrice,
+          stock: ip.currentStock,
+          unit: ip.unit,
+          tax: ip.tax,
+          image: ip.image,
+          lowStock: ip.stockStatus === 'low',
+          outOfStock: ip.stockStatus === 'out',
+          isWeighted: isWeight,
+          saleType: ip.saleType ?? (isWeight ? 'weight' : 'unit'),
+          weightUnit: ip.weightUnit ?? 'lb',
+          pricePerWeight: ip.pricePerWeight ?? ip.salePrice,
+          minWeight: ip.minWeight ?? 0.01,
+          maxWeight: ip.maxWeight ?? 999.99,
+          allowDecimal: ip.allowDecimal ?? true,
+        };
+      });
+
+    return [...fromStore, ...demoExtras];
   }, [productosUi]);
 
   // Reset pagination on category/search change
@@ -230,8 +240,9 @@ export default function ProductPanel({ onAddToCart, onOpenScale, searchQuery }: 
         {categories.map((cat) => (
           <button
             key={cat.id}
+            type="button"
             onClick={() => setActiveCategory(cat.id)}
-            className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+            className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
               activeCategory === cat.id
                 ? 'bg-indigo-600 text-white shadow-2xs font-bold'
                 : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
@@ -257,6 +268,7 @@ export default function ProductPanel({ onAddToCart, onOpenScale, searchQuery }: 
                 return (
                   <button
                     key={`combo-${c.id}`}
+                    type="button"
                     onClick={() => handleComboClick(c)}
                     className="group relative flex flex-col items-center text-center bg-purple-50/40 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800/40 rounded-xl p-2.5 transition-all hover:shadow-md hover:border-purple-500 cursor-pointer"
                   >
@@ -280,6 +292,7 @@ export default function ProductPanel({ onAddToCart, onOpenScale, searchQuery }: 
               return (
                 <button
                   key={p.id}
+                  type="button"
                   onClick={() => handleProductClick(p)}
                   disabled={p.outOfStock}
                   className={`group relative flex flex-col items-center text-center bg-white dark:bg-slate-800/90 border rounded-xl p-2.5 transition-all hover:shadow-md

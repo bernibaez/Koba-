@@ -11,14 +11,7 @@ export interface ScaleProduct {
   image?: string;
 }
 
-export const scaleProducts: ScaleProduct[] = [
-  { productId: 'prod-scale-pollo', name: 'Pollo Entero', sku: 'POL-ENT-LB', price: 98, cost: 72, tax: 0, unit: 'Libra', barcode: '2001001', category: 'Carnes' },
-  { productId: 'prod-scale-res', name: 'Carne de Res', sku: 'RES-LB', price: 185, cost: 140, tax: 0, unit: 'Libra', barcode: '2001002', category: 'Carnes' },
-  { productId: 'prod-scale-queso', name: 'Queso Blanco', sku: 'QUE-BLA-LB', price: 120, cost: 90, tax: 0, unit: 'Libra', barcode: '2001003', category: 'Lácteos' },
-  { productId: 'prod-scale-platano', name: 'Plátano Verde', sku: 'PLA-VER-LB', price: 25, cost: 15, tax: 0, unit: 'Libra', barcode: '2001004', category: 'Frutas' },
-  { productId: 'prod-scale-cerdo', name: 'Chuleta de Cerdo', sku: 'CER-CHU-LB', price: 160, cost: 120, tax: 0, unit: 'Libra', barcode: '2001005', category: 'Carnes' },
-  { productId: 'prod-scale-pescado', name: 'Filete de Mero', sku: 'PES-MER-LB', price: 240, cost: 180, tax: 0, unit: 'Libra', barcode: '2001006', category: 'Carnes' },
-];
+export const scaleProducts: ScaleProduct[] = [];
 
 export interface ParsedScaleBarcode {
   product: ScaleProduct;
@@ -32,7 +25,7 @@ export function parseScaleBarcode(code: string, catalog?: ScaleProduct[]): Parse
   const clean = code.trim().toUpperCase();
   if (!clean) return null;
 
-  const productsToSearch = catalog && catalog.length > 0 ? catalog : scaleProducts;
+  const productsToSearch = catalog || [];
 
   // 1. Direct match by barcode or SKU or ID
   const directMatch = productsToSearch.find(

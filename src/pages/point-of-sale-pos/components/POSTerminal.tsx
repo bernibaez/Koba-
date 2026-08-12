@@ -33,7 +33,8 @@ import { useAuth } from '@/context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useProductos } from '@/hooks/useProductos';
 import { useCombos } from '@/hooks/useCombos';
-import { parseScaleBarcode, scaleProducts } from '../utils/scaleUtils';
+import { initialProducts } from '@/pages/product-management/components/ProductManagementScreen';
+import { parseScaleBarcode } from '../utils/scaleUtils';
 
 const ADMIN_OWN_CASH: CashRegisterId = '1';
 
@@ -213,7 +214,7 @@ export default function POSTerminal() {
 
 
 
-  const { productosUi } = useProductos({ pagina: 1, limite: 200, estado: 'activo' });
+  const { productosUi } = useProductos({ pagina: 1, limite: 500, estado: 'todos' });
   const { combos } = useCombos(true);
 
   const handleSearchSubmit = useCallback(
@@ -221,8 +222,68 @@ export default function POSTerminal() {
       const q = rawQuery.trim();
       if (!q) return;
 
-      // 1. Check scale barcode parse (e.g. 2001001015004 or scale barcode)
-      const scaleParsed = parseScaleBarcode(q);
+      const storeProducts = productosUi.map((p) => ({
+        id: p.id,
+        sku: p.sku,
+        barcode: p.barcode || '',
+        name: p.name,
+        price: p.salePrice,
+        cost: p.costPrice,
+        stock: p.currentStock,
+        unit: p.unit,
+        tax: p.tax,
+        image: p.image,
+        outOfStock: p.stockStatus === 'out',
+        isWeighted:
+          p.isWeightProduct ||
+          p.saleType === 'weight' ||
+          p.saleType === 'both' ||
+          p.unit.toLowerCase().includes('lb') ||
+          p.unit.toLowerCase().includes('kg'),
+        saleType: p.saleType,
+      }));
+
+      const storeSkus = new Set(storeProducts.map((p) => p.sku.toLowerCase()));
+      const demoExtras = initialProducts
+        .filter((ip) => !storeSkus.has(ip.sku.toLowerCase()))
+        .map((ip) => ({
+          id: ip.id,
+          sku: ip.sku,
+          barcode: ip.barcode || '',
+          name: ip.name,
+          price: ip.salePrice,
+          cost: ip.costPrice,
+          stock: ip.currentStock,
+          unit: ip.unit,
+          tax: ip.tax,
+          image: ip.image,
+          outOfStock: ip.stockStatus === 'out',
+          isWeighted:
+            ip.isWeightProduct ||
+            ip.saleType === 'weight' ||
+            ip.saleType === 'both' ||
+            ip.unit.toLowerCase().includes('lb') ||
+            ip.unit.toLowerCase().includes('kg'),
+          saleType: ip.saleType,
+        }));
+
+      const allProds = [...storeProducts, ...demoExtras];
+
+      const realScaleCatalog = allProds.map((p) => ({
+        productId: p.id,
+        name: p.name,
+        sku: p.sku,
+        price: p.price,
+        cost: p.cost,
+        tax: p.tax,
+        unit: p.unit || 'lb',
+        barcode: p.barcode || '',
+        category: '',
+        image: p.image,
+      }));
+
+      // Check scale barcode parse (e.g. 2001001015004 or scale barcode)
+      const scaleParsed = parseScaleBarcode(q, realScaleCatalog);
       if (scaleParsed) {
         addToCart(
           {
@@ -249,48 +310,6 @@ export default function POSTerminal() {
       }
 
       const qLower = q.toLowerCase();
-
-      // 2. Direct lookup in DB products
-      const storeProducts = productosUi.map((p) => ({
-        id: p.id,
-        sku: p.sku,
-        barcode: p.barcode || '',
-        name: p.name,
-        price: p.salePrice,
-        cost: p.costPrice,
-        stock: p.currentStock,
-        unit: p.unit,
-        tax: p.tax,
-        image: p.image,
-        outOfStock: p.stockStatus === 'out',
-        isWeighted:
-          p.isWeightProduct ||
-          p.saleType === 'weight' ||
-          p.saleType === 'both' ||
-          p.unit.toLowerCase().includes('lb') ||
-          p.unit.toLowerCase().includes('kg'),
-        saleType: p.saleType,
-      }));
-
-      const weightedExtras = scaleProducts
-        .filter((sp) => !storeProducts.some((p) => p.sku === sp.sku))
-        .map((sp) => ({
-          id: sp.productId,
-          sku: sp.sku,
-          barcode: sp.barcode || '',
-          name: sp.name,
-          price: sp.price,
-          cost: sp.cost,
-          stock: 85,
-          unit: sp.unit,
-          tax: sp.tax,
-          image: sp.image || '',
-          outOfStock: false,
-          isWeighted: true,
-          saleType: 'weight' as const,
-        }));
-
-      const allProds = [...storeProducts, ...weightedExtras];
 
       let matchedProd = allProds.find(
         (p) => p.barcode.toLowerCase() === qLower || p.sku.toLowerCase() === qLower

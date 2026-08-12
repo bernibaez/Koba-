@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import AppLayout from '@/components/AppLayout';
 import {
   Plus,
@@ -22,6 +22,7 @@ import type { ProductItem } from '@/lib/productStore';
 import type { StockAdjustmentItem } from '@/lib/stockAdjustmentStore';
 import { obtenerHistorialAjustes, procesarAjusteStockBloque } from '@/services/inventario.service';
 import { useProductos } from '@/hooks/useProductos';
+import { initialProducts } from '@/pages/product-management/components/ProductManagementScreen';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 
@@ -47,9 +48,15 @@ export default function StockAdjustmentsPage() {
   const { productosUi, refetch: refetchProductos } = useProductos({
     pagina: 1,
     limite: 500,
-    estado: 'activo',
+    estado: 'todos',
   });
-  const catalogProducts = productosUi as ProductItem[];
+
+  const catalogProducts = useMemo(() => {
+    const fromStore = (productosUi || []) as ProductItem[];
+    const storeSkus = new Set(fromStore.map((p) => p.sku.toLowerCase()));
+    const demoExtras = initialProducts.filter((ip) => !storeSkus.has(ip.sku.toLowerCase())) as ProductItem[];
+    return [...fromStore, ...demoExtras];
+  }, [productosUi]);
 
   const [physicalCounts, setPhysicalCounts] = useState<{ [productId: string]: number }>({});
   const [itemReasons, setItemReasons] = useState<{ [productId: string]: string }>({});
@@ -610,63 +617,67 @@ export default function StockAdjustmentsPage() {
         </div>
       </div>
 
-      {/* DETAIL MODAL */}
-      {detailItem && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-card rounded-3xl border border-border shadow-2xl p-6 space-y-4">
+        {/* INLINE DETAIL PANEL */}
+        {detailItem && (
+          <div className="card p-5 border border-primary/30 space-y-4 slide-up">
             <div className="flex items-center justify-between border-b border-border pb-3">
-              <div className="flex items-center gap-2">
-                <div className="p-2 bg-primary/15 text-primary rounded-xl">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2.5 bg-primary/15 text-primary rounded-2xl">
                   <Sliders size={20} />
                 </div>
-                <h3 className="font-extrabold text-foreground text-base">Detalle de Ajuste</h3>
+                <div>
+                  <h3 className="font-extrabold text-foreground text-base">
+                    Detalle del Ajuste — <span className="font-mono text-primary">{detailItem.code}</span>
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">Información completa del movimiento de inventario</p>
+                </div>
               </div>
-              <button onClick={() => setDetailItem(null)} className="text-muted-foreground hover:text-foreground">
-                <X size={20} />
+              <button
+                type="button"
+                onClick={() => setDetailItem(null)}
+                className="btn-secondary text-xs px-3.5 py-1.5 font-bold flex items-center gap-1.5"
+              >
+                <X size={15} />
+                <span>Cerrar Detalle</span>
               </button>
             </div>
 
-            <div className="space-y-3 text-xs">
-              <div className="flex justify-between py-1 border-b border-border/50">
-                <span className="text-muted-foreground font-bold">Código</span>
-                <span className="font-mono font-bold text-primary">{detailItem.code}</span>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+              <div className="p-3 bg-secondary/30 rounded-xl border border-border/50">
+                <span className="text-muted-foreground font-bold block mb-1">Código de Ajuste</span>
+                <span className="font-mono font-bold text-primary text-sm">{detailItem.code}</span>
               </div>
-              <div className="flex justify-between py-1 border-b border-border/50">
-                <span className="text-muted-foreground font-bold">Producto</span>
-                <span className="font-extrabold text-foreground">{detailItem.productName}</span>
+              <div className="p-3 bg-secondary/30 rounded-xl border border-border/50">
+                <span className="text-muted-foreground font-bold block mb-1">Producto</span>
+                <span className="font-extrabold text-foreground text-sm">{detailItem.productName}</span>
               </div>
-              <div className="flex justify-between py-1 border-b border-border/50">
-                <span className="text-muted-foreground font-bold">SKU</span>
-                <span className="font-mono text-muted-foreground">{detailItem.sku}</span>
+              <div className="p-3 bg-secondary/30 rounded-xl border border-border/50">
+                <span className="text-muted-foreground font-bold block mb-1">SKU</span>
+                <span className="font-mono text-muted-foreground">{detailItem.sku || '—'}</span>
               </div>
-              <div className="flex justify-between py-1 border-b border-border/50">
-                <span className="text-muted-foreground font-bold">Categoría</span>
-                <span className="font-bold text-foreground">{detailItem.category}</span>
+              <div className="p-3 bg-secondary/30 rounded-xl border border-border/50">
+                <span className="text-muted-foreground font-bold block mb-1">Categoría</span>
+                <span className="font-bold text-foreground">{detailItem.category || '—'}</span>
               </div>
-              <div className="flex justify-between py-1 border-b border-border/50">
-                <span className="text-muted-foreground font-bold">Stock Previo</span>
-                <span className="font-bold text-foreground">{detailItem.previousQty} unds</span>
+              <div className="p-3 bg-secondary/30 rounded-xl border border-border/50">
+                <span className="text-muted-foreground font-bold block mb-1">Stock Previo</span>
+                <span className="font-bold text-foreground text-sm">{detailItem.previousQty} unds</span>
               </div>
-              <div className="flex justify-between py-1 border-b border-border/50">
-                <span className="text-muted-foreground font-bold">Nuevo Stock</span>
-                <span className="font-bold text-foreground">{detailItem.newQty} unds</span>
+              <div className="p-3 bg-secondary/30 rounded-xl border border-border/50">
+                <span className="text-muted-foreground font-bold block mb-1">Nuevo Stock</span>
+                <span className="font-bold text-foreground text-sm">{detailItem.newQty} unds</span>
               </div>
-              <div className="flex justify-between py-1 border-b border-border/50">
-                <span className="text-muted-foreground font-bold">Motivo</span>
+              <div className="p-3 bg-secondary/30 rounded-xl border border-border/50">
+                <span className="text-muted-foreground font-bold block mb-1">Motivo</span>
                 <span className="font-medium text-foreground">{detailItem.reason}</span>
               </div>
-              <div className="flex justify-between py-1">
-                <span className="text-muted-foreground font-bold">Fecha / Responsable</span>
+              <div className="p-3 bg-secondary/30 rounded-xl border border-border/50">
+                <span className="text-muted-foreground font-bold block mb-1">Fecha / Responsable</span>
                 <span className="font-medium text-foreground">{detailItem.date} {detailItem.time} — {detailItem.responsible}</span>
               </div>
             </div>
-
-            <button onClick={() => setDetailItem(null)} className="btn-secondary w-full py-2.5 text-xs font-bold">
-              Cerrar
-            </button>
           </div>
-        </div>
-      )}
+        )}
     </AppLayout>
   );
 }

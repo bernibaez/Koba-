@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { X, Barcode, Scale, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { CartItem } from './POSTerminal';
-import { scaleProducts, parseScaleBarcode, type ScaleProduct } from '../utils/scaleUtils';
+import { parseScaleBarcode, type ScaleProduct } from '../utils/scaleUtils';
 import { useProductos } from '@/hooks/useProductos';
 
 interface Props {
@@ -16,7 +16,7 @@ export default function PosScaleModal({ onClose, onConfirm, initialProductId, in
   const { productosUi } = useProductos({ pagina: 1, limite: 200, estado: 'activo' });
 
   const catalogProducts: ScaleProduct[] = useMemo(() => {
-    const fromStore: ScaleProduct[] = productosUi
+    return productosUi
       .filter((p) => p.isWeightProduct || p.saleType === 'weight' || p.saleType === 'both' || p.unit.toLowerCase().includes('lb') || p.unit.toLowerCase().includes('kg'))
       .map((p) => ({
         productId: p.id,
@@ -30,15 +30,12 @@ export default function PosScaleModal({ onClose, onConfirm, initialProductId, in
         category: p.category,
         image: p.image,
       }));
-
-    const extras = scaleProducts.filter((sp) => !fromStore.some((p) => p.sku === sp.sku));
-    return [...fromStore, ...extras];
   }, [productosUi]);
 
   const [selected, setSelected] = useState<string>(
     initialProductId && catalogProducts.some((p) => p.productId === initialProductId)
       ? initialProductId
-      : catalogProducts[0]?.productId || scaleProducts[0].productId
+      : catalogProducts[0]?.productId || ''
   );
 
   const [weight, setWeight] = useState<string>(initialWeight ? String(initialWeight) : '1.000');
@@ -74,7 +71,7 @@ export default function PosScaleModal({ onClose, onConfirm, initialProductId, in
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
   }, [onClose]);
 
-  const product = catalogProducts.find((p) => p.productId === selected) || catalogProducts[0] || scaleProducts[0];
+  const product = catalogProducts.find((p) => p.productId === selected) || catalogProducts[0];
   const qty = parseFloat(weight) || 0;
   const lineTotal = Math.round(qty * product.price * 100) / 100;
 

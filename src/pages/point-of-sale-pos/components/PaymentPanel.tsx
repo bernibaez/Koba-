@@ -408,7 +408,7 @@ export default function PaymentPanel({
               VISTA PREVIA DEL COMPROBANTE
             </p>
 
-            <div className="border border-slate-200 dark:border-slate-800 rounded-2xl p-4 bg-white text-slate-900 font-mono shadow-sm space-y-3 text-[11px]">
+            <div className="printable-invoice-container border border-slate-200 dark:border-slate-800 rounded-2xl p-4 bg-white text-slate-900 font-mono shadow-sm space-y-3 text-[11px]">
               {/* Receipt Header */}
               <div className="text-center space-y-0.5 border-b border-slate-200 pb-3">
                 <div className="flex items-center justify-center gap-1.5 font-sans font-black text-sm text-slate-900">
