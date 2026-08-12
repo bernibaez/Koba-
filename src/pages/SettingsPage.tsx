@@ -426,17 +426,20 @@ export default function SettingsPage() {
                           });
                         }}
                         className={`
-                          relative inline-flex h-6 w-11 shrink-0 items-center rounded-full
-                          overflow-hidden transition-colors duration-200
+                          relative inline-flex h-7 w-12 shrink-0 items-center rounded-full
+                          border-2 transition-colors duration-200
                           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40
-                          ${enabled ? 'bg-primary' : 'bg-muted'}
+                          ${enabled
+                            ? 'border-primary bg-primary'
+                            : 'border-slate-500 bg-slate-400 dark:border-slate-400 dark:bg-slate-500'}
                         `}
                       >
                         <span
                           className={`
-                            pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-sm
+                            pointer-events-none absolute top-0.5 left-0.5 h-5 w-5 rounded-full
+                            bg-white shadow-md ring-1 ring-slate-900/20
                             transition-transform duration-200 ease-out
-                            ${enabled ? 'translate-x-6' : 'translate-x-1'}
+                            ${enabled ? 'translate-x-5' : 'translate-x-0'}
                           `}
                         />
                       </button>
