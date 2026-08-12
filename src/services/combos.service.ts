@@ -191,7 +191,10 @@ export async function guardarCombo(uiCombo: UiCombo): Promise<string> {
 
   const sb = getSupabase();
   const { combo, items } = uiComboADb(uiCombo);
-  const isNew = !uiCombo.id || uiCombo.id.startsWith('cmb-tmp') || uiCombo.id.startsWith('new-');
+  const uuidRe =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  // IDs temporales del formulario (cmb-*, new-*, etc.) no son UUID de Supabase.
+  const isNew = !uiCombo.id || !uuidRe.test(uiCombo.id);
 
   let comboId = uiCombo.id;
   if (isNew) {

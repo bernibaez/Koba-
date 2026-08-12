@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useId } from 'react';
+import React, { useState, useEffect, useId, useMemo } from 'react';
 import {
   Plus,
   Trash2,
@@ -8,7 +8,6 @@ import {
   Layers,
   Store,
   Calendar,
-  Clock,
   Check,
   RefreshCw,
   Info,
@@ -18,7 +17,7 @@ import {
 } from 'lucide-react';
 import { Combo, ComboItem, PricingMode } from '@/lib/comboStore';
 import type { ProductItem } from '@/lib/productStore';
-import { obtenerProductos, productoAUi } from '@/services/productos.service';
+import { useProductos } from '@/hooks/useProductos';
 import CategoryIcon from '@/components/ui/CategoryIcon';
 import { toast } from 'sonner';
 
@@ -62,8 +61,20 @@ export default function ComboFormModal({
   onSave,
   editingCombo,
 }: ComboFormModalProps) {
-  const [availableProducts, setAvailableProducts] = useState<ProductItem[]>([]);
   const formId = useId();
+  const {
+    productosUi,
+    loading: loadingProducts,
+    error: productsError,
+    refetch: refetchProducts,
+  } = useProductos({ pagina: 1, limite: 500, estado: 'todos' });
+
+  /** Mismos productos del módulo Productos / POS; prioriza activos. */
+  const availableProducts = useMemo(() => {
+    const list = productosUi as ProductItem[];
+    const activos = list.filter((p) => p.status === 'active');
+    return activos.length > 0 ? activos : list;
+  }, [productosUi]);
 
   // Card 1: General
   const [name, setName] = useState('');
@@ -75,7 +86,6 @@ export default function ComboFormModal({
 
   // Card 2: Items
   const [items, setItems] = useState<ComboItem[]>([]);
-  const [selectedProdId, setSelectedProdId] = useState('');
 
   // Card 3: Pricing
   const [discountType, setDiscountType] = useState<PricingMode>('fixed');
@@ -104,15 +114,7 @@ export default function ComboFormModal({
   const [prodCategoryFilter, setProdCategoryFilter] = useState('all');
 
   useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        const res = await obtenerProductos({ pagina: 1, limite: 500, estado: 'activo' });
-        if (alive) setAvailableProducts(res.datos.map(productoAUi) as ProductItem[]);
-      } catch {
-        if (alive) setAvailableProducts([]);
-      }
-    })();
+    if (!isOpen) return;
 
     if (editingCombo) {
       setName(editingCombo.name);
@@ -162,10 +164,6 @@ export default function ComboFormModal({
       setStartTime('06:00');
       setEndTime('22:00');
     }
-
-    return () => {
-      alive = false;
-    };
   }, [editingCombo, isOpen]);
 
   // Real-time calculations
@@ -225,16 +223,6 @@ export default function ComboFormModal({
       const newNormal = updated.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
       setPriceInput(Math.round(newNormal * 0.9));
     }
-  };
-
-  const handleAddItem = () => {
-    if (!selectedProdId) {
-      toast.error('Selecciona un producto para agregar');
-      return;
-    }
-    const prod = availableProducts.find((p) => p.id === selectedProdId);
-    if (prod) addSpecificProductToCombo(prod);
-    setSelectedProdId('');
   };
 
   const handleUpdateItemQty = (itemId: string, newQty: number) => {
@@ -489,9 +477,34 @@ export default function ComboFormModal({
 
               {/* Live Matching Products List */}
               <div className="max-h-48 overflow-y-auto scrollbar-thin border border-border/60 rounded-xl divide-y divide-border/60 bg-card">
-                {filteredAvailableProducts.length === 0 ? (
-                  <div className="p-4 text-center text-xs text-muted-foreground">
-                    No se encontraron productos coincidentes con "{prodSearchTerm}"
+                {loadingProducts ? (
+                  <div className="p-4 text-center text-xs text-muted-foreground font-semibold">
+                    Cargando productos del catálogo…
+                  </div>
+                ) : productsError ? (
+                  <div className="p-4 text-center space-y-2">
+                    <p className="text-xs text-danger font-semibold">{productsError}</p>
+                    <button
+                      type="button"
+                      onClick={() => void refetchProducts()}
+                      className="btn-secondary text-xs font-bold inline-flex items-center gap-1"
+                    >
+                      <RefreshCw size={12} /> Reintentar
+                    </button>
+                  </div>
+                ) : filteredAvailableProducts.length === 0 ? (
+                  <div className="p-4 text-center text-xs text-muted-foreground space-y-1">
+                    {availableProducts.length === 0 ? (
+                      <>
+                        <p className="font-semibold">No hay productos en el catálogo.</p>
+                        <p>Crea productos en Productos para poder armar combos.</p>
+                      </>
+                    ) : (
+                      <p>
+                        No se encontraron productos coincidentes
+                        {prodSearchTerm.trim() ? ` con "${prodSearchTerm}"` : ''}.
+                      </p>
+                    )}
                   </div>
                 ) : (
                   filteredAvailableProducts.map((p) => {
