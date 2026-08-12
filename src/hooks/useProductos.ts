@@ -10,6 +10,7 @@ import {
 } from '@/services/productos.service';
 import type { Product } from '@/pages/product-management/components/ProductManagementScreen';
 import type { Producto } from '@/types/database';
+import { isAbortError } from '@/lib/isAbortError';
 
 export function useProductos(params: ProductosFiltro = {}) {
   const [productos, setProductos] = useState<Producto[]>([]);
@@ -17,7 +18,8 @@ export function useProductos(params: ProductosFiltro = {}) {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
+  const reqIdRef = useRef(0);
+  const mountedRef = useRef(true);
 
   const pagina = params.pagina ?? 1;
   const limite = params.limite ?? 50;
@@ -26,9 +28,7 @@ export function useProductos(params: ProductosFiltro = {}) {
   const estado = params.estado;
 
   const refetch = useCallback(async () => {
-    abortRef.current?.abort();
-    const ac = new AbortController();
-    abortRef.current = ac;
+    const reqId = ++reqIdRef.current;
     setLoading(true);
     setError(null);
     try {
@@ -38,23 +38,26 @@ export function useProductos(params: ProductosFiltro = {}) {
         busqueda,
         categoria,
         estado,
-        signal: ac.signal,
       });
-      if (ac.signal.aborted) return;
+      if (!mountedRef.current || reqId !== reqIdRef.current) return;
       setProductos(res.datos);
       setProductosUi(res.datos.map(productoAUi));
       setTotal(res.total);
     } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
+      if (isAbortError(e) || !mountedRef.current || reqId !== reqIdRef.current) return;
       setError(e instanceof Error ? e.message : 'Error al cargar productos');
     } finally {
-      if (!ac.signal.aborted) setLoading(false);
+      if (mountedRef.current && reqId === reqIdRef.current) setLoading(false);
     }
   }, [pagina, limite, busqueda, categoria, estado]);
 
   useEffect(() => {
-    refetch();
-    return () => abortRef.current?.abort();
+    mountedRef.current = true;
+    void refetch();
+    return () => {
+      mountedRef.current = false;
+      reqIdRef.current += 1;
+    };
   }, [refetch]);
 
   const crear = useCallback(
