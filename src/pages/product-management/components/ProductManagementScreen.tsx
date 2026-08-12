@@ -6,7 +6,7 @@ import ProductFormModal from './ProductFormModal';
 import PriceLabelModal from './PriceLabelModal';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 import ModalShell from '@/components/ui/ModalShell';
-import { X } from 'lucide-react';
+import { X, Package } from 'lucide-react';
 import { toast } from 'sonner';
 import { exportTableToPdf, formatMoneyPdf } from '@/lib/exportPdf';
 import { useProductos } from '@/hooks/useProductos';
@@ -240,7 +240,7 @@ export default function ProductManagementScreen() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <ProductsHeader
         onAdd={() => { setEditProduct(null); setAddModalOpen(true); }}
         onExport={handleExportPdf}
@@ -248,6 +248,32 @@ export default function ProductManagementScreen() {
         activeProducts={products.filter((p) => p.status === 'active').length}
         lowStockCount={products.filter((p) => p.stockStatus === 'low' || p.stockStatus === 'out').length}
       />
+
+      {/* Metric Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="card p-4 hover:border-primary/40 transition-all">
+          <p className="text-xs text-muted-foreground font-medium">Productos en Catálogo</p>
+          <p className="text-2xl font-bold text-foreground mt-1">{products.length} productos</p>
+        </div>
+        <div className="card p-4 hover:border-emerald-500/40 transition-all">
+          <p className="text-xs text-muted-foreground font-medium">Productos Activos</p>
+          <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
+            {products.filter((p) => p.status === 'active').length}
+          </p>
+        </div>
+        <div className="card p-4 hover:border-amber-500/40 transition-all">
+          <p className="text-xs text-muted-foreground font-medium">Con Stock Bajo / Agotado</p>
+          <p className="text-2xl font-bold text-amber-600 dark:text-amber-400 mt-1">
+            {products.filter((p) => p.stockStatus === 'low' || p.stockStatus === 'out').length}
+          </p>
+        </div>
+        <div className="card p-4 hover:border-blue-500/40 transition-all">
+          <p className="text-xs text-muted-foreground font-medium">Valor en Inventario</p>
+          <p className="text-2xl font-bold text-info mt-1">
+            RD$ {products.reduce((s, p) => s + p.costPrice * p.currentStock, 0).toLocaleString('es-DO', { maximumFractionDigits: 0 })}
+          </p>
+        </div>
+      </div>
 
       <ProductsToolbar
         search={search}
@@ -266,6 +292,7 @@ export default function ProductManagementScreen() {
         }}
         onAdd={() => { setEditProduct(null); setAddModalOpen(true); }}
         totalFiltered={filtered.length}
+        onExportPdf={handleExportPdf}
       />
 
       <ProductsTable
@@ -299,64 +326,78 @@ export default function ProductManagementScreen() {
       >
         {viewingProduct && (
           <>
-            <div className="flex items-center justify-between border-b border-border pb-3 mb-4">
-              <h2 className="text-lg font-bold text-foreground">Detalle del Producto</h2>
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3 mb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 flex items-center justify-center font-bold">
+                  <Package size={18} />
+                </div>
+                <h2 className="text-lg font-bold text-slate-900 dark:text-white">Detalle del Producto</h2>
+              </div>
               <button
                 type="button"
                 onClick={() => setViewingProduct(null)}
-                className="p-1 text-muted-foreground hover:text-foreground"
+                className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
               >
                 <X size={18} />
               </button>
             </div>
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div className="col-span-2">
-                <span className="text-xs text-muted-foreground block">Nombre</span>
-                <span className="font-semibold text-foreground">{viewingProduct.name}</span>
+
+            <div className="space-y-4">
+              <div className="p-3.5 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-200/80 dark:border-slate-800">
+                <span className="text-xs font-semibold text-slate-400 block uppercase tracking-wider mb-0.5">Nombre del Producto</span>
+                <span className="text-base font-bold text-slate-900 dark:text-white">{viewingProduct.name}</span>
               </div>
-              <div>
-                <span className="text-xs text-muted-foreground block">SKU</span>
-                <span className="font-mono text-foreground">{viewingProduct.sku}</span>
-              </div>
-              <div>
-                <span className="text-xs text-muted-foreground block">Código de barras</span>
-                <span className="font-mono text-foreground">{viewingProduct.barcode || '—'}</span>
-              </div>
-              <div>
-                <span className="text-xs text-muted-foreground block">Categoría</span>
-                <span className="text-foreground">{viewingProduct.category}</span>
-              </div>
-              <div>
-                <span className="text-xs text-muted-foreground block">Estado</span>
-                <span className="text-foreground">
-                  {viewingProduct.status === 'active'
-                    ? 'Activo'
-                    : viewingProduct.status === 'inactive'
-                      ? 'Inactivo'
-                      : 'Descontinuado'}
-                </span>
-              </div>
-              <div>
-                <span className="text-xs text-muted-foreground block">Precio costo</span>
-                <span className="text-foreground">
-                  RD$ {viewingProduct.costPrice.toLocaleString('es-DO')}
-                </span>
-              </div>
-              <div>
-                <span className="text-xs text-muted-foreground block">Precio venta</span>
-                <span className="font-semibold text-foreground">
-                  RD$ {viewingProduct.salePrice.toLocaleString('es-DO')}
-                </span>
-              </div>
-              <div>
-                <span className="text-xs text-muted-foreground block">Precio mayoreo</span>
-                <span className="text-foreground">
-                  RD$ {viewingProduct.wholesalePrice.toLocaleString('es-DO')}
-                </span>
-              </div>
-              <div>
-                <span className="text-xs text-muted-foreground block">Stock</span>
-                <span className="text-foreground">{viewingProduct.currentStock}</span>
+
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800">
+                  <span className="text-[11px] text-slate-400 font-semibold block uppercase mb-1">SKU</span>
+                  <span className="font-mono text-slate-900 dark:text-white font-bold">{viewingProduct.sku}</span>
+                </div>
+
+                <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800">
+                  <span className="text-[11px] text-slate-400 font-semibold block uppercase mb-1">Código de Barras</span>
+                  <span className="font-mono text-emerald-700 dark:text-emerald-400 font-extrabold bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-200/60 inline-block">
+                    {viewingProduct.barcode || 'Sin Código'}
+                  </span>
+                </div>
+
+                <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800">
+                  <span className="text-[11px] text-slate-400 font-semibold block uppercase mb-1">Categoría</span>
+                  <span className="font-bold text-slate-800 dark:text-slate-200">{viewingProduct.category}</span>
+                </div>
+
+                <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800">
+                  <span className="text-[11px] text-slate-400 font-semibold block uppercase mb-1">Marca</span>
+                  <span className="font-bold text-slate-800 dark:text-slate-200">{viewingProduct.brand || '—'}</span>
+                </div>
+
+                <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800">
+                  <span className="text-[11px] text-slate-400 font-semibold block uppercase mb-1">Precio Costo</span>
+                  <span className="font-semibold text-slate-600 dark:text-slate-400 tabular-nums">
+                    RD$ {viewingProduct.costPrice.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+
+                <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800">
+                  <span className="text-[11px] text-slate-400 font-semibold block uppercase mb-1">Precio Venta</span>
+                  <span className="font-extrabold text-slate-900 dark:text-white tabular-nums">
+                    RD$ {viewingProduct.salePrice.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+
+                <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800">
+                  <span className="text-[11px] text-slate-400 font-semibold block uppercase mb-1">Stock Actual</span>
+                  <span className="font-bold text-slate-900 dark:text-white">{viewingProduct.currentStock} unidades</span>
+                </div>
+
+                <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800">
+                  <span className="text-[11px] text-slate-400 font-semibold block uppercase mb-1">Estado</span>
+                  <span className={`inline-flex items-center gap-1 font-bold ${
+                    viewingProduct.status === 'active' ? 'text-emerald-600' : 'text-slate-500'
+                  }`}>
+                    {viewingProduct.status === 'active' ? 'Activo' : viewingProduct.status === 'inactive' ? 'Inactivo' : 'Descontinuado'}
+                  </span>
+                </div>
               </div>
             </div>
             <div className="mt-6">

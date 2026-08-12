@@ -399,9 +399,49 @@ export default function POSTerminal() {
         (target.tagName === 'INPUT' && target.id !== 'pos-barcode-search-input') ||
         target.tagName === 'TEXTAREA';
 
+      if (e.key === 'F6') {
+        e.preventDefault();
+        setPreferredPayMethod('cash');
+        setPaymentOpen(true);
+        return;
+      }
+      if (e.key === 'F7') {
+        e.preventDefault();
+        setPreferredPayMethod('card');
+        setPaymentOpen(true);
+        return;
+      }
+      if (e.key === 'F8') {
+        e.preventDefault();
+        setPreferredPayMethod('transfer');
+        setPaymentOpen(true);
+        return;
+      }
+      if (e.key === 'F5') {
+        e.preventDefault();
+        setPreferredPayMethod('split');
+        setPaymentOpen(true);
+        return;
+      }
       if (e.key === 'F9') {
         e.preventDefault();
-        setPaymentOpen(true);
+        setPaymentOpen((prev) => !prev);
+        return;
+      }
+      if (e.key === 'F12' && orderCompleted) {
+        e.preventDefault();
+        window.print();
+        return;
+      }
+      if (e.key === 'F2' && orderCompleted) {
+        e.preventDefault();
+        clearCart();
+        setPaymentOpen(false);
+        return;
+      }
+      if (e.key === 'Escape' && paymentOpen) {
+        e.preventDefault();
+        setPaymentOpen(false);
         return;
       }
 
@@ -436,7 +476,7 @@ export default function POSTerminal() {
 
     window.addEventListener('keydown', onGlobalKeyDown);
     return () => window.removeEventListener('keydown', onGlobalKeyDown);
-  }, [handleSearchSubmit]);
+  }, [handleSearchSubmit, orderCompleted, paymentOpen, clearCart]);
 
   const handleQuickCashSale = () => {
     if (cart.length === 0) {
@@ -772,8 +812,12 @@ export default function POSTerminal() {
 
       {/* Payment Drawer / Modal when clicking Efectivo or Pago Múltiple */}
       {paymentOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden max-h-[90vh]">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200">
+          <div
+            className={`w-full ${
+              orderCompleted ? 'max-w-4xl' : 'max-w-2xl'
+            } bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200/80 dark:border-slate-800 overflow-hidden max-h-[94vh] flex flex-col transition-all duration-300`}
+          >
             <PaymentPanel {...paymentProps} onClose={() => setPaymentOpen(false)} />
           </div>
         </div>

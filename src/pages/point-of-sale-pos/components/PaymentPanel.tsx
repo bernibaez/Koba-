@@ -1,5 +1,22 @@
 import React, { useMemo, useState } from 'react';
-import { CreditCard, Banknote, Smartphone, Split, Printer, CheckCircle, X, Plus, AlertCircle, FileText, Check, ShieldCheck } from 'lucide-react';
+import {
+  CreditCard,
+  Banknote,
+  Smartphone,
+  Split,
+  Printer,
+  X,
+  Plus,
+  FileText,
+  Check,
+  ChevronRight,
+  Info,
+  Send,
+  Clock,
+  Store,
+  Lightbulb,
+  Layers,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import type { CartItem, Customer } from './POSTerminal';
 import type { PaymentSplit } from '@/lib/posStore';
@@ -8,7 +25,6 @@ import { validateRNC, NCF_TYPES, type NCFType, type FiscalInvoiceRecord } from '
 import { generarSiguienteNcf } from '@/services/ncf.service';
 import { isSupabaseConfigured } from '@/services/clienteSupabase';
 import PrintableInvoice from '@/components/PrintableInvoice';
-import { getInvoiceSettings } from '@/lib/invoiceSettingsStore';
 
 type PaymentMethod = 'cash' | 'card' | 'transfer' | 'credit' | 'split';
 
@@ -26,14 +42,14 @@ interface PaymentPanelProps {
 }
 
 const paymentMethods = [
-  { id: 'cash' as PaymentMethod, label: 'Efectivo', icon: <Banknote size={16} /> },
-  { id: 'card' as PaymentMethod, label: 'Tarjeta', icon: <CreditCard size={16} /> },
-  { id: 'transfer' as PaymentMethod, label: 'Transf.', icon: <Smartphone size={16} /> },
-  { id: 'credit' as PaymentMethod, label: 'Crédito', icon: <Split size={16} /> },
-  { id: 'split' as PaymentMethod, label: 'Múltiple', icon: <Plus size={16} /> },
+  { id: 'cash' as PaymentMethod, label: 'Efectivo', icon: <Banknote size={20} /> },
+  { id: 'card' as PaymentMethod, label: 'Tarjeta', icon: <CreditCard size={20} /> },
+  { id: 'transfer' as PaymentMethod, label: 'Transf.', icon: <Smartphone size={20} /> },
+  { id: 'credit' as PaymentMethod, label: 'Crédito', icon: <Split size={20} /> },
+  { id: 'split' as PaymentMethod, label: 'Múltiple', icon: <Layers size={20} /> },
 ];
 
-const quickCash = [100, 200, 500, 1000, 2000];
+const quickCashPresets = [50, 100, 200, 500, 1000];
 
 export default function PaymentPanel({
   total,
@@ -50,7 +66,6 @@ export default function PaymentPanel({
   const [method, setMethod] = useState<PaymentMethod>(initialMethod ?? 'cash');
   const [cashReceived, setCashReceived] = useState('');
   const [processing, setProcessing] = useState(false);
-  const [printReceipt, setPrintReceipt] = useState(true);
   const [split, setSplit] = useState({ cash: '', card: '', transfer: '', credit: '' });
   const [lastChange, setLastChange] = useState(0);
 
@@ -58,6 +73,7 @@ export default function PaymentPanel({
   const [ncfType, setNcfType] = useState<NCFType>('B02');
   const [rncClient, setRncClient] = useState('');
   const [companyName, setCompanyName] = useState('');
+  const [showFiscalDetails, setShowFiscalDetails] = useState(false);
 
   React.useEffect(() => {
     if (initialMethod) setMethod(initialMethod);
@@ -176,7 +192,6 @@ export default function PaymentPanel({
         const subtotalNet = total / 1.18;
         const totalItbis = total - subtotalNet;
 
-        // En Supabase el NCF lo asigna procesar_venta_pos (evita doble avance de secuencia).
         let ncf = '';
         let expirationDate = '2027-12-31';
         if (!isSupabaseConfigured()) {
@@ -236,6 +251,9 @@ export default function PaymentPanel({
     }
   };
 
+  // ----------------------------------------------------
+  // VIEW 2: ORDER COMPLETED (¡VENTA COMPLETADA!)
+  // ----------------------------------------------------
   if (orderCompleted) {
     const now = new Date();
     const subtotalNet = total / 1.18;
@@ -265,135 +283,450 @@ export default function PaymentPanel({
       itbis: Math.round(totalItbis * 100) / 100,
       total,
       paymentMethod: method,
-      cashReceived: cashAmount || undefined,
-      change: lastChange || undefined,
+      cashReceived: cashAmount || total,
+      change: lastChange || 0,
     };
 
     return (
-      <div className="flex flex-col h-full bg-card overflow-y-auto p-4 space-y-4">
-        <div className="flex flex-col items-center justify-center gap-2 p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl text-center">
-          <div className="w-10 h-10 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-md">
-            <CheckCircle size={24} />
+      <div className="flex flex-col h-full bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 overflow-y-auto">
+        {/* Top Banner */}
+        <div className="bg-emerald-500/10 border-b border-emerald-500/20 p-6 text-center flex flex-col items-center justify-center">
+          <div className="w-12 h-12 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow-md mb-2">
+            <Check size={26} strokeWidth={3} />
           </div>
-          <div>
-            <p className="text-base font-black text-foreground">¡Venta Completada!</p>
-            <p className="text-xs text-muted-foreground font-bold">{fmt(total)}</p>
-          </div>
-          {lastChange > 0 && (
-            <div className="w-full bg-white dark:bg-slate-900 border border-emerald-500/40 rounded-xl p-2.5 mt-1">
-              <p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase">Devuelta / Cambio</p>
-              <p className="text-xl font-black tabular-nums text-emerald-600 dark:text-emerald-400">{fmt(lastChange)}</p>
+          <h2 className="text-xl font-black tracking-wide text-slate-800 dark:text-white uppercase">
+            ¡VENTA COMPLETADA!
+          </h2>
+          <p className="text-2xl font-extrabold tabular-nums text-emerald-600 dark:text-emerald-400 mt-0.5">
+            {fmt(total)}
+          </p>
+        </div>
+
+        {/* Body 2 columns */}
+        <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6 flex-1 items-start">
+          {/* Left Column: Summary & Actions */}
+          <div className="space-y-5">
+            <div className="bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-700/60 rounded-2xl p-4 space-y-3">
+              <p className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700 pb-2">
+                RESUMEN DE LA VENTA
+              </p>
+
+              <div className="space-y-2 text-xs font-semibold">
+                <div className="flex justify-between">
+                  <span className="text-slate-500 dark:text-slate-400">Total</span>
+                  <span className="font-extrabold text-slate-900 dark:text-white">{fmt(total)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500 dark:text-slate-400">Método de pago</span>
+                  <span className="font-extrabold text-emerald-600 dark:text-emerald-400 capitalize">
+                    {method === 'cash'
+                      ? 'Efectivo'
+                      : method === 'card'
+                        ? 'Tarjeta'
+                        : method === 'transfer'
+                          ? 'Transferencia'
+                          : method === 'credit'
+                            ? 'Crédito'
+                            : 'Múltiple'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500 dark:text-slate-400">Dinero recibido</span>
+                  <span className="font-extrabold text-slate-900 dark:text-white">{fmt(cashAmount || total)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500 dark:text-slate-400">Cambio entregado</span>
+                  <span className="font-extrabold text-emerald-600 dark:text-emerald-400">{fmt(lastChange)}</span>
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-slate-200 dark:border-slate-700 space-y-1 text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                <div className="flex justify-between">
+                  <span>Venta #{completedInvoiceData.invoiceNumber.replace('FAC-', '')}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Fecha</span>
+                  <span>{completedInvoiceData.issueDate} {completedInvoiceData.issueTime}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Cajero</span>
+                  <span>{completedInvoiceData.cashier}</span>
+                </div>
+              </div>
             </div>
-          )}
+
+            {/* Action buttons */}
+            <div className="space-y-2.5">
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="w-full py-3.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-md transition-all active:scale-98 cursor-pointer"
+              >
+                <Printer size={18} />
+                <span>IMPRIMIR FACTURA</span>
+                <span className="bg-emerald-700/60 text-white text-[10px] px-2 py-0.5 rounded font-mono ml-auto">F12</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={onNewSale}
+                className="w-full py-3 px-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 font-extrabold text-xs flex items-center justify-center gap-2 transition-all active:scale-98 cursor-pointer"
+              >
+                <Plus size={16} />
+                <span>NUEVA VENTA</span>
+                <span className="bg-slate-100 dark:bg-slate-800 text-slate-500 text-[10px] px-2 py-0.5 rounded font-mono ml-auto">F2</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => toast.info('Enviando o guardando comprobante...')}
+                className="w-full py-3 px-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 font-extrabold text-xs flex items-center justify-between transition-all cursor-pointer"
+              >
+                <div className="flex items-center gap-2">
+                  <Send size={16} />
+                  <span>ENVIAR / GUARDAR</span>
+                </div>
+                <ChevronRight size={16} className="text-slate-400" />
+              </button>
+            </div>
+
+            {/* Progress / Auto-redirect banner */}
+            <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 flex items-center gap-3 text-xs text-emerald-800 dark:text-emerald-300 font-semibold">
+              <Clock size={16} className="text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
+              <div className="flex-1">
+                <p className="text-[11px] mb-1">Serás redirigido a nueva venta en 3 segundos...</p>
+                <div className="w-full bg-emerald-200 dark:bg-emerald-900/50 h-1.5 rounded-full overflow-hidden">
+                  <div className="bg-emerald-600 h-full w-full animate-pulse" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column: Receipt Preview */}
+          <div className="space-y-2">
+            <p className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              VISTA PREVIA DEL COMPROBANTE
+            </p>
+
+            <div className="border border-slate-200 dark:border-slate-800 rounded-2xl p-4 bg-white text-slate-900 font-mono shadow-sm space-y-3 text-[11px]">
+              {/* Receipt Header */}
+              <div className="text-center space-y-0.5 border-b border-slate-200 pb-3">
+                <div className="flex items-center justify-center gap-1.5 font-sans font-black text-sm text-slate-900">
+                  <Store size={18} className="text-slate-800" />
+                  <span>SUPERMERCADO MERCATO S.R.L.</span>
+                </div>
+                <p className="text-[10px] text-slate-500">RNC: 131-45678-9</p>
+                <p className="text-[10px] text-slate-500">Av. 27 de Febrero #450, Santo Domingo, R.D.</p>
+                <p className="text-[10px] text-slate-500">Tel: (809) 555-0199</p>
+              </div>
+
+              <div className="text-center font-bold">
+                COMPROBANTE DE VENTA<br />
+                No. {completedInvoiceData.invoiceNumber}
+              </div>
+
+              {/* Items */}
+              <div className="border-t border-b border-dashed border-slate-300 py-1.5 my-1 space-y-1">
+                <div className="flex justify-between font-bold text-[10px] text-slate-500 uppercase">
+                  <span>Descripción</span>
+                  <span>Cant.</span>
+                  <span>Importe</span>
+                </div>
+                {completedInvoiceData.items.map((item, idx) => (
+                  <div key={idx} className="flex justify-between text-slate-800">
+                    <span className="truncate max-w-[120px]">{item.name}</span>
+                    <span>{item.qty} x {fmt(item.price)}</span>
+                    <span>{fmt(item.subtotal)}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="space-y-1 text-slate-700">
+                <div className="flex justify-between">
+                  <span>Subtotal Neto:</span>
+                  <span>{fmt(completedInvoiceData.subtotal)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>ITBIS (18%):</span>
+                  <span>{fmt(completedInvoiceData.itbis)}</span>
+                </div>
+              </div>
+
+              <div className="border-t border-dashed border-slate-300 pt-2 flex justify-between font-black text-xs text-slate-900">
+                <span>TOTAL:</span>
+                <span>{fmt(completedInvoiceData.total)}</span>
+              </div>
+
+              <div className="text-[10px] text-slate-600 space-y-0.5 pt-1">
+                <div className="flex justify-between">
+                  <span>Método Pago:</span>
+                  <span className="capitalize">{method === 'cash' ? 'Efectivo' : method}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Recibido:</span>
+                  <span>{fmt(cashAmount || total)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Cambio:</span>
+                  <span>{fmt(lastChange)}</span>
+                </div>
+              </div>
+
+              <div className="text-center text-[10px] italic text-slate-500 pt-2 border-t border-slate-200">
+                ¡Gracias por preferirnos!
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div className="flex gap-2 w-full">
-          <button
-            type="button"
-            onClick={() => window.print()}
-            className="flex-1 btn-primary flex items-center justify-center gap-1.5 text-xs py-2.5 font-black shadow-md"
-          >
-            <Printer size={15} />
-            Imprimir Factura
-          </button>
-          <button
-            type="button"
-            onClick={onNewSale}
-            className="flex-1 btn-secondary text-xs py-2.5 font-bold"
-          >
-            Nueva Venta
-          </button>
-        </div>
-
-        {/* Printable Invoice Container */}
-        <div className="border border-border rounded-xl p-2 bg-white text-slate-900 overflow-x-auto">
-          <PrintableInvoice invoiceData={completedInvoiceData} />
+        {/* Footer Hint */}
+        <div className="bg-slate-50 dark:bg-slate-900/80 border-t border-slate-200/60 dark:border-slate-800 px-6 py-2.5 flex items-center justify-center gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
+          <Lightbulb size={16} className="text-amber-500" />
+          <span>
+            Consejo: Presiona <span className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 font-mono text-[10px] font-bold">F2</span> para nueva venta o <span className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 font-mono text-[10px] font-bold">F12</span> para imprimir
+          </span>
         </div>
       </div>
     );
   }
 
+  // ----------------------------------------------------
+  // VIEW 1: PAYMENT FORM (PAGO EN CAJA)
+  // ----------------------------------------------------
   return (
-    <div className="flex flex-col h-full bg-card">
-      {/* Header */}
-      <div className="px-3 py-2 border-b border-border flex items-center justify-between flex-shrink-0">
-        <span className="text-xs font-black uppercase text-foreground tracking-wider">Pago en Caja</span>
+    <div className="flex flex-col h-full bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 overflow-hidden">
+      {/* Modal Header */}
+      <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between flex-shrink-0">
+        <h2 className="text-base font-black tracking-wide text-slate-800 dark:text-white uppercase">
+          PAGO EN CAJA
+        </h2>
         {onClose && (
-          <button type="button" onClick={onClose} className="p-1 text-muted-foreground hover:text-foreground">
-            <X size={15} />
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+          >
+            <X size={18} />
           </button>
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto scrollbar-thin p-3 space-y-3">
-        {/* Total Display */}
-        <div className="bg-primary/10 border border-primary/30 rounded-xl p-3 text-center">
-          <p className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">TOTAL A PAGAR</p>
-          <p className="text-2xl sm:text-3xl font-black tabular-nums text-primary mt-0.5">{fmt(total)}</p>
+      {/* Main Content Area */}
+      <div className="flex-1 overflow-y-auto p-6 space-y-5">
+        {/* TOTAL A PAGAR Banner */}
+        <div className="bg-slate-50/80 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-700/60 rounded-2xl p-5 text-center shadow-2xs">
+          <p className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            TOTAL A PAGAR
+          </p>
+          <p className="text-4xl sm:text-5xl font-black tabular-nums text-emerald-600 dark:text-emerald-400 mt-1">
+            {fmt(total)}
+          </p>
         </div>
 
-        {/* Method buttons */}
+        {/* 1. FORMA DE PAGO */}
         <div>
-          <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground mb-1.5">Forma de Pago</p>
-          <div className="grid grid-cols-3 gap-1">
-            {paymentMethods.map((m) => (
+          <p className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">
+            1. FORMA DE PAGO
+          </p>
+          <div className="grid grid-cols-5 gap-2.5">
+            {paymentMethods.map((m) => {
+              const isSelected = method === m.id;
+              return (
+                <button
+                  key={`pm-${m.id}`}
+                  type="button"
+                  onClick={() => setMethod(m.id)}
+                  className={`flex flex-col items-center justify-center p-3 rounded-2xl border transition-all active:scale-95 text-center min-h-[82px] cursor-pointer ${
+                    isSelected
+                      ? 'border-emerald-500 bg-emerald-50/60 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 ring-2 ring-emerald-500/40 font-extrabold shadow-2xs'
+                      : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:border-slate-300 hover:bg-slate-50/80 dark:hover:bg-slate-800/60 font-semibold'
+                  }`}
+                >
+                  <div
+                    className={`mb-1.5 p-2 rounded-xl ${
+                      isSelected
+                        ? 'bg-emerald-500 text-white shadow-xs'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+                    }`}
+                  >
+                    {m.icon}
+                  </div>
+                  <span className="text-xs">{m.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* 2. DINERO RECIBIDO & 3. CAMBIO */}
+        {method === 'cash' && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {/* 2. DINERO RECIBIDO */}
+            <div className="md:col-span-2 space-y-1.5 bg-slate-50/50 dark:bg-slate-800/30 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 flex flex-col justify-between">
+              <p className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                2. DINERO RECIBIDO
+              </p>
+              <div>
+                <input
+                  type="number"
+                  step="0.01"
+                  placeholder="0.00"
+                  value={cashReceived}
+                  onChange={(e) => setCashReceived(e.target.value)}
+                  className={`w-full text-center text-3xl font-extrabold tabular-nums h-16 rounded-xl border bg-white dark:bg-slate-900 px-4 focus:outline-none focus:ring-2 ${
+                    isCashInsufficient && cashAmount > 0
+                      ? 'border-rose-500 text-rose-600 focus:ring-rose-500'
+                      : 'border-slate-200 dark:border-slate-700 text-slate-800 dark:text-white focus:ring-emerald-500'
+                  }`}
+                />
+                <div className="text-[11px] text-slate-400 dark:text-slate-500 text-center font-medium mt-1.5 flex items-center justify-center gap-1.5">
+                  <FileText size={12} className="text-slate-400" />
+                  <span>Ingrese el monto recibido o use los botones rápidos</span>
+                </div>
+              </div>
+            </div>
+
+            {/* 3. CAMBIO */}
+            <div className="md:col-span-1 flex flex-col justify-between bg-emerald-50/70 dark:bg-emerald-950/20 p-4 rounded-2xl border border-emerald-500/30">
+              <p className="text-xs font-black uppercase tracking-wider text-emerald-800 dark:text-emerald-300">
+                3. CAMBIO
+              </p>
+              <div className="flex items-center gap-2 mt-3">
+                <div className="p-2.5 rounded-xl bg-emerald-500 text-white shadow-xs">
+                  <Banknote size={24} />
+                </div>
+                <p className="text-2xl font-extrabold tabular-nums text-emerald-600 dark:text-emerald-400">
+                  {fmt(change)}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Mode Multiple / Split */}
+        {method === 'split' && (
+          <div className="p-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/30 space-y-3 text-xs">
+            <p className="font-black uppercase text-slate-500 tracking-wider">Desglose de Pago Múltiple</p>
+            <div className="grid grid-cols-2 gap-3">
+              {(
+                [
+                  ['cash', 'Efectivo'],
+                  ['card', 'Tarjeta'],
+                  ['transfer', 'Transferencia'],
+                  ['credit', 'Crédito'],
+                ] as const
+              ).map(([key, label]) => (
+                <div key={key}>
+                  <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-1">
+                    {label}
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    placeholder="0.00"
+                    value={split[key]}
+                    onChange={(e) => setSplit((s) => ({ ...s, [key]: e.target.value }))}
+                    className="w-full text-xs font-bold h-9 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 tabular-nums"
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="pt-2 flex justify-between font-bold text-xs">
+              <span>Suma total: {fmt(splitTotal)}</span>
+              <span className={Math.abs(splitDiff) < 0.01 ? 'text-emerald-600' : 'text-rose-500'}>
+                Diferencia: {fmt(splitDiff)}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* 4. MONTO RÁPIDO */}
+        {method === 'cash' && (
+          <div>
+            <p className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">
+              4. MONTO RÁPIDO
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-6 gap-2">
               <button
-                key={`pm-${m.id}`}
                 type="button"
-                onClick={() => setMethod(m.id)}
-                className={`flex flex-col items-center justify-center p-2 rounded-lg border transition-all active:scale-95 text-center ${
-                  method === m.id
-                    ? 'bg-primary text-white border-primary shadow-xs font-bold'
-                    : 'bg-card border-border hover:bg-secondary text-foreground'
+                onClick={() => setCashReceived(String(total))}
+                className="py-2.5 px-2 rounded-xl border border-emerald-500 text-emerald-600 dark:text-emerald-400 bg-emerald-50/60 dark:bg-emerald-950/30 hover:bg-emerald-100 transition-all font-bold text-center active:scale-95 cursor-pointer"
+              >
+                <div className="text-[9px] uppercase font-extrabold tracking-wider">EXACTO</div>
+                <div className="text-xs font-extrabold tabular-nums">{fmt(total)}</div>
+              </button>
+              {quickCashPresets.map((v) => (
+                <button
+                  key={`quick-${v}`}
+                  type="button"
+                  onClick={() => setCashReceived(v.toString())}
+                  className="py-3 px-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 transition-all font-extrabold text-xs text-center active:scale-95 tabular-nums flex items-center justify-center cursor-pointer"
+                >
+                  RD$ {v}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* COMPROBANTE FISCAL Block */}
+        <div className="border border-slate-200/80 dark:border-slate-700/70 rounded-2xl bg-white dark:bg-slate-900 overflow-hidden">
+          <div
+            className="p-3.5 flex items-center justify-between cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-all"
+            onClick={() => setShowFiscalDetails((prev) => !prev)}
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                <FileText size={18} />
+              </div>
+              <div>
+                <p className="text-xs font-black uppercase text-slate-700 dark:text-slate-200 tracking-wide">
+                  COMPROBANTE FISCAL
+                </p>
+                <p className="text-xs font-semibold text-slate-400 dark:text-slate-500">
+                  {fiscalEnabled ? `Factura Fiscal (${ncfType})` : 'Factura Simple (Sin NCF)'}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (onToggleFiscal) onToggleFiscal(!fiscalEnabled);
+                }}
+                className={`px-3 py-1 rounded-full text-[10px] font-extrabold transition-all cursor-pointer ${
+                  fiscalEnabled
+                    ? 'bg-emerald-600 text-white shadow-2xs'
+                    : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
                 }`}
               >
-                <div className="mb-0.5">{m.icon}</div>
-                <span className="text-[10px]">{m.label}</span>
+                {fiscalEnabled ? 'NCF ACTIVADO' : 'ACTIVAR NCF'}
               </button>
-            ))}
-          </div>
-        </div>
-
-        {/* NCF / Comprobante Fiscal Selector Block */}
-        <div
-          className={`p-3 rounded-xl border transition-all ${
-            fiscalEnabled
-              ? 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700'
-              : 'bg-slate-100/50 dark:bg-slate-800/20 border-slate-200/50 dark:border-slate-800'
-          } space-y-2 text-xs`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-              <FileText size={14} className={fiscalEnabled ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400'} />
-              Comprobante Fiscal (DGII)
-            </span>
-
-            {/* Toggle Switch */}
-            <button
-              type="button"
-              onClick={() => onToggleFiscal && onToggleFiscal(!fiscalEnabled)}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-extrabold transition-all cursor-pointer ${
-                fiscalEnabled
-                  ? 'bg-indigo-600 text-white shadow-2xs'
-                  : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
-              }`}
-            >
-              <span>{fiscalEnabled ? 'ACTIVADO (NCF)' : 'DESACTIVADO (Sin NCF)'}</span>
-            </button>
+              <ChevronRight
+                size={18}
+                className={`text-slate-400 transition-transform ${showFiscalDetails ? 'rotate-90' : ''}`}
+              />
+            </div>
           </div>
 
-          {fiscalEnabled ? (
-            <>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1 pt-1">
+          {/* Expanded Fiscal Options */}
+          {(showFiscalDetails || fiscalEnabled) && (
+            <div className="p-3.5 pt-0 border-t border-slate-100 dark:border-slate-800 space-y-3 text-xs">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 pt-2">
                 {(['B02', 'B01', 'B15', 'B14'] as NCFType[]).map((t) => (
                   <button
                     key={`ncf-btn-${t}`}
                     type="button"
-                    onClick={() => setNcfType(t)}
-                    className={`py-1.5 px-2 rounded-lg text-[10px] font-bold border transition-all ${
-                      ncfType === t
-                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs'
-                        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100'
+                    onClick={() => {
+                      if (!fiscalEnabled && onToggleFiscal) onToggleFiscal(true);
+                      setNcfType(t);
+                    }}
+                    className={`py-2 px-2 rounded-xl text-[10px] font-bold border transition-all cursor-pointer ${
+                      fiscalEnabled && ncfType === t
+                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
+                        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50'
                     }`}
                   >
                     {t === 'B02' && 'B02 · Consumo'}
@@ -404,37 +737,22 @@ export default function PaymentPanel({
                 ))}
               </div>
 
-              {/* RNC / Cédula & Razón Social inputs when required */}
-              {NCF_TYPES[ncfType].requiresRnc && (
-                <div className="pt-2 border-t border-slate-200 dark:border-slate-700 space-y-2 animate-fadeIn">
+              {fiscalEnabled && NCF_TYPES[ncfType].requiresRnc && (
+                <div className="space-y-2 pt-1 border-t border-slate-100 dark:border-slate-800">
                   <div>
-                    <div className="flex items-center justify-between mb-0.5">
-                      <label className="text-[10px] font-bold text-slate-700 dark:text-slate-300">
-                        RNC / Cédula del Cliente *
-                      </label>
-                      {rncClient && (
-                        <span
-                          className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
-                            validateRNC(rncClient).valid
-                              ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
-                              : 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
-                          }`}
-                        >
-                          {validateRNC(rncClient).message}
-                        </span>
-                      )}
-                    </div>
+                    <label className="text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-1 block">
+                      RNC / Cédula del Cliente *
+                    </label>
                     <input
                       type="text"
                       placeholder="Ej: 131456789 o 00112345678"
                       value={rncClient}
                       onChange={(e) => setRncClient(e.target.value)}
-                      className="input-field text-xs h-8 font-mono"
+                      className="w-full text-xs font-mono h-9 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3"
                     />
                   </div>
-
                   <div>
-                    <label className="text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-0.5 block">
+                    <label className="text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-1 block">
                       Razón Social / Nombre Comercial *
                     </label>
                     <input
@@ -442,151 +760,81 @@ export default function PaymentPanel({
                       placeholder="Nombre oficial registrado en DGII"
                       value={companyName}
                       onChange={(e) => setCompanyName(e.target.value)}
-                      className="input-field text-xs h-8"
+                      className="w-full text-xs h-9 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3"
                     />
                   </div>
                 </div>
               )}
-            </>
-          ) : (
-            <p className="text-[11px] text-slate-400 font-medium py-1">
-              ⚠️ Venta procesada como Factura Simple (Sin Comprobante Fiscal NCF). Haz clic arriba para activar.
-            </p>
+            </div>
           )}
         </div>
-
-        {/* Cash options */}
-        {method === 'cash' && (
-          <div className="space-y-2.5 bg-secondary/30 p-2.5 rounded-xl border border-border">
-            <div>
-              <label className="block text-[11px] font-bold text-foreground mb-1">
-                Dinero Recibido (RD$)
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                placeholder="0.00"
-                value={cashReceived}
-                onChange={(e) => setCashReceived(e.target.value)}
-                className={`input-field text-lg font-black tabular-nums text-center h-10 ${
-                  isCashInsufficient && cashAmount > 0 ? 'border-danger text-danger' : ''
-                }`}
-              />
-            </div>
-
-            {/* Quick cash denomination buttons */}
-            <div>
-              <p className="text-[10px] text-muted-foreground mb-1 font-semibold">Billetes Rápidos</p>
-              <div className="grid grid-cols-3 gap-1">
-                {quickCash.map((v) => (
-                  <button
-                    key={`quick-${v}`}
-                    type="button"
-                    onClick={() => setCashReceived(v.toString())}
-                    className="py-1 text-[11px] font-bold bg-card border border-border hover:bg-primary/10 hover:text-primary rounded transition-colors active:scale-95 tabular-nums"
-                  >
-                    RD$ {v}
-                  </button>
-                ))}
-                <button
-                  type="button"
-                  onClick={() => setCashReceived(String(total))}
-                  className="py-1 text-[10px] font-extrabold bg-primary/15 text-primary border border-primary/30 rounded transition-colors"
-                >
-                  Exacto
-                </button>
-              </div>
-            </div>
-
-            {/* Change display */}
-            <div className="pt-2 border-t border-border/60">
-              <div className={`flex justify-between items-center p-2 rounded-lg font-bold border ${
-                cashAmount >= total && total > 0
-                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400'
-                  : 'bg-card border-border text-muted-foreground'
-              }`}>
-                <span className="text-xs">Devuelta:</span>
-                <span className="text-lg font-black tabular-nums">{fmt(change)}</span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {method === 'split' && (
-          <div className="space-y-2 text-xs">
-            {(
-              [
-                ['cash', 'Efectivo'],
-                ['card', 'Tarjeta'],
-                ['transfer', 'Transferencia'],
-                ['credit', 'Crédito'],
-              ] as const
-            ).map(([key, label]) => (
-              <div key={key}>
-                <label className="block text-[10px] font-bold text-muted-foreground">{label}</label>
-                <input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  placeholder="0.00"
-                  value={split[key]}
-                  onChange={(e) => setSplit((s) => ({ ...s, [key]: e.target.value }))}
-                  className="input-field text-xs h-7 tabular-nums"
-                />
-              </div>
-            ))}
-          </div>
-        )}
-
-        {method === 'card' && (
-          <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 text-center">
-            <CreditCard size={22} className="text-blue-500 mx-auto mb-1" />
-            <p className="text-xs font-bold text-foreground">Pasar tarjeta en verifone</p>
-          </div>
-        )}
-
-        {method === 'transfer' && (
-          <div className="bg-secondary rounded-xl p-2.5 text-xs space-y-1">
-            <p className="font-bold text-muted-foreground text-[10px] uppercase">Transferencia</p>
-            <p className="font-mono text-foreground font-semibold">Banco Popular: 123-456789-0</p>
-          </div>
-        )}
-
-        {method === 'credit' && (
-          <div className="text-xs">
-            {customer ? (
-              <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-2.5 space-y-1">
-                <p className="font-bold text-emerald-600 dark:text-emerald-400">{customer.name}</p>
-                <p className="text-[11px] font-semibold text-muted-foreground">Crédito disponible: {fmt(customer.credit)}</p>
-              </div>
-            ) : (
-              <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-2.5 text-amber-600 dark:text-amber-400 font-bold text-center text-xs">
-                Selecciona cliente primero
-              </div>
-            )}
-          </div>
-        )}
       </div>
 
       {/* Action Footer */}
-      <div className="p-3 border-t border-border flex-shrink-0 bg-secondary/10">
+      <div className="px-6 py-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3 flex-shrink-0 bg-white dark:bg-slate-900">
+        {/* Cancel */}
+        <button
+          type="button"
+          onClick={onClose}
+          className="px-4 py-2.5 rounded-xl text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 font-bold text-xs flex items-center gap-2 transition-all cursor-pointer"
+        >
+          <span>Cancelar</span>
+          <span className="bg-slate-100 dark:bg-slate-800 text-slate-500 text-[10px] px-1.5 py-0.5 rounded font-mono">
+            ESC
+          </span>
+        </button>
+
+        {/* Status Info */}
+        <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300">
+          <Info size={14} className={cashAmount >= total || method !== 'cash' ? 'text-emerald-500' : 'text-amber-500'} />
+          <span>
+            {method !== 'cash'
+              ? 'Listo para procesar'
+              : cashAmount >= total
+                ? 'Falta recibir RD$ 0,00 · El pago está completo'
+                : `Falta recibir ${fmt(total - cashAmount)}`}
+          </span>
+        </div>
+
+        {/* Finalize button */}
         <button
           type="button"
           onClick={handleProcess}
-          disabled={processing || cart.length === 0 || isCashInsufficient}
-          className="w-full btn-primary py-3 text-sm font-black flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
+          disabled={processing || cart.length === 0 || (method === 'cash' && cashAmount < total)}
+          className="px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-extrabold text-xs flex items-center gap-2 shadow-md transition-all active:scale-95 cursor-pointer"
         >
-          {processing ? (
-            <span>Procesando...</span>
-          ) : (
-            <>
-              <CheckCircle size={16} />
-              Finalizar (F9)
-            </>
-          )}
+          <div className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center">
+            <Check size={13} strokeWidth={3} />
+          </div>
+          <span>FINALIZAR (F9)</span>
         </button>
+      </div>
+
+      {/* Keyboard Shortcuts Footer */}
+      <div className="bg-slate-50 dark:bg-slate-900/80 border-t border-slate-200/60 dark:border-slate-800 px-6 py-2 flex items-center justify-between text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+        <div className="flex items-center gap-5">
+          <span className="flex items-center gap-1.5">
+            <span className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 font-mono text-[10px] font-bold">F6</span>
+            Efectivo
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 font-mono text-[10px] font-bold">F7</span>
+            Tarjeta
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 font-mono text-[10px] font-bold">F8</span>
+            Transf.
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 font-mono text-[10px] font-bold">F5</span>
+            Múltiple
+          </span>
+        </div>
+        <span className="flex items-center gap-1.5">
+          <span className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 font-mono text-[10px] font-bold">F9</span>
+          Finalizar
+        </span>
       </div>
     </div>
   );
 }
-

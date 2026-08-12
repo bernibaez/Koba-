@@ -126,8 +126,23 @@ export async function procesarVenta(payload: PayloadVenta): Promise<ResultadoVen
     return { venta_id: id, numero_factura: numero, ncf: payload.ncf ?? null };
   }
 
+  const isUUID = (str: string | null | undefined): boolean =>
+    Boolean(str && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str));
+
+  const sanitizedPayload: PayloadVenta = {
+    ...payload,
+    sucursal_id: isUUID(payload.sucursal_id) ? payload.sucursal_id : null,
+    cajero_id: isUUID(payload.cajero_id) ? payload.cajero_id : null,
+    cliente_id: isUUID(payload.cliente_id) ? payload.cliente_id : null,
+    items: payload.items.map((it) => ({
+      ...it,
+      producto_id: isUUID(it.producto_id) ? it.producto_id : null,
+      combo_id: isUUID(it.combo_id) ? it.combo_id : null,
+    })),
+  };
+
   const sb = getSupabase();
-  const { data, error } = await sb.rpc('procesar_venta_pos', { p_payload: payload });
+  const { data, error } = await sb.rpc('procesar_venta_pos', { p_payload: sanitizedPayload });
   if (error) throw error;
   const resultado = data as ResultadoVenta;
 
