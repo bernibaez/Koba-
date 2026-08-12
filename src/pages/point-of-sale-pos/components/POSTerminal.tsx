@@ -14,6 +14,7 @@ import RegisterDetailsModal from './RegisterDetailsModal';
 import PosCashOpenModal from './PosCashOpenModal';
 import FiscalInvoiceModal from '@/components/FiscalInvoiceModal';
 import { getCashRegister, type CashRegisterId } from '@/lib/cashRegisters';
+import { useCashRegisters } from '@/hooks/useCashRegisters';
 import {
   DELETE_SKU,
   getHeldSales,
@@ -37,6 +38,7 @@ import { initialProducts } from '@/pages/product-management/components/ProductMa
 import { parseScaleBarcode } from '../utils/scaleUtils';
 
 const ADMIN_OWN_CASH: CashRegisterId = '1';
+const DEFAULT_CASHIER_CASH: CashRegisterId = '2';
 
 export interface CartItem {
   id: string;
@@ -66,6 +68,8 @@ export interface Customer {
 export default function POSTerminal() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const isAdminUser = user?.role === 'Administrador';
+  const { registers } = useCashRegisters();
   const [cart, setCart] = useState<CartItem[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [globalDiscount, setGlobalDiscount] = useState(0);
@@ -89,12 +93,24 @@ export default function POSTerminal() {
   };
   const [heldSales, setHeldSales] = useState<HeldSale[]>(() => getHeldSales());
   const [awaitingDeleteScan, setAwaitingDeleteScan] = useState(false);
-  const [activeCashId, setActiveCashId] = useState<CashRegisterId>(ADMIN_OWN_CASH);
+  const [activeCashId, setActiveCashId] = useState<CashRegisterId>(() =>
+    user?.role === 'Administrador' ? ADMIN_OWN_CASH : DEFAULT_CASHIER_CASH
+  );
   const [cashSwitchOpen, setCashSwitchOpen] = useState(false);
   const [openCashModalOpen, setOpenCashModalOpen] = useState(false);
 
-  const activeCash = getCashRegister(activeCashId);
-  const isRemoteAdmin = activeCashId !== ADMIN_OWN_CASH;
+  const activeCashSession = registers.find((c) => c.id === activeCashId);
+  const activeCash = activeCashSession || getCashRegister(activeCashId);
+  const isRemoteAdmin = isAdminUser && !activeCash.isAdminBox;
+
+  useEffect(() => {
+    if (isAdminUser || registers.length === 0) return;
+    const current = registers.find((c) => c.id === activeCashId);
+    if (current?.isAdminBox) {
+      const fallback = registers.find((c) => !c.isAdminBox);
+      if (fallback) setActiveCashId(fallback.id as CashRegisterId);
+    }
+  }, [isAdminUser, registers, activeCashId]);
 
   const refreshHeld = () => setHeldSales(getHeldSales());
 
@@ -887,7 +903,14 @@ export default function POSTerminal() {
       {cashSwitchOpen && (
         <PosCashSwitchModal
           currentId={activeCashId}
-          onSelect={setActiveCashId}
+          onSelect={(id) => {
+            const target = registers.find((c) => c.id === id);
+            if (!isAdminUser && target?.isAdminBox) {
+              toast.error('Solo el administrador puede entrar a la caja principal');
+              return;
+            }
+            setActiveCashId(id);
+          }}
           onClose={() => setCashSwitchOpen(false)}
         />
       )}

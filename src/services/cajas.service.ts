@@ -130,13 +130,55 @@ export type CrearCajaPayload = {
   activa?: boolean;
 };
 
+function isUniqueConflictError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  const e = err as { code?: string; status?: number; message?: string };
+  return (
+    e.code === '23505' ||
+    e.status === 409 ||
+    (typeof e.message === 'string' &&
+      (e.message.toLowerCase().includes('duplicate') ||
+        e.message.toLowerCase().includes('unique') ||
+        e.message.toLowerCase().includes('conflict')))
+  );
+}
+
+/** Siguiente código numérico libre (1, 2, 3...). */
+export async function sugerirSiguienteCodigoCaja(): Promise<string> {
+  const list = await obtenerCajas();
+  const usados = new Set(list.map((c) => c.codigo.trim()));
+  let n = 1;
+  while (usados.has(String(n))) n += 1;
+  return String(n);
+}
+
+async function asegurarUnicaPrincipal(sb: ReturnType<typeof getSupabase>, exceptId?: string) {
+  let query = sb
+    .from('cajas')
+    .update({ es_caja_principal: false, actualizado_en: new Date().toISOString() })
+    .eq('es_caja_principal', true);
+  if (exceptId) query = query.neq('id', exceptId);
+  await query;
+}
+
 export async function crearCaja(payload: CrearCajaPayload): Promise<Caja> {
+  const codigo = payload.codigo.trim();
+  const nombre = payload.nombre.trim();
+  if (!codigo) throw new Error('El código de la caja es obligatorio');
+  if (!nombre) throw new Error('El nombre de la caja es obligatorio');
+
   if (!isSupabaseConfigured()) {
     const list = getLocalCajas();
+    if (list.some((c) => c.codigo === codigo)) {
+      throw new Error(`Ya existe una caja con el código «${codigo}». Usa otro código.`);
+    }
+    if (payload.es_caja_principal) {
+      for (const c of list) c.es_caja_principal = false;
+    }
     const nueva: Caja = {
       id: `caja-${Date.now()}`,
-      codigo: payload.codigo,
-      nombre: payload.nombre,
+      codigo,
+      nombre,
       descripcion: payload.descripcion ?? null,
       sucursal_id: payload.sucursal_id ?? null,
       es_caja_principal: payload.es_caja_principal ?? false,
@@ -150,11 +192,15 @@ export async function crearCaja(payload: CrearCajaPayload): Promise<Caja> {
 
   const sb = getSupabase();
   try {
+    if (payload.es_caja_principal) {
+      await asegurarUnicaPrincipal(sb);
+    }
+
     const { data, error } = await sb
       .from('cajas')
       .insert({
-        codigo: payload.codigo,
-        nombre: payload.nombre,
+        codigo,
+        nombre,
         descripcion: payload.descripcion ?? null,
         sucursal_id: payload.sucursal_id ?? null,
         es_caja_principal: payload.es_caja_principal ?? false,
@@ -164,12 +210,18 @@ export async function crearCaja(payload: CrearCajaPayload): Promise<Caja> {
       .single();
 
     if (error) {
+      if (isUniqueConflictError(error)) {
+        throw new Error(`Ya existe una caja con el código «${codigo}». Usa otro código.`);
+      }
       if (isMissingCajasTableError(error)) {
         const list = getLocalCajas();
+        if (list.some((c) => c.codigo === codigo)) {
+          throw new Error(`Ya existe una caja con el código «${codigo}». Usa otro código.`);
+        }
         const nueva: Caja = {
           id: `caja-${Date.now()}`,
-          codigo: payload.codigo,
-          nombre: payload.nombre,
+          codigo,
+          nombre,
           descripcion: payload.descripcion ?? null,
           sucursal_id: payload.sucursal_id ?? null,
           es_caja_principal: payload.es_caja_principal ?? false,
@@ -184,12 +236,19 @@ export async function crearCaja(payload: CrearCajaPayload): Promise<Caja> {
     }
     return data as Caja;
   } catch (err) {
+    if (err instanceof Error && err.message.includes('Ya existe una caja')) throw err;
+    if (isUniqueConflictError(err)) {
+      throw new Error(`Ya existe una caja con el código «${codigo}». Usa otro código.`);
+    }
     if (isMissingCajasTableError(err)) {
       const list = getLocalCajas();
+      if (list.some((c) => c.codigo === codigo)) {
+        throw new Error(`Ya existe una caja con el código «${codigo}». Usa otro código.`);
+      }
       const nueva: Caja = {
         id: `caja-${Date.now()}`,
-        codigo: payload.codigo,
-        nombre: payload.nombre,
+        codigo,
+        nombre,
         descripcion: payload.descripcion ?? null,
         sucursal_id: payload.sucursal_id ?? null,
         es_caja_principal: payload.es_caja_principal ?? false,
@@ -212,6 +271,13 @@ export async function actualizarCaja(
     const list = getLocalCajas();
     const idx = list.findIndex((c) => c.id === id);
     if (idx === -1) throw new Error('Caja no encontrada');
+    const codigoNuevo = datos.codigo?.trim();
+    if (codigoNuevo && list.some((c) => c.id !== id && c.codigo === codigoNuevo)) {
+      throw new Error(`Ya existe una caja con el código «${codigoNuevo}». Usa otro código.`);
+    }
+    if (datos.es_caja_principal) {
+      for (const c of list) c.es_caja_principal = c.id === id;
+    }
     const actualizada = { ...list[idx], ...datos, actualizado_en: new Date().toISOString() };
     list[idx] = actualizada;
     saveLocalCajas(list);
@@ -220,6 +286,10 @@ export async function actualizarCaja(
 
   const sb = getSupabase();
   try {
+    if (datos.es_caja_principal) {
+      await asegurarUnicaPrincipal(sb, id);
+    }
+
     const { data, error } = await sb
       .from('cajas')
       .update({ ...datos, actualizado_en: new Date().toISOString() })
@@ -228,6 +298,11 @@ export async function actualizarCaja(
       .single();
 
     if (error) {
+      if (isUniqueConflictError(error)) {
+        throw new Error(
+          `Ya existe una caja con el código «${datos.codigo ?? ''}». Usa otro código.`
+        );
+      }
       if (isMissingCajasTableError(error)) {
         const list = getLocalCajas();
         const idx = list.findIndex((c) => c.id === id);
@@ -242,6 +317,12 @@ export async function actualizarCaja(
     }
     return data as Caja;
   } catch (err) {
+    if (err instanceof Error && err.message.includes('Ya existe una caja')) throw err;
+    if (isUniqueConflictError(err)) {
+      throw new Error(
+        `Ya existe una caja con el código «${datos.codigo ?? ''}». Usa otro código.`
+      );
+    }
     if (isMissingCajasTableError(err)) {
       const list = getLocalCajas();
       const idx = list.findIndex((c) => c.id === id);

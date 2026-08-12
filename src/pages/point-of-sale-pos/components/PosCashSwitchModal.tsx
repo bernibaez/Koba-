@@ -16,19 +16,34 @@ export default function PosCashSwitchModal({ currentId, onSelect, onClose }: Pro
   const { user } = useAuth();
   const { registers, refetch } = useCashRegisters();
   const isAdmin = user?.role === 'Administrador';
-  const [openTargetId, setOpenTargetId] = useState<string | null>(null);
 
-  const adminBox = registers.find((c) => c.isAdminBox || c.id === '1') || registers[0];
-  const [selectedBox, setSelectedBox] = useState<CashRegisterSession>(
-    () => registers.find((c) => c.id === currentId) || adminBox
-  );
+  const visibleRegisters = isAdmin
+    ? registers
+    : registers.filter((c) => !c.isAdminBox);
+
+  const adminBox = registers.find((c) => c.isAdminBox) || registers[0];
+  const defaultBox =
+    visibleRegisters.find((c) => c.id === currentId) ||
+    visibleRegisters[0] ||
+    adminBox;
+
+  const [openTargetId, setOpenTargetId] = useState<string | null>(null);
+  const [selectedBox, setSelectedBox] = useState<CashRegisterSession>(() => defaultBox);
 
   useEffect(() => {
-    const matched = registers.find((c) => c.id === selectedBox.id);
-    if (matched) setSelectedBox(matched);
-  }, [registers, selectedBox.id]);
+    const matched = visibleRegisters.find((c) => c.id === selectedBox.id);
+    if (matched) {
+      setSelectedBox(matched);
+      return;
+    }
+    if (visibleRegisters[0]) setSelectedBox(visibleRegisters[0]);
+  }, [registers, selectedBox.id, isAdmin]);
 
   const handleEnterBox = (reg: CashRegisterSession) => {
+    if (!isAdmin && reg.isAdminBox) {
+      toast.error('Solo el administrador puede entrar a la caja principal');
+      return;
+    }
     if (!reg.open) {
       setOpenTargetId(reg.id);
       return;
@@ -164,13 +179,18 @@ export default function PosCashSwitchModal({ currentId, onSelect, onClose }: Pro
                 ¿A cuál caja quieres entrar? (Cajas disponibles)
               </h3>
               <span className="text-xs text-slate-400 font-medium">
-                {registers.length} cajas registradas
+                {visibleRegisters.length} cajas disponibles
               </span>
             </div>
 
             {/* 2x2 Grid of Cash Register Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {registers.map((reg) => {
+              {visibleRegisters.length === 0 ? (
+                <p className="col-span-full text-sm text-slate-500 py-8 text-center">
+                  No hay cajas disponibles para tu perfil.
+                </p>
+              ) : (
+                visibleRegisters.map((reg) => {
                 const isSelected = selectedBox.id === reg.id;
                 const isActiveCurrent = currentId === reg.id;
 
@@ -205,7 +225,7 @@ export default function PosCashSwitchModal({ currentId, onSelect, onClose }: Pro
                             </h4>
                             {reg.isAdminBox && (
                               <span className="text-[10px] font-bold bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-md">
-                                Admin
+                                Principal
                               </span>
                             )}
                           </div>
@@ -264,7 +284,8 @@ export default function PosCashSwitchModal({ currentId, onSelect, onClose }: Pro
                     )}
                   </div>
                 );
-              })}
+              })
+              )}
             </div>
           </div>
         </div>

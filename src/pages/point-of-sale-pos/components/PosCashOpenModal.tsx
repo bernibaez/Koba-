@@ -15,20 +15,31 @@ interface PosCashOpenModalProps {
 }
 
 export default function PosCashOpenModal({
-  initialCajaId = '1',
+  initialCajaId,
   onSuccess,
   onClose,
 }: PosCashOpenModalProps) {
   const { user } = useAuth();
   const { registers, dbUsers } = useCashRegisters();
-  const [selectedCajaId, setSelectedCajaId] = useState(initialCajaId);
+  const isAdmin = user?.role === 'Administrador';
+  const availableRegisters = isAdmin
+    ? registers
+    : registers.filter((c) => !c.isAdminBox);
+
+  const resolvedInitial =
+    initialCajaId &&
+    (isAdmin || availableRegisters.some((c) => c.id === initialCajaId))
+      ? initialCajaId
+      : availableRegisters[0]?.id || registers.find((c) => !c.isAdminBox)?.id || registers[0]?.id || '2';
+
+  const [selectedCajaId, setSelectedCajaId] = useState(resolvedInitial);
   const [selectedCajeroId, setSelectedCajeroId] = useState<string>(user?.id || '');
   const [montoApertura, setMontoApertura] = useState('5000');
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const isAdmin = user?.role === 'Administrador';
-  const selectedCaja = registers.find((c) => c.id === selectedCajaId) || registers[0];
+  const selectedCaja =
+    availableRegisters.find((c) => c.id === selectedCajaId) || availableRegisters[0] || registers[0];
   const selectedUser = isAdmin ? dbUsers.find((u) => u.id === selectedCajeroId) : null;
 
   useEffect(() => {
@@ -37,6 +48,13 @@ export default function PosCashOpenModal({
       if (match) setSelectedCajeroId(match.id);
     }
   }, [isAdmin, dbUsers, user, selectedCajeroId]);
+
+  useEffect(() => {
+    if (!isAdmin && selectedCaja?.isAdminBox) {
+      const first = registers.find((c) => !c.isAdminBox);
+      if (first) setSelectedCajaId(first.id);
+    }
+  }, [isAdmin, registers, selectedCaja?.isAdminBox]);
 
   const handleStart = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -170,7 +188,7 @@ export default function PosCashOpenModal({
               Seleccionar Caja Registradora
             </label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              {registers.map((caja) => {
+              {availableRegisters.map((caja) => {
                 const isSelected = selectedCajaId === caja.id;
                 return (
                   <button
@@ -200,6 +218,11 @@ export default function PosCashOpenModal({
                   </button>
                 );
               })}
+              {availableRegisters.length === 0 && (
+                <p className="col-span-full text-xs text-slate-500 text-center py-4">
+                  No hay cajas disponibles para tu perfil.
+                </p>
+              )}
             </div>
           </div>
 

@@ -46,7 +46,7 @@ export function useCashRegisters() {
       const nextRegisters: CashRegisterSession[] = baseCajasList.map((caja, idx) => {
         const cajaId = (caja.codigo || caja.id) as CashRegisterId;
         const sessionAbierta = abiertasMap.get(cajaId) || abiertasMap.get(caja.id);
-        const isAdminBox = caja.es_caja_principal || caja.codigo === '1';
+        const isAdminBox = Boolean(caja.es_caja_principal);
 
         if (sessionAbierta) {
           const matchedUser = usuarios.find((u) => u.id === sessionAbierta.cajero_id);

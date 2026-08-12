@@ -3,6 +3,7 @@ import AppLayout from '@/components/AppLayout';
 import { Plus, Download, Edit2, Monitor, Trash2, Power, Star, Search, ShieldCheck, X, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useCajas } from '@/hooks/useCajas';
+import { sugerirSiguienteCodigoCaja } from '@/services/cajas.service';
 import { exportTableToPdf } from '@/lib/exportPdf';
 import type { Caja } from '@/types/database';
 import { InlineLoader, TableRowSkeleton } from '@/components/ui/LoadingSkeleton';
@@ -24,16 +25,29 @@ export default function CajasPage() {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
 
-  const openCreate = () => {
+  const openCreate = async () => {
     setEditingCaja(null);
-    const nextNum = cajas.length + 1;
-    setForm({
-      codigo: String(nextNum),
-      nombre: `Caja #${nextNum} - `,
-      descripcion: '',
-      es_caja_principal: cajas.length === 0,
-      activa: true,
-    });
+    try {
+      const nextCode = await sugerirSiguienteCodigoCaja();
+      setForm({
+        codigo: nextCode,
+        nombre: `Caja #${nextCode} - `,
+        descripcion: '',
+        es_caja_principal: cajas.length === 0,
+        activa: true,
+      });
+    } catch {
+      const usados = new Set(cajas.map((c) => c.codigo.trim()));
+      let nextNum = 1;
+      while (usados.has(String(nextNum))) nextNum += 1;
+      setForm({
+        codigo: String(nextNum),
+        nombre: `Caja #${nextNum} - `,
+        descripcion: '',
+        es_caja_principal: cajas.length === 0,
+        activa: true,
+      });
+    }
     setShowForm(true);
   };
 
