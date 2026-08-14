@@ -208,7 +208,7 @@ export interface PaginacionParams {
 }
 
 export const PRODUCTO_COLUMNS =
-  'id, codigo_barras, sku, nombre, categoria, marca, unidad, proveedor_id, precio_costo, precio_venta, precio_mayorista, porcentaje_impuesto, stock_minimo, stock_actual, es_pesado, sale_type, weight_unit, price_per_weight, allow_decimal, min_weight, max_weight, generate_scale_barcode, is_weight_product, fecha_vencimiento, garantia, imagen_url, estado, creado_en, actualizado_en' as const;
+  'id, codigo_barras, sku, plu, nombre, categoria, marca, unidad, proveedor_id, precio_costo, precio_venta, precio_mayorista, porcentaje_impuesto, stock_minimo, stock_actual, es_pesado, sale_type, weight_unit, price_per_weight, allow_decimal, min_weight, max_weight, generate_scale_barcode, is_weight_product, fecha_vencimiento, garantia, imagen_url, estado, creado_en, actualizado_en' as const;
 
 export const COMBO_COLUMNS =
   'id, codigo, codigo_barras, nombre, descripcion, categoria, precio_venta, precio_costo_total, precio_normal, tipo_descuento, valor_descuento, porcentaje_margen, activo, visible_en_pos, permitir_venta_sin_stock, fecha_inicio, fecha_fin, imagen_url, creado_en, actualizado_en' as const;
