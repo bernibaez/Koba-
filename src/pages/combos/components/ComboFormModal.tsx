@@ -14,6 +14,7 @@ import {
   Percent,
   Search,
   CheckCircle2,
+  CheckSquare,
 } from 'lucide-react';
 import { Combo, ComboItem, PricingMode } from '@/lib/comboStore';
 import type { ProductItem } from '@/lib/productStore';
@@ -217,7 +218,7 @@ export default function ComboFormModal({
 
     const updated = [...items, newItem];
     setItems(updated);
-    toast.success(`✓ "${prod.name}" agregado al combo`);
+    toast.success(`"${prod.name}" agregado al combo`);
 
     if (priceInput === 0 && discountType === 'fixed') {
       const newNormal = updated.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
@@ -802,7 +803,9 @@ export default function ComboFormModal({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <label className="flex items-center justify-between p-3 rounded-xl bg-secondary/30 border border-border/60 cursor-pointer">
                 <div>
-                  <span className="text-xs font-extrabold text-foreground block">☑ Activo</span>
+                  <span className="text-xs font-extrabold text-foreground flex items-center gap-1">
+                    <CheckSquare size={14} className="text-emerald-600 dark:text-emerald-400" /> Activo
+                  </span>
                   <span className="text-[11px] text-muted-foreground">Habilitar combo en el sistema</span>
                 </div>
                 <input
@@ -815,7 +818,9 @@ export default function ComboFormModal({
 
               <label className="flex items-center justify-between p-3 rounded-xl bg-secondary/30 border border-border/60 cursor-pointer">
                 <div>
-                  <span className="text-xs font-extrabold text-foreground block">☑ Visible en POS</span>
+                  <span className="text-xs font-extrabold text-foreground flex items-center gap-1">
+                    <CheckSquare size={14} className="text-emerald-600 dark:text-emerald-400" /> Visible en POS
+                  </span>
                   <span className="text-[11px] text-muted-foreground">Mostrar botón en Terminal POS</span>
                 </div>
                 <input
@@ -828,7 +833,9 @@ export default function ComboFormModal({
 
               <label className="flex items-center justify-between p-3 rounded-xl bg-secondary/30 border border-border/60 cursor-pointer">
                 <div>
-                  <span className="text-xs font-extrabold text-foreground block">☑ Permitir venta sin stock</span>
+                  <span className="text-xs font-extrabold text-foreground flex items-center gap-1">
+                    <CheckSquare size={14} className="text-emerald-600 dark:text-emerald-400" /> Permitir venta sin stock
+                  </span>
                   <span className="text-[11px] text-muted-foreground">Permitir vender aun sin existencias</span>
                 </div>
                 <input
@@ -841,7 +848,9 @@ export default function ComboFormModal({
 
               <label className="flex items-center justify-between p-3 rounded-xl bg-secondary/30 border border-border/60 cursor-pointer">
                 <div>
-                  <span className="text-xs font-extrabold text-foreground block">☑ Aplicar ITBIS / Impuestos</span>
+                  <span className="text-xs font-extrabold text-foreground flex items-center gap-1">
+                    <CheckSquare size={14} className="text-emerald-600 dark:text-emerald-400" /> Aplicar ITBIS / Impuestos
+                  </span>
                   <span className="text-[11px] text-muted-foreground">Calcular impuesto en la venta</span>
                 </div>
                 <input
@@ -857,7 +866,9 @@ export default function ComboFormModal({
             <div className="space-y-3 pt-2">
               <label className="flex items-center justify-between p-3 rounded-xl bg-secondary/30 border border-border/60 cursor-pointer">
                 <div>
-                  <span className="text-xs font-extrabold text-foreground block">☑ Disponible en todas las sucursales</span>
+                  <span className="text-xs font-extrabold text-foreground flex items-center gap-1">
+                    <CheckSquare size={14} className="text-emerald-600 dark:text-emerald-400" /> Disponible en todas las sucursales
+                  </span>
                   <span className="text-[11px] text-muted-foreground">Habilita este combo universalmente</span>
                 </div>
                 <input

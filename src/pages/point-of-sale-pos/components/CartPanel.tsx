@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Minus, Plus, Trash2, User, Search, PlusCircle, CreditCard, Info } from 'lucide-react';
+import { Minus, Plus, Trash2, User, Search, PlusCircle, CreditCard, Info, X, Pencil } from 'lucide-react';
 import type { CartItem, Customer } from './POSTerminal';
 import { useClientes } from '@/hooks/useClientes';
 import PosAddCustomerModal from './PosAddCustomerModal';
@@ -166,7 +166,9 @@ export default function CartPanel({
         </div>
         <div className="col-span-3 text-center">Cantidad / Peso</div>
         <div className="col-span-3 text-right">Subtotal</div>
-        <div className="col-span-1 text-center text-red-500">✕</div>
+        <div className="col-span-1 flex items-center justify-center text-red-500">
+          <X size={14} />
+        </div>
       </div>
 
       {/* Table Body: Cart Items List */}
@@ -199,10 +201,11 @@ export default function CartPanel({
                     <button
                       type="button"
                       onClick={() => onEditWeight && onEditWeight(item)}
-                      className="px-2 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 rounded-lg text-xs font-black tabular-nums transition-colors cursor-pointer"
+                      className="px-2 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 rounded-lg text-xs font-black tabular-nums transition-colors cursor-pointer flex items-center gap-1"
                       title="Haz clic para editar el peso"
                     >
-                      {item.qty} {unitLabel} ✍
+                      <span>{item.qty} {unitLabel}</span>
+                      <Pencil size={11} />
                     </button>
                   ) : (
                     <>
@@ -286,14 +289,16 @@ export default function CartPanel({
         </div>
 
         <div className="grid grid-cols-3 gap-2 text-[11px] font-semibold text-slate-500 dark:text-slate-400 pt-2 border-t border-slate-200 dark:border-slate-700">
-          <div>
-            Descuento (i) PUNTOS (-): <span className="font-bold text-slate-800 dark:text-slate-200">✍ 0.00</span>
+          <div className="flex items-center gap-1">
+            <span>Descuento (i) PUNTOS (-):</span>
+            <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-0.5"><Pencil size={10} className="text-muted-foreground inline" /> 0.00</span>
           </div>
           <div>
             ITBIS (18%) desglosado: <span className="font-bold text-slate-800 dark:text-slate-200">RD$ {taxTotal.toFixed(2)}</span>
           </div>
-          <div>
-            Transporte(+): (i) <span className="font-bold text-slate-800 dark:text-slate-200">✍ 0.00</span>
+          <div className="flex items-center gap-1">
+            <span>Transporte(+): (i)</span>
+            <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-0.5"><Pencil size={10} className="text-muted-foreground inline" /> 0.00</span>
           </div>
         </div>
       </div>

@@ -10,6 +10,7 @@ import PrintableInvoice, { type InvoiceItem } from '@/components/PrintableInvoic
 import {
   FileText,
   Printer,
+  Receipt,
   Palette,
   Save,
   CheckCircle,
@@ -167,7 +168,7 @@ export default function InvoiceSettingsTab() {
                   }`}
                 >
                   <p className="text-xs font-extrabold flex items-center gap-1.5">
-                    <span>🎟️</span> Ticket Térmico (80mm)
+                    <Receipt size={14} className="text-indigo-500" /> Ticket Térmico (80mm)
                   </p>
                   <p className="text-[10px] text-muted-foreground mt-0.5">Ideal para POS y cajas de cobro rápido</p>
                 </button>
@@ -185,7 +186,7 @@ export default function InvoiceSettingsTab() {
                   }`}
                 >
                   <p className="text-xs font-extrabold flex items-center gap-1.5">
-                    <span>📄</span> Hoja Completa (Carta / A4)
+                    <FileText size={14} className="text-indigo-500" /> Hoja Completa (Carta / A4)
                   </p>
                   <p className="text-[10px] text-muted-foreground mt-0.5">Ideal para crédito fiscal y facturas B01</p>
                 </button>

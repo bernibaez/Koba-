@@ -12,6 +12,7 @@ import {
   Info,
   Sparkles,
   AlertTriangle,
+  Lightbulb,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { UserRole } from '@/types/roles';
@@ -235,8 +236,9 @@ export default function PermissionsSettingsTab() {
           <p>
             {loadErr}
           </p>
-          <p className="font-medium">
-            💡 <strong>Instrucciones:</strong> Abre tu panel de Supabase → <strong>SQL Editor</strong>, abre o pega el contenido del archivo <code className="bg-amber-500/20 px-1.5 py-0.5 rounded font-mono">supabase/migrations/008_crear_tabla_roles.sql</code> y haz clic en <strong>Run</strong>.
+          <p className="font-medium flex items-center">
+            <Lightbulb size={16} className="text-amber-500 inline mr-1.5 shrink-0" />
+            <span><strong>Instrucciones:</strong> Abre tu panel de Supabase → <strong>SQL Editor</strong>, abre o pega el contenido del archivo <code className="bg-amber-500/20 px-1.5 py-0.5 rounded font-mono">supabase/migrations/008_crear_tabla_roles.sql</code> y haz clic en <strong>Run</strong>.</span>
           </p>
         </div>
       )}

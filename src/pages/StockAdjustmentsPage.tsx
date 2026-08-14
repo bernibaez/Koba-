@@ -196,7 +196,7 @@ export default function StockAdjustmentsPage() {
       );
       refreshData();
       closeBlockForm();
-      toast.success(`✓ Se aplicaron ajustes a ${adjustmentsToApply.length} producto(s) exitosamente`);
+      toast.success(`Se aplicaron ajustes a ${adjustmentsToApply.length} producto(s) exitosamente`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Error al aplicar ajustes');
     }

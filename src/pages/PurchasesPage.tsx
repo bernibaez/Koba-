@@ -374,7 +374,7 @@ export default function PurchasesPage() {
 
     setPurchaseItems((prev) => [...prev, newItem]);
 
-    const noticeText = `✓ ${createdNew ? 'Creado y añadido' : 'Añadido'}: ${product.name} (${modalQty} und) — Compra: RD$ ${itemCostPrice.toLocaleString('es-DO')} | Venta: RD$ ${itemSalePrice.toLocaleString('es-DO')}`;
+    const noticeText = `${createdNew ? 'Creado y añadido' : 'Añadido'}: ${product.name} (${modalQty} und) — Compra: RD$ ${itemCostPrice.toLocaleString('es-DO')} | Venta: RD$ ${itemSalePrice.toLocaleString('es-DO')}`;
     setLastAddedNotice(noticeText);
     toast.success(
       createdNew
@@ -936,7 +936,9 @@ export default function PurchasesPage() {
                     <CheckCircle2 size={18} className="text-emerald-600 flex-shrink-0" />
                     <span>{lastAddedNotice}</span>
                   </div>
-                  <button type="button" onClick={() => setLastAddedNotice(null)} className="text-emerald-700 hover:text-emerald-900 font-black p-1">✕</button>
+                  <button type="button" onClick={() => setLastAddedNotice(null)} className="text-emerald-700 hover:text-emerald-900 font-black p-1 flex items-center justify-center">
+                    <X size={16} />
+                  </button>
                 </div>
               )}
 
@@ -1311,9 +1313,10 @@ export default function PurchasesPage() {
                 <button
                   type="button"
                   onClick={() => setShowProductModal(false)}
-                  className="btn-secondary text-sm px-5 py-3 font-bold"
+                  className="btn-secondary text-sm px-5 py-3 font-bold flex items-center gap-1.5"
                 >
-                  ✓ Listo / Finalizar
+                  <CheckCircle2 size={16} className="text-emerald-600" />
+                  <span>Listo / Finalizar</span>
                 </button>
 
                 <button

@@ -4,7 +4,7 @@ import AppLogo from './ui/AppLogo';
 import {
   LayoutDashboard, ShoppingCart, Package, Users, UserCheck, ShoppingBag, ArrowLeftRight, Sliders,
   BarChart2, Settings, ChevronRight, ChevronDown, Store, FileText, DollarSign, HandCoins, Wallet, Monitor,
-  RotateCcw, Briefcase, Lock, ShieldCheck, Filter, Boxes
+  RotateCcw, Briefcase, Lock, ShieldCheck, Filter, Boxes, X
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { canAccessNav } from '@/lib/auth';
@@ -216,7 +216,7 @@ export default function Sidebar({ collapsed, mobileOpen, onMobileClose, currentP
             className="p-2 rounded-xl text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
             aria-label="Cerrar menú"
           >
-            ✕
+            <X size={20} />
           </button>
         </div>
 
