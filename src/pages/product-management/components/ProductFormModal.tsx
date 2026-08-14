@@ -100,6 +100,7 @@ export default function ProductFormModal({ open, onClose, product, onSave, onPri
       reset({
         barcode: product.barcode,
         sku: product.sku,
+        plu: product.plu || '',
         name: product.name,
         category: product.category,
         brand: product.brand,
@@ -129,6 +130,7 @@ export default function ProductFormModal({ open, onClose, product, onSave, onPri
       reset({
         barcode: '',
         sku: '',
+        plu: '',
         name: '',
         category: 'Granos',
         brand: 'Molinos Modernos',
@@ -275,6 +277,15 @@ export default function ProductFormModal({ open, onClose, product, onSave, onPri
                 {...register('sku', { required: 'El SKU es obligatorio' })}
                 className="input-field font-mono"
                 placeholder="Ej: ARR-SEL-5LB"
+              />
+            </FormField>
+
+            <FormField label="PLU (Balanza)" name="plu" error={errors.plu?.message} hint="Código de balanza conservando ceros (ej. 00132)">
+              <input
+                id="plu"
+                {...register('plu')}
+                className="input-field font-mono"
+                placeholder="Ej: 00132"
               />
             </FormField>
 

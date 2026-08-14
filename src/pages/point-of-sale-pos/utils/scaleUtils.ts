@@ -2,6 +2,7 @@ export interface ScaleProduct {
   productId: string;
   name: string;
   sku: string;
+  plu?: string;
   price: number;
   cost: number;
   tax: number;
@@ -9,9 +10,22 @@ export interface ScaleProduct {
   barcode: string;
   category: string;
   image?: string;
+  isWeightProduct?: boolean;
 }
 
 export const scaleProducts: ScaleProduct[] = [];
+
+let activeScalePrefix = '20';
+
+export function setScalePrefix(prefix: string): void {
+  if (prefix && prefix.trim().length === 2) {
+    activeScalePrefix = prefix.trim();
+  }
+}
+
+export function getScalePrefix(): string {
+  return activeScalePrefix;
+}
 
 export interface ParsedScaleBarcode {
   product: ScaleProduct;
@@ -21,13 +35,107 @@ export interface ParsedScaleBarcode {
   isFromEan13: boolean;
 }
 
+export interface DecodedVariableWeightBarcode {
+  isVariableWeight: boolean;
+  plu: string;
+  weight: number;
+  unit: string;
+  rawBarcode: string;
+  error?: string;
+}
+
+export function validateEan13(code: string): boolean {
+  const clean = code.trim();
+  if (!/^\d{13}$/.test(clean)) return false;
+
+  let sum = 0;
+  for (let i = 0; i < 12; i++) {
+    const digit = parseInt(clean[i], 10);
+    sum += i % 2 === 0 ? digit : digit * 3;
+  }
+  const checkDigit = (10 - (sum % 10)) % 10;
+  return checkDigit === parseInt(clean[12], 10);
+}
+
+export function decodeVariableWeightBarcode(
+  barcode: string,
+  configuredPrefix: string = activeScalePrefix
+): DecodedVariableWeightBarcode {
+  const clean = barcode.trim();
+
+  if (!validateEan13(clean)) {
+    return {
+      isVariableWeight: false,
+      plu: '',
+      weight: 0,
+      unit: 'lb',
+      rawBarcode: clean,
+      error: 'El código de peso no es válido (Fallo de suma de control EAN-13).',
+    };
+  }
+
+  const prefix = clean.substring(0, 2);
+  // Valid prefixes: user configured prefix, or standard in-store 20-29 range
+  const validPrefixes = Array.from(new Set([configuredPrefix, '20', '21', '22', '23', '24', '25', '26', '27', '28', '29']));
+
+  if (!validPrefixes.includes(prefix)) {
+    return {
+      isVariableWeight: false,
+      plu: '',
+      weight: 0,
+      unit: 'lb',
+      rawBarcode: clean,
+      error: `El código no corresponde al prefijo de balanza configurado (${configuredPrefix}).`,
+    };
+  }
+
+  const plu = clean.substring(2, 7); // e.g. "00132" (conserva ceros a la izquierda)
+  const weightRaw = parseInt(clean.substring(7, 12), 10);
+  const weight = Math.round((weightRaw / 1000) * 1000) / 1000;
+
+  return {
+    isVariableWeight: true,
+    plu,
+    weight,
+    unit: 'lb',
+    rawBarcode: clean,
+  };
+}
+
 export function parseScaleBarcode(code: string, catalog?: ScaleProduct[]): ParsedScaleBarcode | null {
   const clean = code.trim().toUpperCase();
   if (!clean) return null;
 
   const productsToSearch = catalog || [];
 
-  // 1. Direct match by barcode or SKU or ID
+  const decoded = decodeVariableWeightBarcode(clean);
+  if (decoded.isVariableWeight) {
+    const plu = decoded.plu;
+    const fullPrefix = clean.substring(0, 7);
+
+    const matchedProduct = productsToSearch.find(
+      (p) =>
+        (p.plu && p.plu === plu) ||
+        p.barcode === plu ||
+        p.barcode === fullPrefix ||
+        p.sku === plu ||
+        p.sku === fullPrefix ||
+        p.sku.toUpperCase().includes(plu) ||
+        (p.barcode && p.barcode.includes(plu))
+    );
+
+    if (matchedProduct) {
+      const total = Math.round(matchedProduct.price * decoded.weight * 100) / 100;
+      return {
+        product: matchedProduct,
+        weight: decoded.weight,
+        price: matchedProduct.price,
+        total,
+        isFromEan13: true,
+      };
+    }
+  }
+
   const directMatch = productsToSearch.find(
     (p) => p.barcode === clean || p.sku.toUpperCase() === clean || p.productId === clean
   );
@@ -35,35 +143,6 @@ export function parseScaleBarcode(code: string, catalog?: ScaleProduct[]): Parse
     const weight = 1.0;
     const total = Math.round(directMatch.price * weight * 100) / 100;
     return { product: directMatch, weight, price: directMatch.price, total, isFromEan13: false };
-  }
-
-  // 2. Check 13-digit EAN scale barcode starting with 20, 21 or 22
-  // Format: 20 + 5 digits item barcode + 5 digits weight (thousandths) + 1 check digit
-  // Example: 2001001015004 -> item "2001001", weight 01500 -> 1.500 lbs
-  if ((clean.startsWith('20') || clean.startsWith('21') || clean.startsWith('22')) && clean.length === 13) {
-    const itemCode = clean.substring(0, 7); // e.g. 2001001
-    const shortCode = clean.substring(2, 7); // e.g. 01001
-    const weightRaw = parseInt(clean.substring(7, 12), 10);
-    const matchedProduct = productsToSearch.find(
-      (p) =>
-        p.barcode === itemCode ||
-        p.barcode === shortCode ||
-        p.barcode === clean.substring(0, 6) ||
-        (p.barcode && clean.includes(p.barcode))
-    );
-
-    if (matchedProduct && !isNaN(weightRaw)) {
-      const weight = weightRaw / 1000;
-      const validWeight = weight > 0 ? weight : 1.0;
-      const total = Math.round(matchedProduct.price * validWeight * 100) / 100;
-      return {
-        product: matchedProduct,
-        weight: validWeight,
-        price: matchedProduct.price,
-        total,
-        isFromEan13: true,
-      };
-    }
   }
 
   return null;

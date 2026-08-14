@@ -115,11 +115,11 @@ export async function procesarVenta(payload: PayloadVenta): Promise<ResultadoVen
 
     saveLocalVentas([venta, ...getLocalVentas()]);
 
-    // Descontar stock local
+    // Descontar stock local (soporta cantidades fraccionarias exactas)
     const { updateProductStockInStore } = await import('@/lib/productStore');
     for (const item of payload.items) {
       if (item.tipo_item === 'producto' && item.producto_id) {
-        updateProductStockInStore(item.producto_id, -Math.ceil(item.cantidad));
+        updateProductStockInStore(item.producto_id, -item.cantidad);
       }
     }
 

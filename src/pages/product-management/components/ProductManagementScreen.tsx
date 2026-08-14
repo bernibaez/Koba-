@@ -17,6 +17,7 @@ export interface Product {
   id: string;
   barcode: string;
   sku: string;
+  plu?: string;
   name: string;
   category: string;
   brand: string;
@@ -56,6 +57,7 @@ export const initialProducts: Product[] = [
   { id: 'prod-010', barcode: '7891001000112', sku: 'JUG-NAR-1L', name: 'Jugo Naranja 1L', category: 'Bebidas', brand: 'Del Valle', unit: 'Unidad', supplier: 'Nestlé Dominicana', costPrice: 105, salePrice: 145, wholesalePrice: 130, tax: 18, minStock: 18, currentStock: 28, image: '', expiryDate: '2026-10-15', warranty: 'N/A', status: 'active', stockStatus: 'normal' },
   { id: 'prod-011', barcode: '7891001100113', sku: 'DET-LIQ-1.5', name: 'Detergente Líq. 1.5L', category: 'Limpieza', brand: 'Fabuloso', unit: 'Unidad', supplier: 'Colgate-Palmolive DO', costPrice: 195, salePrice: 285, wholesalePrice: 255, tax: 18, minStock: 20, currentStock: 6, image: '', expiryDate: null, warranty: 'N/A', status: 'active', stockStatus: 'low' },
   { id: 'prod-012', barcode: '7891001200114', sku: 'YOG-GRI-500', name: 'Yogur Griego 500g', category: 'Lácteos', brand: 'Chobani', unit: 'Unidad', supplier: 'Importadora Pérez', costPrice: 140, salePrice: 195, wholesalePrice: 175, tax: 18, minStock: 15, currentStock: 48, image: '', expiryDate: '2026-07-23', warranty: 'N/A', status: 'active', stockStatus: 'normal' },
+  { id: 'prod-00132', barcode: '00132', sku: 'QUE-CHE-LB', plu: '00132', name: 'Queso Cheddar Balanza /lb', category: 'Lácteos', brand: 'Dos Pinos', unit: 'Libra', supplier: 'Distribuidora El Caribe', costPrice: 28, salePrice: 40, wholesalePrice: 35, tax: 0, minStock: 20, currentStock: 100, image: '', expiryDate: '2027-01-01', warranty: 'N/A', status: 'active', stockStatus: 'normal', isWeightProduct: true, saleType: 'weight', pricePerWeight: 40 },
 ];
 
 export default function ProductManagementScreen() {
