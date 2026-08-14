@@ -1,6 +1,6 @@
 import type { Customer } from '@/pages/point-of-sale-pos/components/POSTerminal';
 
-const STORAGE_KEY = 'marketerp_pos_customers';
+const STORAGE_KEY = 'mercato_pos_customers';
 
 const DEFAULT_CUSTOMERS: Customer[] = [
   { id: 'cust-001', name: 'Rosa Martínez', phone: '809-555-0142', credit: 5000 },

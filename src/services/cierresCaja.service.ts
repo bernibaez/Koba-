@@ -180,3 +180,104 @@ export async function obtenerCajaAbierta(cajaId?: string, cajeroId?: string): Pr
   return (data as CierreCaja) ?? null;
 }
 
+export interface ResumenCajaAbierta {
+  cierre_id?: string;
+  caja_id: string;
+  caja_label: string;
+  cajero_id?: string | null;
+  cajero_nombre?: string;
+  cajero_username?: string;
+  abierta_en: string;
+  monto_apertura: number;
+  total_ventas: number;
+  total_efectivo: number;
+  total_tarjeta: number;
+  total_transferencia: number;
+  total_otros: number;
+  total_entradas: number;
+  total_retiros: number;
+  total_devoluciones: number;
+  monto_esperado: number;
+  estado: string;
+}
+
+export async function calcularResumenCajaAbierta(cajaId: string): Promise<ResumenCajaAbierta> {
+  const abierta = await obtenerCajaAbierta(cajaId);
+  const apertura = abierta?.monto_apertura ?? 0;
+  const totalVentas = abierta?.total_ventas ?? 0;
+  const totalEfectivo = abierta?.total_efectivo ?? 0;
+  const totalTarjeta = abierta?.total_tarjeta ?? 0;
+  const totalTransferencia = abierta?.total_transferencia ?? 0;
+  const totalOtros = 0;
+  const totalEntradas = 0;
+  const totalRetiros = 0;
+  const totalDevoluciones = 0;
+  const montoEsperado = apertura + totalEfectivo + totalEntradas - totalRetiros - totalDevoluciones;
+
+  return {
+    cierre_id: abierta?.id,
+    caja_id: cajaId,
+    caja_label: `Caja #${cajaId}`,
+    cajero_id: abierta?.cajero_id,
+    abierta_en: abierta?.abierta_en || new Date().toISOString(),
+    monto_apertura: apertura,
+    total_ventas: totalVentas,
+    total_efectivo: totalEfectivo,
+    total_tarjeta: totalTarjeta,
+    total_transferencia: totalTransferencia,
+    total_otros: totalOtros,
+    total_entradas: totalEntradas,
+    total_retiros: totalRetiros,
+    total_devoluciones: totalDevoluciones,
+    monto_esperado: montoEsperado,
+    estado: abierta ? 'abierta' : 'en_curso',
+  };
+}
+
+export interface CerrarTurnoInput {
+  cierre_id?: string;
+  caja_id: string;
+  caja_label?: string;
+  cajero_id?: string | null;
+  cajero_nombre?: string;
+  cajero_username?: string;
+  usuario_cierre_id?: string | null;
+  usuario_cierre_nombre?: string;
+  monto_apertura: number;
+  monto_esperado: number;
+  monto_real: number;
+  monto_diferencia: number;
+  total_ventas?: number;
+  total_efectivo?: number;
+  total_tarjeta?: number;
+  total_transferencia?: number;
+  total_otros?: number;
+  total_entradas?: number;
+  total_retiros?: number;
+  total_devoluciones?: number;
+  notes?: string;
+}
+
+export async function cerrarTurnoCaja(input: CerrarTurnoInput): Promise<CierreCaja> {
+  const code = `CR-${Date.now().toString().slice(-6)}`;
+  return guardarCierreCaja({
+    codigo: code,
+    caja_id: input.caja_id,
+    caja_label: input.caja_label,
+    cajero_id: input.cajero_id,
+    cajero_nombre: input.cajero_nombre,
+    cajero_username: input.cajero_username,
+    monto_apertura: input.monto_apertura,
+    monto_esperado: input.monto_esperado,
+    monto_real: input.monto_real,
+    monto_diferencia: input.monto_diferencia,
+    total_ventas: input.total_ventas ?? 0,
+    total_efectivo: input.total_efectivo ?? 0,
+    total_tarjeta: input.total_tarjeta ?? 0,
+    total_transferencia: input.total_transferencia ?? 0,
+    estado: 'cerrada',
+    notes: input.notes,
+  });
+}
+
+

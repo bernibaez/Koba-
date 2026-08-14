@@ -46,7 +46,7 @@ export function isMissingRolesTableError(error: unknown): boolean {
   return false;
 }
 
-const LOCAL_ROLES_KEY = 'marketerp_local_roles';
+const LOCAL_ROLES_KEY = 'mercato_local_roles';
 const ROLE_CODES = ['admin', 'cajero', 'vendedor', 'almacen', 'contable'] as const;
 
 function getInitialLocalRoles(): Rol[] {

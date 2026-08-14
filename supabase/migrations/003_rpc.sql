@@ -1,4 +1,4 @@
--- RPCs transaccionales MarketERP
+-- RPCs transaccionales Mercato
 
 -- Helper: rol del usuario autenticado
 CREATE OR REPLACE FUNCTION obtener_rol_actual()

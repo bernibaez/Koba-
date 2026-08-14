@@ -32,7 +32,7 @@ export interface CotizacionConDetalle extends Cotizacion {
   }[];
 }
 
-const LOCAL_COTIZACIONES_KEY = 'marketerp_cotizaciones_local';
+const LOCAL_COTIZACIONES_KEY = 'mercato_cotizaciones_local';
 
 function getLocalCotizaciones(): CotizacionConDetalle[] {
   try {

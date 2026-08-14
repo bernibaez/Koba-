@@ -1,4 +1,4 @@
-/** Tipos de base de datos MarketERP (columnas en español) */
+/** Tipos de base de datos Mercato (columnas en español) */
 
 export type RolDb = 'admin' | 'super_admin' | 'cajero' | 'almacen' | 'contable' | 'vendedor';
 export type EstadoProducto = 'activo' | 'inactivo' | 'descontinuado';

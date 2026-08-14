@@ -58,7 +58,7 @@ export function PageLoader({ message = 'Cargando…' }: { message?: string }) {
       </div>
       <div className="text-center space-y-1">
         <p className="text-sm font-semibold text-foreground">{message}</p>
-        <p className="text-xs text-muted-foreground">MarketERP</p>
+        <p className="text-xs text-muted-foreground">Mercato</p>
       </div>
     </div>
   );

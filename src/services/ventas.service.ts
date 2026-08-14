@@ -48,8 +48,8 @@ export interface VentaConDetalle extends Venta {
   detalle_ventas?: DetalleVenta[];
 }
 
-const LOCAL_VENTAS_KEY = 'marketerp_ventas_local';
-const LOCAL_DETALLE_KEY = 'marketerp_detalle_ventas_local';
+const LOCAL_VENTAS_KEY = 'mercato_ventas_local';
+const LOCAL_DETALLE_KEY = 'mercato_detalle_ventas_local';
 
 function getLocalVentas(): VentaConDetalle[] {
   try {

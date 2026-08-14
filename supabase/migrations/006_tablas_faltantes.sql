@@ -1,4 +1,4 @@
--- MarketERP — Tablas faltantes para módulos ERP completos
+-- Mercato — Tablas faltantes para módulos ERP completos
 -- Ejecutar después de 001–005
 
 -- ============================================================

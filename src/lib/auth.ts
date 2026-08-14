@@ -25,7 +25,7 @@ export const AUTH_ACCOUNTS: AuthAccount[] = [
     id: '1',
     username: 'admin',
     name: 'Admin General',
-    email: 'admin@marketerp.do',
+    email: 'admin@mercato.do',
     password: 'admin123',
     role: 'Administrador',
     status: 'active',
@@ -36,7 +36,7 @@ export const AUTH_ACCOUNTS: AuthAccount[] = [
     id: '2',
     username: 'maria',
     name: 'María García',
-    email: 'maria@marketerp.do',
+    email: 'maria@mercato.do',
     password: 'maria123',
     role: 'Cajero',
     status: 'active',
@@ -47,7 +47,7 @@ export const AUTH_ACCOUNTS: AuthAccount[] = [
     id: '3',
     username: 'carlos',
     name: 'Carlos López',
-    email: 'carlos@marketerp.do',
+    email: 'carlos@mercato.do',
     password: 'carlos123',
     role: 'Vendedor',
     status: 'active',
@@ -58,7 +58,7 @@ export const AUTH_ACCOUNTS: AuthAccount[] = [
     id: '4',
     username: 'ana',
     name: 'Ana Martínez',
-    email: 'ana@marketerp.do',
+    email: 'ana@mercato.do',
     password: 'ana123',
     role: 'Almacenista',
     status: 'inactive',
@@ -69,7 +69,7 @@ export const AUTH_ACCOUNTS: AuthAccount[] = [
     id: '5',
     username: 'pedro',
     name: 'Pedro Sánchez',
-    email: 'pedro@marketerp.do',
+    email: 'pedro@mercato.do',
     password: 'pedro123',
     role: 'Contador',
     status: 'active',
@@ -125,7 +125,7 @@ export const ROLE_HOME: Record<UserRole, string> = {
   Contador: '/reports',
 };
 
-const STORAGE_KEY = 'marketerp_auth_user';
+const STORAGE_KEY = 'mercato_auth_user';
 
 function toPublicUser(account: AuthAccount): AuthUser {
   const { password: _, ...user } = account;

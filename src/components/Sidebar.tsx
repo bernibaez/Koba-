@@ -98,7 +98,7 @@ export default function Sidebar({ collapsed, mobileOpen, onMobileClose, currentP
           <AppLogo size={36} />
           {!collapsed && (
             <span className="font-extrabold text-xl text-foreground tracking-tight">
-              MarketERP
+              Mercato
             </span>
           )}
         </div>
@@ -209,7 +209,7 @@ export default function Sidebar({ collapsed, mobileOpen, onMobileClose, currentP
         <div className="flex items-center justify-between h-20 px-5 border-b border-border flex-shrink-0">
           <div className="flex items-center gap-3">
             <AppLogo size={36} />
-            <span className="font-extrabold text-xl text-foreground tracking-tight">MarketERP</span>
+            <span className="font-extrabold text-xl text-foreground tracking-tight">Mercato</span>
           </div>
           <button
             onClick={onMobileClose}

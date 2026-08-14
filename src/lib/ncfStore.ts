@@ -77,8 +77,8 @@ export interface FiscalInvoiceRecord {
 }
 
 const STORAGE_KEYS = {
-  ranges: 'marketerp_ncf_ranges',
-  history: 'marketerp_fiscal_invoices',
+  ranges: 'mercato_ncf_ranges',
+  history: 'mercato_fiscal_invoices',
 };
 
 const DEFAULT_RANGES: NCFRange[] = [

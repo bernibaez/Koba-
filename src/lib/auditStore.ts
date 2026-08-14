@@ -27,7 +27,7 @@ export type AuditLog = {
   ip: string;
 };
 
-const STORAGE_KEY = 'marketerp_audit_logs';
+const STORAGE_KEY = 'mercato_audit_logs';
 
 /** Solo logs reales locales (sin seed demo). */
 export function getAuditLogsLocal(): AuditLog[] {

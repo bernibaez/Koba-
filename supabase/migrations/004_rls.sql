@@ -1,4 +1,4 @@
--- Row Level Security MarketERP
+-- Row Level Security Mercato
 
 ALTER TABLE perfiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE sucursales ENABLE ROW LEVEL SECURITY;

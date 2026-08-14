@@ -36,7 +36,7 @@ export type CashClosure = {
   notes?: string;
 };
 
-const STORAGE_KEY = 'marketerp_cash_closures';
+const STORAGE_KEY = 'mercato_cash_closures';
 
 const INITIAL_CLOSURES: CashClosure[] = [];
 

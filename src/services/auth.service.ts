@@ -74,7 +74,7 @@ export async function iniciarSesion(
   }
 
   const input = usuarioOEmail.trim();
-  const email = input.includes('@') ? input.toLowerCase() : `${input.toLowerCase()}@marketerp.do`;
+  const email = input.includes('@') ? input.toLowerCase() : `${input.toLowerCase()}@mercato.do`;
 
   const { data, error } = await sb.auth.signInWithPassword({ email, password });
   if (error || !data.user) {

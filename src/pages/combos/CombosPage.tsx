@@ -141,8 +141,8 @@ export default function CombosPage() {
   const handleExportPDF = () => {
     exportTableToPdf({
       title: 'Reporte Oficial de Combos y Ofertas Combinadas',
-      subtitle: 'MarketERP - Catálogo de combos vigentes y descontables en POS',
-      filename: 'combos-marketerp.pdf',
+      subtitle: 'Mercato - Catálogo de combos vigentes y descontables en POS',
+      filename: 'combos-mercato.pdf',
       landscape: true,
       headers: [
         'Código',

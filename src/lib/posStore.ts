@@ -81,11 +81,11 @@ export type ScaleDevice = {
 };
 
 const KEYS = {
-  held: 'marketerp_held_sales',
-  returns: 'marketerp_pos_returns',
-  expenses: 'marketerp_pos_expenses',
-  maleta: 'marketerp_maleta_cuts',
-  scales: 'marketerp_scales',
+  held: 'mercato_held_sales',
+  returns: 'mercato_pos_returns',
+  expenses: 'mercato_pos_expenses',
+  maleta: 'mercato_maleta_cuts',
+  scales: 'mercato_scales',
 };
 
 function read<T>(key: string, fallback: T): T {

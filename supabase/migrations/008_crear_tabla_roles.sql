@@ -1,4 +1,4 @@
--- MarketERP — Migración para crear la tabla de roles
+-- Mercato — Migración para crear la tabla de roles
 -- Ejecutar completo en: Supabase Dashboard → SQL Editor → New query → Run
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";

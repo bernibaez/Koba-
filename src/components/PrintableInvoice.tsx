@@ -236,7 +236,7 @@ export default function PrintableInvoice({
             <p className="text-[8px] text-slate-500">{settings.termsAndConditions}</p>
           )}
           <p className="text-[8px] pt-1 text-slate-400 border-t border-slate-200">
-            Software de Gestión MarketERP
+            Software de Gestión Mercato
           </p>
         </div>
       </div>

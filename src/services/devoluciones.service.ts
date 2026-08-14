@@ -39,7 +39,7 @@ export interface DevolucionConDetalle extends Devolucion {
   }[];
 }
 
-const LOCAL_DEVOLUCIONES_KEY = 'marketerp_devoluciones_local';
+const LOCAL_DEVOLUCIONES_KEY = 'mercato_devoluciones_local';
 
 function getLocalDevoluciones(): DevolucionConDetalle[] {
   try {

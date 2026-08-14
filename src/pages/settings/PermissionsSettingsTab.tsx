@@ -90,8 +90,8 @@ export default function PermissionsSettingsTab() {
     setLoadError(null);
     // Limpia caché local antigua de permisos simulados
     try {
-      localStorage.removeItem('marketerp_permissions_matrix');
-      localStorage.removeItem('market_erp_local_roles');
+      localStorage.removeItem('mercato_permissions_matrix');
+      localStorage.removeItem('mercato_local_roles');
     } catch {
       /* ignore */
     }

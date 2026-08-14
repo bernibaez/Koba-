@@ -1,4 +1,4 @@
--- MarketERP — Esquema inicial (100% español)
+-- Mercato — Esquema inicial (100% español)
 -- Ejecutar en el SQL Editor de Supabase o vía CLI
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";

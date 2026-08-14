@@ -1,7 +1,7 @@
 import { getSupabase, isSupabaseConfigured, tryGetSupabase } from './clienteSupabase';
 import { CAJA_COLUMNS, type Caja } from '@/types/database';
 
-const LOCAL_CAJAS_KEY = 'marketerp_local_cajas';
+const LOCAL_CAJAS_KEY = 'mercato_local_cajas';
 
 export const CAJAS_DEFAULT: Caja[] = [
   {

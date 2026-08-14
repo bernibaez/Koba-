@@ -1,4 +1,4 @@
-# MarketERP
+# Mercato
 
 ERP/POS de supermercado (Vite + React) con integración a **Supabase / PostgreSQL**.
 

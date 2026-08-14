@@ -1,7 +1,7 @@
 import { isSupabaseConfigured } from '@/services/clienteSupabase';
 
-const LOGO_STORAGE_KEY = 'marketerp_company_logo';
-const LOGO_CHANGE_EVENT = 'marketerp-logo-change';
+const LOGO_STORAGE_KEY = 'mercato_company_logo';
+const LOGO_CHANGE_EVENT = 'mercato-logo-change';
 
 const MAX_BYTES = 2 * 1024 * 1024; // 2MB
 const ACCEPTED = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/svg+xml'];

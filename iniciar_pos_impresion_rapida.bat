@@ -1,7 +1,7 @@
 @echo off
-title Iniciar MarketERP POS - Impresion Rapida Silenciosa
+title Iniciar Mercato POS - Impresion Rapida Silenciosa
 echo ======================================================================
-echo           MARKETERP POS - IMPRESION SILENCIOSA KIOSK MODE
+echo           MERCATO POS - IMPRESION SILENCIOSA KIOSK MODE
 echo ======================================================================
 echo.
 echo Abriendo navegador con configuracion de Impresion Rapida Silenciosa.

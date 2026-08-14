@@ -1,4 +1,4 @@
--- Seed opcional MarketERP
+-- Seed opcional Mercato
 -- 1) Ejecutar migraciones 001–004
 -- 2) Crear el primer admin (elige UNA opción)
 
@@ -10,7 +10,7 @@
 -- VALUES (
 --   '<uuid-del-auth-user>',
 --   'Admin General',
---   'admin@marketerp.do',
+--   'admin@mercato.do',
 --   'admin',
 --   TRUE
 -- );

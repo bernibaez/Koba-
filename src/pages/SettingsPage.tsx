@@ -38,7 +38,7 @@ export default function SettingsPage() {
   const [logoError, setLogoError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [empresaNombre, setEmpresaNombre] = useState('MarketERP Supermercado');
+  const [empresaNombre, setEmpresaNombre] = useState('Mercato Supermercado');
   const [empresaRnc, setEmpresaRnc] = useState('');
   const [empresaTelefono, setEmpresaTelefono] = useState('');
   const [empresaCorreo, setEmpresaCorreo] = useState('');
@@ -50,7 +50,7 @@ export default function SettingsPage() {
   const [loadingSucursales, setLoadingSucursales] = useState(false);
   const [notifPrefs, setNotifPrefs] = useState<Record<string, boolean>>(() => {
     try {
-      const raw = localStorage.getItem('marketerp_notif_prefs');
+      const raw = localStorage.getItem('mercato_notif_prefs');
       if (raw) return JSON.parse(raw) as Record<string, boolean>;
     } catch {
       /* ignore */
@@ -417,7 +417,7 @@ export default function SettingsPage() {
                           setNotifPrefs((prev) => {
                             const next = { ...prev, [n.key]: !Boolean(prev[n.key]) };
                             try {
-                              localStorage.setItem('marketerp_notif_prefs', JSON.stringify(next));
+                              localStorage.setItem('mercato_notif_prefs', JSON.stringify(next));
                             } catch {
                               /* ignore */
                             }

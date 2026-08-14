@@ -63,8 +63,8 @@ export interface ComboSaleRecord {
   items: { productId: string; name: string; qty: number }[];
 }
 
-const COMBOS_KEY = 'marketerp_combos_list';
-const COMBO_SALES_KEY = 'marketerp_combo_sales_history';
+const COMBOS_KEY = 'mercato_combos_list';
+const COMBO_SALES_KEY = 'mercato_combo_sales_history';
 
 export const DEFAULT_COMBOS: Combo[] = [
   {

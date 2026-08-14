@@ -17,7 +17,7 @@ export interface StockAdjustmentItem {
   responsible: string;
 }
 
-const STORAGE_KEY = 'marketerp_stock_adjustments';
+const STORAGE_KEY = 'mercato_stock_adjustments';
 
 export const INITIAL_ADJUSTMENTS: StockAdjustmentItem[] = [];
 

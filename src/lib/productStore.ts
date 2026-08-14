@@ -3,7 +3,7 @@ import { isSupabaseConfigured } from '@/services/clienteSupabase';
 
 export type ProductItem = PMProduct;
 
-const STORAGE_KEY = 'marketerp_products_store';
+const STORAGE_KEY = 'mercato_products_store';
 
 export function getStoredProducts(): ProductItem[] {
   // Con Supabase activo no devolvemos catálogo demo local.

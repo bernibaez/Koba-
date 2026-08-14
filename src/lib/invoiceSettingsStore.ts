@@ -22,7 +22,7 @@ export interface InvoiceSettings {
   dgiiNotice: string;
 }
 
-const INVOICE_SETTINGS_KEY = 'marketerp_invoice_settings';
+const INVOICE_SETTINGS_KEY = 'mercato_invoice_settings';
 
 export const DEFAULT_INVOICE_SETTINGS: InvoiceSettings = {
   companyName: 'SUPERMERCADO MERCATO S.R.L.',
