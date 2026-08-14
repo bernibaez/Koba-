@@ -393,7 +393,7 @@ export async function obtenerMatrizPermisos(): Promise<PermissionsMatrix> {
   try {
     await sincronizarRolesPorDefecto();
     const roles = await obtenerRoles();
-    const matrix = emptyPermissionsMatrix();
+    const matrix = buildDefaultMatrix();
 
     for (const rol of roles) {
       const ui = ROL_DB_A_UI[rol.codigo as keyof typeof ROL_DB_A_UI] || rol.nombre;

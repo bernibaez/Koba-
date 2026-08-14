@@ -91,7 +91,7 @@ const ALL_ROUTES = '*';
 /** Rutas permitidas por rol (`*` = todas) */
 export const ROLE_ROUTES: Record<UserRole, string[] | typeof ALL_ROUTES> = {
   Administrador: ALL_ROUTES,
-  Cajero: ['/point-of-sale-pos', '/cash-closure'],
+  Cajero: ['/point-of-sale-pos', '/cash-closure', '/sales'],
   Vendedor: ['/', '/sales', '/point-of-sale-pos', '/combos', '/contacts', '/accounts-receivable', '/cash-closure', '/settings'],
   Almacenista: [
     '/',

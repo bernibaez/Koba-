@@ -16,6 +16,8 @@ export function useVentas(params: {
   fechaInicio?: string;
   fechaFin?: string;
   busqueda?: string;
+  cajeroId?: string;
+  cajaId?: string;
 } = {}) {
   const [ventas, setVentas] = useState<VentaConDetalle[]>([]);
   const [total, setTotal] = useState(0);
@@ -42,7 +44,15 @@ export function useVentas(params: {
     } finally {
       if (!ac.signal.aborted) setLoading(false);
     }
-  }, [params.pagina, params.limite, params.fechaInicio, params.fechaFin, params.busqueda]);
+  }, [
+    params.pagina,
+    params.limite,
+    params.fechaInicio,
+    params.fechaFin,
+    params.busqueda,
+    params.cajeroId,
+    params.cajaId,
+  ]);
 
   useEffect(() => {
     refetch();

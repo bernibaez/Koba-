@@ -45,6 +45,8 @@ import {
   obtenerDetalleCotizacion,
   type CotizacionConDetalle,
 } from '@/services/cotizaciones.service';
+import { useAuth } from '@/context/AuthContext';
+import { hasPermission } from '@/lib/permissionsStore';
 
 type Tab = 'sales' | 'quotes' | 'returns';
 
@@ -81,11 +83,20 @@ interface CartItem {
 }
 
 export default function SalesPage() {
+  const { user } = useAuth();
   const [searchParams] = useSearchParams();
   const [tab, setTab] = useState<Tab>('sales');
   const [search, setSearch] = useState(() => searchParams.get('q') ?? '');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+
+  const isAdmin = user?.role === 'Administrador';
+  const canSeeAllSales = isAdmin || user?.role === 'Contador';
+  const canEditSales = hasPermission(user?.role ?? 'Cajero', 'ventas', 'editar');
+  const canDeleteSales = hasPermission(user?.role ?? 'Cajero', 'ventas', 'eliminar');
+  const canCreateSales = hasPermission(user?.role ?? 'Cajero', 'ventas', 'crear');
+  const canExportSales = hasPermission(user?.role ?? 'Cajero', 'ventas', 'exportar');
+  const ownCajeroId = !canSeeAllSales ? user?.id : undefined;
 
   useEffect(() => {
     const q = searchParams.get('q');
@@ -136,12 +147,13 @@ export default function SalesPage() {
   }, [search, dateFrom, dateTo, tab]);
 
   // Supabase hooks
-  const { ventas, total: totalVentas, loading: loadingVentas, cobrar, obtenerDetalle, anular, actualizar } = useVentas({
+  const { ventas, total: totalVentas, loading: loadingVentas, error: errorVentas, cobrar, obtenerDetalle, anular, actualizar } = useVentas({
     pagina: page,
     limite: limit,
     busqueda: search,
     fechaInicio: dateFrom || undefined,
     fechaFin: dateTo || undefined,
+    cajeroId: ownCajeroId,
   });
 
   const {
@@ -242,6 +254,10 @@ export default function SalesPage() {
   // Void Sale
   const handleConfirmAnular = async () => {
     if (!anulandoSale) return;
+    if (!canDeleteSales) {
+      toast.error('Solo un administrador puede anular o eliminar facturas');
+      return;
+    }
     try {
       await anular(anulandoSale.id, anularMotivo);
       toast.success(`Factura ${anulandoSale.numero_factura} anulada exitosamente`);
@@ -253,6 +269,10 @@ export default function SalesPage() {
 
   // Open Edit Sale Modal
   const handleOpenEditSale = (s: VentaConDetalle) => {
+    if (!canEditSales) {
+      toast.error('Solo un administrador puede editar facturas');
+      return;
+    }
     setEditingSale(s);
     setEditCustomerId(s.cliente_id || '');
     setEditPaymentMethod(s.metodo_pago || 'efectivo');
@@ -266,6 +286,10 @@ export default function SalesPage() {
   const handleSaveEditSale = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingSale) return;
+    if (!canEditSales) {
+      toast.error('Solo un administrador puede editar facturas');
+      return;
+    }
     try {
       await actualizar(editingSale.id, {
         cliente_id: editCustomerId || null,
@@ -916,22 +940,28 @@ export default function SalesPage() {
               Módulo de Ventas y Gestión Comercial
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Control de ventas, facturación con ITBIS 18% transparentado, cotizaciones y devoluciones con Supabase
+              {canSeeAllSales
+                ? 'Control de ventas, facturación con ITBIS 18% transparentado, cotizaciones y devoluciones'
+                : 'Consulta las ventas que realizaste. Editar o anular requiere permiso de administrador'}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={() => setShowAddQuoteForm(true)}
-              className="btn-secondary flex items-center gap-1.5 text-xs font-semibold"
-            >
-              <FileText size={15} /> Nueva Cotización
-            </button>
-            <button
-              onClick={() => setShowAddSaleForm(true)}
-              className="btn-primary flex items-center gap-2 font-bold shadow-md"
-            >
-              <Plus size={16} /> Nueva Venta
-            </button>
+            {canCreateSales && (
+              <button
+                onClick={() => setShowAddQuoteForm(true)}
+                className="btn-secondary flex items-center gap-1.5 text-xs font-semibold"
+              >
+                <FileText size={15} /> Nueva Cotización
+              </button>
+            )}
+            {canCreateSales && (
+              <button
+                onClick={() => setShowAddSaleForm(true)}
+                className="btn-primary flex items-center gap-2 font-bold shadow-md"
+              >
+                <Plus size={16} /> Nueva Venta
+              </button>
+            )}
           </div>
         </div>
 
@@ -1030,20 +1060,24 @@ export default function SalesPage() {
               registro(s)
             </span>
             <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={handleExportPdf}
-                className="btn-secondary flex items-center gap-1.5 text-xs font-semibold"
-              >
-                <Download size={14} /> PDF
-              </button>
-              <button
-                type="button"
-                onClick={handleExportExcel}
-                className="btn-secondary flex items-center gap-1.5 text-xs font-semibold"
-              >
-                <FileSpreadsheet size={14} /> Excel
-              </button>
+              {canExportSales && (
+                <button
+                  type="button"
+                  onClick={handleExportPdf}
+                  className="btn-secondary flex items-center gap-1.5 text-xs font-semibold"
+                >
+                  <Download size={14} /> PDF
+                </button>
+              )}
+              {canExportSales && (
+                <button
+                  type="button"
+                  onClick={handleExportExcel}
+                  className="btn-secondary flex items-center gap-1.5 text-xs font-semibold"
+                >
+                  <FileSpreadsheet size={14} /> Excel
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -1051,6 +1085,16 @@ export default function SalesPage() {
         {/* TAB 1: TODAS LAS VENTAS */}
         {tab === 'sales' && (
           <div className="card overflow-hidden border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-xs">
+            {errorVentas && (
+              <div className="px-5 py-3 bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 text-xs font-semibold border-b border-rose-200 dark:border-rose-900">
+                {errorVentas}
+              </div>
+            )}
+            {!canSeeAllSales && (
+              <div className="px-5 py-2.5 bg-slate-50 dark:bg-slate-900/50 text-slate-600 dark:text-slate-400 text-xs font-medium border-b border-slate-200 dark:border-slate-800">
+                Mostrando solo tus ventas. Para editar o anular una factura, solicita permiso a un administrador.
+              </div>
+            )}
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -1241,17 +1285,19 @@ export default function SalesPage() {
                                         <Eye size={15} className="text-emerald-600" />
                                         <span>Ver Detalle</span>
                                       </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setOpenActionsId(null);
-                                          handleOpenEditSale(s);
-                                        }}
-                                        className="w-full text-left px-3.5 py-2 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2.5 font-semibold transition-colors cursor-pointer"
-                                      >
-                                        <Edit size={15} className="text-amber-500" />
-                                        <span>Editar Factura</span>
-                                      </button>
+                                      {canEditSales && (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setOpenActionsId(null);
+                                            handleOpenEditSale(s);
+                                          }}
+                                          className="w-full text-left px-3.5 py-2 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2.5 font-semibold transition-colors cursor-pointer"
+                                        >
+                                          <Edit size={15} className="text-amber-500" />
+                                          <span>Editar Factura</span>
+                                        </button>
+                                      )}
                                       <button
                                         type="button"
                                         onClick={() => {
@@ -1264,7 +1310,7 @@ export default function SalesPage() {
                                         <span>Imprimir Factura</span>
                                       </button>
                                     </div>
-                                    {s.estado !== 'anulada' && (
+                                    {canDeleteSales && s.estado !== 'anulada' && (
                                       <div className="py-1">
                                         <button
                                           type="button"

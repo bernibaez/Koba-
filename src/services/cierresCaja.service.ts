@@ -204,11 +204,35 @@ export interface ResumenCajaAbierta {
 export async function calcularResumenCajaAbierta(cajaId: string): Promise<ResumenCajaAbierta> {
   const abierta = await obtenerCajaAbierta(cajaId);
   const apertura = abierta?.monto_apertura ?? 0;
-  const totalVentas = abierta?.total_ventas ?? 0;
-  const totalEfectivo = abierta?.total_efectivo ?? 0;
-  const totalTarjeta = abierta?.total_tarjeta ?? 0;
-  const totalTransferencia = abierta?.total_transferencia ?? 0;
-  const totalOtros = 0;
+  const desde = abierta?.abierta_en || new Date().toISOString().slice(0, 10);
+
+  let totalVentas = 0;
+  let totalEfectivo = 0;
+  let totalTarjeta = 0;
+  let totalTransferencia = 0;
+  let totalOtros = 0;
+
+  try {
+    const { obtenerVentasTurno } = await import('./ventas.service');
+    const ventas = await obtenerVentasTurno({
+      cajaId,
+      desde,
+      limite: 500,
+    });
+    for (const v of ventas) {
+      totalVentas += Number(v.monto_total) || 0;
+      totalEfectivo += Number(v.monto_efectivo) || 0;
+      totalTarjeta += Number(v.monto_tarjeta) || 0;
+      totalTransferencia += Number(v.monto_transferencia) || 0;
+      totalOtros += Number(v.monto_credito) || 0;
+    }
+  } catch {
+    totalVentas = abierta?.total_ventas ?? 0;
+    totalEfectivo = abierta?.total_efectivo ?? 0;
+    totalTarjeta = abierta?.total_tarjeta ?? 0;
+    totalTransferencia = abierta?.total_transferencia ?? 0;
+  }
+
   const totalEntradas = 0;
   const totalRetiros = 0;
   const totalDevoluciones = 0;
@@ -219,6 +243,8 @@ export async function calcularResumenCajaAbierta(cajaId: string): Promise<Resume
     caja_id: cajaId,
     caja_label: `Caja #${cajaId}`,
     cajero_id: abierta?.cajero_id,
+    cajero_nombre: (abierta as CierreCaja & { cajero_nombre?: string })?.cajero_nombre,
+    cajero_username: (abierta as CierreCaja & { cajero_username?: string })?.cajero_username,
     abierta_en: abierta?.abierta_en || new Date().toISOString(),
     monto_apertura: apertura,
     total_ventas: totalVentas,

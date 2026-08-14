@@ -211,25 +211,30 @@ export function buildDefaultMatrix(): PermissionsMatrix {
   }
 
   const cajero = empty();
-  for (const id of ['pos', 'cierre_caja']) {
-    const mod = PERMISSION_MODULES.find((m) => m.id === id)!;
+  for (const id of ['pos', 'cierre_caja', 'ventas']) {
+    const mod = PERMISSION_MODULES.find((m) => m.id === id);
+    if (!mod) continue;
     cajero[id] = {
       ...Object.fromEntries(mod.actions.map((a) => [a, false])),
       ver: true,
+      // Cajero vende en POS; en Ventas solo consulta su historial (sin editar/anular).
       crear: id === 'pos' || id === 'cierre_caja',
       editar: id === 'pos',
+      exportar: id === 'ventas',
       aprobar: id === 'cierre_caja',
     };
   }
 
   const vendedor = empty();
   for (const id of ['dashboard', 'ventas', 'pos', 'combos', 'contactos', 'cxc', 'cierre_caja', 'configuracion']) {
-    const mod = PERMISSION_MODULES.find((m) => m.id === id)!;
+    const mod = PERMISSION_MODULES.find((m) => m.id === id);
+    if (!mod) continue;
     vendedor[id] = {
       ...Object.fromEntries(mod.actions.map((a) => [a, false])),
       ver: true,
       crear: ['ventas', 'pos', 'contactos', 'cxc'].includes(id),
-      editar: ['ventas', 'contactos', 'cxc'].includes(id),
+      // Editar/anular facturas solo con permiso de Administrador (matriz o rol admin).
+      editar: ['contactos', 'cxc'].includes(id),
       exportar: ['ventas', 'cxc'].includes(id),
     };
   }
@@ -241,15 +246,16 @@ export function buildDefaultMatrix(): PermissionsMatrix {
     'combos',
     'transferencias',
     'ajustes_stock',
-    'balanzas',
+    'cajas',
     'compras',
     'configuracion',
   ]) {
-    const mod = PERMISSION_MODULES.find((m) => m.id === id)!;
+    const mod = PERMISSION_MODULES.find((m) => m.id === id);
+    if (!mod) continue;
     almacen[id] = {
       ...Object.fromEntries(mod.actions.map((a) => [a, false])),
       ver: true,
-      crear: !['dashboard', 'configuracion', 'balanzas'].includes(id),
+      crear: !['dashboard', 'configuracion', 'cajas'].includes(id),
       editar: !['dashboard', 'configuracion'].includes(id),
       eliminar: ['productos', 'combos'].includes(id),
       aprobar: ['transferencias', 'ajustes_stock', 'compras'].includes(id),
@@ -270,7 +276,8 @@ export function buildDefaultMatrix(): PermissionsMatrix {
     'auditoria',
     'configuracion',
   ]) {
-    const mod = PERMISSION_MODULES.find((m) => m.id === id)!;
+    const mod = PERMISSION_MODULES.find((m) => m.id === id);
+    if (!mod) continue;
     contador[id] = {
       ...Object.fromEntries(mod.actions.map((a) => [a, false])),
       ver: true,
@@ -300,12 +307,12 @@ export const ROLE_META: Record<
     accent: 'border-emerald-500/40',
   },
   Cajero: {
-    description: 'Acceso exclusivo al Punto de Venta (POS) y Cierre de Caja',
+    description: 'POS, consulta de sus ventas y cierre de caja (sin editar/anular facturas)',
     color: 'bg-sky-500/15 text-sky-700 dark:text-sky-400',
     accent: 'border-sky-500/40',
   },
   Vendedor: {
-    description: 'Ventas, clientes y cuentas por cobrar',
+    description: 'Ventas propias, clientes y CxC (editar/anular facturas solo con permiso admin)',
     color: 'bg-amber-500/15 text-amber-700 dark:text-amber-400',
     accent: 'border-amber-500/40',
   },
