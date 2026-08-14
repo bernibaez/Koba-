@@ -174,7 +174,8 @@ export async function obtenerProductos(params: ProductosFiltro = {}): Promise<Pr
         (p) =>
           p.nombre.toLowerCase().includes(q) ||
           p.sku.toLowerCase().includes(q) ||
-          p.codigo_barras.toLowerCase().includes(q)
+          p.codigo_barras.toLowerCase().includes(q) ||
+          (p.plu && p.plu.toLowerCase().includes(q))
       );
     }
     if (params.categoria && params.categoria !== 'Todas') {
@@ -195,7 +196,7 @@ export async function obtenerProductos(params: ProductosFiltro = {}): Promise<Pr
 
   const q = params.busqueda?.trim() ? sanitizarBusquedaPostgrest(params.busqueda) : '';
   if (q) {
-    query = query.or(`nombre.ilike.%${q}%,sku.ilike.%${q}%,codigo_barras.ilike.%${q}%`);
+    query = query.or(`nombre.ilike.%${q}%,sku.ilike.%${q}%,codigo_barras.ilike.%${q}%,plu.ilike.%${q}%`);
   }
   if (params.categoria && params.categoria !== 'Todas') {
     query = query.eq('categoria', params.categoria);

@@ -197,21 +197,30 @@ export default function WeightProductForm({
             </div>
 
             {/* Scale Barcode Toggle */}
-            <div className="flex items-center justify-between p-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-              <div className="flex items-center gap-2">
-                <Barcode size={16} className="text-emerald-600 dark:text-emerald-400" />
+            <div className="sm:col-span-2 flex items-center justify-between p-3.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-2xs">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-600 dark:text-emerald-400 flex-shrink-0">
+                  <Scale size={16} />
+                </div>
                 <div>
-                  <span className="font-bold text-xs block text-slate-800 dark:text-slate-200">
-                    Código para Balanza
+                  <span className="font-bold text-xs block text-slate-900 dark:text-white flex items-center gap-1.5">
+                    Producto de Balanza
+                    {values.generateScaleBarcode && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+                        EAN-13 / PLU
+                      </span>
+                    )}
                   </span>
-                  <span className="text-[10px] text-slate-400">EAN-13 automático</span>
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Este producto utiliza etiquetas EAN-13 generadas por una balanza para identificar automáticamente el PLU y el peso.
+                  </span>
                 </div>
               </div>
               <input
                 type="checkbox"
                 checked={values.generateScaleBarcode}
                 onChange={(e) => onChange({ generateScaleBarcode: e.target.checked })}
-                className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500"
+                className="w-5 h-5 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer flex-shrink-0"
               />
             </div>
           </div>

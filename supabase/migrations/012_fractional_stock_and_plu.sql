@@ -1,19 +1,38 @@
 -- Migración 012: Soporte para inventario fraccionario (NUMERIC) y columna PLU independiente para balanza
 -- Fecha: 2026-08-14
 
--- 1. Alterar stock_actual y stock_minimo a NUMERIC(12,3) para permitir decimales (ej. 97.954 lb)
+-- 1. Eliminar temporalmente la vista dependiente alertas_stock para permitir alterar la columna stock_actual
+DROP VIEW IF EXISTS alertas_stock CASCADE;
+
+-- 2. Alterar stock_actual y stock_minimo a NUMERIC(12,3) para permitir decimales (ej. 97.954 lb)
 ALTER TABLE productos 
   ALTER COLUMN stock_actual TYPE NUMERIC(12, 3) USING stock_actual::NUMERIC(12, 3),
   ALTER COLUMN stock_minimo TYPE NUMERIC(12, 3) USING stock_minimo::NUMERIC(12, 3);
 
--- 2. Agregar columna PLU independiente conservando ceros a la izquierda (ej. "00132")
+-- 3. Recrear la vista alertas_stock preservando la consulta de alertas con el nuevo tipo NUMERIC
+CREATE OR REPLACE VIEW alertas_stock AS
+SELECT
+    id,
+    sku,
+    nombre,
+    stock_actual,
+    stock_minimo,
+    CASE
+        WHEN stock_actual = 0 THEN 'agotado'
+        WHEN stock_actual <= stock_minimo THEN 'bajo'
+        ELSE 'normal'
+    END AS nivel_alerta
+FROM productos
+WHERE estado = 'activo' AND stock_actual <= stock_minimo;
+
+-- 4. Agregar columna PLU independiente conservando ceros a la izquierda (ej. "00132")
 ALTER TABLE productos 
   ADD COLUMN IF NOT EXISTS plu TEXT;
 
--- 3. Crear índice para acelerar la búsqueda por PLU de balanza en POS
+-- 5. Crear índice para acelerar la búsqueda por PLU de balanza en POS
 CREATE INDEX IF NOT EXISTS idx_productos_plu ON productos(plu);
 
--- 4. Actualizar procedimiento procesar_venta_pos para descontar inventario fraccionario sin ceil()
+-- 6. Actualizar procedimiento procesar_venta_pos para descontar inventario fraccionario sin ceil()
 CREATE OR REPLACE FUNCTION procesar_venta_pos(p_payload JSONB)
 RETURNS JSONB
 LANGUAGE plpgsql
