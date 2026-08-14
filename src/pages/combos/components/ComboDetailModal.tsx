@@ -1,7 +1,7 @@
 import React from 'react';
-import { X, Layers, Calendar, Store, CheckCircle, PackageCheck } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { X, Layers, Package } from 'lucide-react';
 import { Combo } from '@/lib/comboStore';
-import CategoryIcon from '@/components/ui/CategoryIcon';
 
 interface ComboDetailModalProps {
   combo: Combo | null;
@@ -18,171 +18,157 @@ export default function ComboDetailModal({
 }: ComboDetailModalProps) {
   if (!isOpen || !combo) return null;
 
-  const formatCurrency = (val: number) => `RD$ ${val.toLocaleString('es-DO', { minimumFractionDigits: 2 })}`;
+  const formatCurrency = (val: number) =>
+    `RD$ ${val.toLocaleString('es-DO', { minimumFractionDigits: 2 })}`;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-      <div className="bg-card w-full max-w-2xl rounded-3xl border border-border/80 shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-border/80 bg-secondary/30">
-          <div className="flex items-center gap-3">
-            <CategoryIcon category={combo.category} name={combo.name} isCombo size="lg" />
-            <div>
-              <h2 className="text-lg font-black text-foreground">{combo.name}</h2>
-              <div className="flex items-center gap-2 mt-0.5">
-                <span className="font-mono text-xs font-bold text-muted-foreground">{combo.code}</span>
-                <span className="text-xs font-semibold px-2 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20">
-                  {combo.category}
-                </span>
-              </div>
-            </div>
+  const costVal = combo.totalCost ?? combo.items.reduce((s, i) => s + (i.costPrice || 0) * i.quantity, 0);
+  const profitVal = combo.price - costVal;
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center p-4 sm:p-8 overflow-y-auto bg-black/50 backdrop-blur-[2px]"
+      onClick={onClose}
+    >
+      <div
+        className="card w-full max-w-xl my-auto max-h-[90vh] overflow-y-auto p-6 space-y-4 shadow-2xl border-primary/20"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-border pb-3">
+          <div>
+            <h3 className="font-bold text-foreground text-lg flex items-center gap-2">
+              <Layers className="text-primary" size={20} />
+              Detalle de Combo
+            </h3>
+            <p className="text-xs text-muted-foreground font-mono mt-0.5">
+              {combo.code}
+              {combo.barcode ? ` · ${combo.barcode}` : ''}
+            </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-xl text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+            className="p-1 text-muted-foreground hover:text-foreground"
           >
-            <X size={20} />
+            <X size={18} />
           </button>
         </div>
 
-        {/* Body */}
-        <div className="p-6 space-y-6 overflow-y-auto max-h-[75vh] scrollbar-thin">
-          {/* Summary Badges */}
-          {(() => {
-            const costVal = combo.totalCost ?? combo.items.reduce((s, i) => s + (i.costPrice || 0) * i.quantity, 0);
-            const profitVal = combo.price - costVal;
-            return (
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-center">
-                <div className="p-3 bg-secondary/40 rounded-xl border border-border/60">
-                  <span className="text-[10px] font-bold text-muted-foreground block uppercase">Precio Costo</span>
-                  <span className="text-sm font-black text-foreground">{formatCurrency(costVal)}</span>
-                </div>
-                <div className="p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
-                  <span className="text-[10px] font-bold text-emerald-600 block uppercase">Precio Venta</span>
-                  <span className="text-sm font-black text-emerald-600">{formatCurrency(combo.price)}</span>
-                </div>
-                <div className="p-3 bg-secondary/40 rounded-xl border border-border/60">
-                  <span className="text-[10px] font-bold text-muted-foreground block uppercase">Precio Normal</span>
-                  <span className="text-xs font-extrabold line-through text-muted-foreground">
-                    {formatCurrency(combo.normalPrice)}
-                  </span>
-                </div>
-                <div className="p-3 bg-purple-500/10 rounded-xl border border-purple-500/20">
-                  <span className="text-[10px] font-bold text-purple-600 block uppercase">Ganancia Neta</span>
-                  <span className="text-xs font-black text-purple-600">{formatCurrency(profitVal)} ({combo.marginPercent.toFixed(1)}%)</span>
-                </div>
-                <div className="p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
-                  <span className="text-[10px] font-bold text-emerald-600 block uppercase">Ahorro Cliente</span>
-                  <span className="text-xs font-black text-emerald-600">
-                    {formatCurrency(combo.savingsAmount)} (-{combo.savingsPercent.toFixed(1)}%)
-                  </span>
-                </div>
-              </div>
-            );
-          })()}
-
-          {/* Description */}
-          {combo.description && (
-            <div className="p-3.5 bg-secondary/30 rounded-xl border border-border/60">
-              <span className="text-xs font-bold text-muted-foreground block mb-1">Descripción:</span>
-              <p className="text-xs text-foreground font-medium">{combo.description}</p>
+        <div className="space-y-3 text-xs">
+          <div className="grid grid-cols-2 gap-2 bg-secondary/30 rounded-xl p-3">
+            <div>
+              <span className="text-muted-foreground block">Nombre:</span>
+              <span className="font-bold text-foreground">{combo.name}</span>
             </div>
-          )}
-
-          {/* Component Products Table */}
-          <div className="space-y-2">
-            <h3 className="text-xs font-black uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-              <PackageCheck size={16} className="text-primary" /> Productos Componentes ({combo.items.length})
-            </h3>
-            <div className="overflow-x-auto rounded-xl border border-border/70">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-secondary/60 text-muted-foreground font-black uppercase">
-                  <tr>
-                    <th className="p-2.5">Producto</th>
-                    <th className="p-2.5">SKU</th>
-                    <th className="p-2.5 text-center">Cantidad</th>
-                    <th className="p-2.5 text-center">Stock Actual</th>
-                    <th className="p-2.5 text-right">Costo Unit.</th>
-                    <th className="p-2.5 text-right">Venta Unit.</th>
-                    <th className="p-2.5 text-right">Subtotal Costo</th>
-                    <th className="p-2.5 text-right">Subtotal Venta</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/60">
-                  {combo.items.map((item) => {
-                    return (
-                      <tr key={item.id}>
-                        <td className="p-2.5 font-bold text-foreground">{item.name || 'Producto'}</td>
-                        <td className="p-2.5 font-mono text-muted-foreground">{item.sku || '—'}</td>
-                        <td className="p-2.5 text-center font-extrabold text-primary">{item.quantity} unds</td>
-                        <td className="p-2.5 text-center font-bold text-muted-foreground">—</td>
-                        <td className="p-2.5 text-right font-semibold text-muted-foreground">RD$ {item.costPrice.toFixed(2)}</td>
-                        <td className="p-2.5 text-right font-semibold text-emerald-600 dark:text-emerald-400">RD$ {item.unitPrice.toFixed(2)}</td>
-                        <td className="p-2.5 text-right font-bold text-slate-600 dark:text-slate-300">RD$ {(item.costPrice * item.quantity).toFixed(2)}</td>
-                        <td className="p-2.5 text-right font-black text-foreground">RD$ {item.subtotal.toFixed(2)}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+            <div>
+              <span className="text-muted-foreground block">Categoría:</span>
+              <span className="font-semibold text-foreground">{combo.category}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground block">Estado:</span>
+              <span className={combo.active ? 'text-emerald-600 font-bold' : 'text-rose-600 font-bold'}>
+                {combo.active ? 'Activo' : 'Inactivo'}
+              </span>
+            </div>
+            <div>
+              <span className="text-muted-foreground block">Vigencia:</span>
+              <span>
+                {combo.startDate || '—'} → {combo.endDate || '—'}
+              </span>
+            </div>
+            <div>
+              <span className="text-muted-foreground block">Visible en POS:</span>
+              <span>{combo.visibleInPos ? 'Sí' : 'No'}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground block">Sucursales:</span>
+              <span>{combo.allBranches ? 'Todas' : combo.branches.join(', ') || '—'}</span>
             </div>
           </div>
 
-          {/* Settings & Validity Details */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-            <div className="p-4 bg-card rounded-xl border border-border/80 space-y-2">
-              <span className="font-extrabold text-foreground block border-b border-border/60 pb-1">
-                Configuración
-              </span>
-              <div className="space-y-1.5 text-muted-foreground font-medium">
-                <p>• Visible en POS: <strong className="text-foreground">{combo.visibleInPos ? 'Sí' : 'No'}</strong></p>
-                <p>• Venta sin stock: <strong className="text-foreground">{combo.allowSaleWithoutStock ? 'Permitida' : 'Bloqueada'}</strong></p>
-                <p>• Aplicar Impuestos: <strong className="text-foreground">{combo.applyTax ? 'Sí (ITBIS)' : 'No'}</strong></p>
-              </div>
+          {combo.description ? (
+            <div className="bg-secondary/20 rounded-xl p-3">
+              <span className="text-muted-foreground block mb-1">Descripción:</span>
+              <p className="text-foreground font-medium">{combo.description}</p>
             </div>
+          ) : null}
 
-            <div className="p-4 bg-card rounded-xl border border-border/80 space-y-2">
-              <span className="font-extrabold text-foreground block border-b border-border/60 pb-1">
-                Vigencia & Sucursales
+          <div className="space-y-1">
+            <p className="font-bold text-muted-foreground uppercase text-[10px] tracking-wider flex items-center gap-1.5">
+              <Package size={12} /> Componentes ({combo.items.length})
+            </p>
+            <div className="bg-secondary/40 rounded-xl p-3 max-h-40 overflow-y-auto space-y-2">
+              {combo.items.map((item) => (
+                <div
+                  key={item.id}
+                  className="flex justify-between items-center border-b border-border/40 pb-1.5 last:border-none"
+                >
+                  <div>
+                    <span className="font-semibold text-foreground">{item.name || 'Producto'}</span>
+                    <span className="text-[11px] text-muted-foreground block font-mono">
+                      {item.quantity}x @ {formatCurrency(item.unitPrice)}
+                      {item.sku ? ` · ${item.sku}` : ''}
+                    </span>
+                  </div>
+                  <span className="font-bold font-mono text-foreground">
+                    {formatCurrency(item.subtotal)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="border-t border-border pt-3 space-y-1.5">
+            <p className="font-bold uppercase tracking-wider text-muted-foreground text-[10px]">
+              Precios y margen
+            </p>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Costo componentes:</span>
+              <span className="font-mono">{formatCurrency(costVal)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Precio normal:</span>
+              <span className="font-mono line-through text-muted-foreground">
+                {formatCurrency(combo.normalPrice)}
               </span>
-              <div className="space-y-1.5 text-muted-foreground font-medium">
-                <p>• Rango: <strong className="text-foreground">{combo.startDate} - {combo.endDate}</strong></p>
-                <p>• Horario: <strong className="text-foreground">{combo.startTime} a {combo.endTime}</strong></p>
-                <p>• Sucursales: <strong className="text-foreground">{combo.allBranches ? 'Todas' : combo.branches.join(', ')}</strong></p>
-              </div>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Ahorro cliente:</span>
+              <span className="font-mono text-emerald-600">
+                {formatCurrency(combo.savingsAmount)} (−{combo.savingsPercent.toFixed(1)}%)
+              </span>
+            </div>
+            <div className="flex justify-between font-semibold">
+              <span className="text-muted-foreground">Ganancia:</span>
+              <span className="font-mono text-emerald-600 dark:text-emerald-400 font-bold">
+                {formatCurrency(profitVal)} ({combo.marginPercent.toFixed(1)}%)
+              </span>
+            </div>
+            <div className="flex justify-between border-t border-border pt-2 text-sm font-bold">
+              <span className="text-foreground">Precio de venta:</span>
+              <span className="font-mono text-foreground">{formatCurrency(combo.price)}</span>
             </div>
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-between p-4 border-t border-border/80 bg-card">
-          <span className="text-xs text-muted-foreground font-semibold">
-            Ventas registradas: <strong className="text-foreground">{combo.salesCount || 0} veces</strong>
-          </span>
-          <div className="flex items-center gap-2">
-            {onEdit && (
-              <button
-                type="button"
-                onClick={() => {
-                  onClose();
-                  onEdit(combo);
-                }}
-                className="btn-primary text-xs font-bold px-4 py-2"
-              >
-                Editar Combo
-              </button>
-            )}
+        <div className="flex justify-end gap-2 pt-2 border-t border-border">
+          {onEdit && (
             <button
               type="button"
-              onClick={onClose}
-              className="btn-secondary text-xs font-bold px-4 py-2"
+              onClick={() => {
+                onClose();
+                onEdit(combo);
+              }}
+              className="btn-secondary text-xs py-2"
             >
-              Cerrar
+              Editar Combo
             </button>
-          </div>
+          )}
+          <button type="button" onClick={onClose} className="btn-primary text-xs py-2">
+            Cerrar
+          </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

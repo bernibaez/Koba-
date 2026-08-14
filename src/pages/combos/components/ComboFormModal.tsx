@@ -301,20 +301,16 @@ export default function ComboFormModal({
   if (!isOpen) return null;
 
   return (
-    <div className="space-y-6 slide-up">
+    <div className="space-y-6">
       <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-primary/10 text-primary rounded-xl">
-            <Layers size={22} />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">
-              {editingCombo ? 'Editar Combo' : 'Crear Nuevo Combo'}
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Configura los productos componentes, precios y vigencia del combo
-            </p>
-          </div>
+        <div>
+          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+            <Layers className="text-primary" size={26} />
+            {editingCombo ? 'Editar Combo' : 'Nuevo Combo'}
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Configura los productos componentes, precios y vigencia del combo
+          </p>
         </div>
         <button type="button" onClick={onClose} className="btn-secondary">
           ← Volver a Combos
@@ -323,12 +319,10 @@ export default function ComboFormModal({
 
       <form onSubmit={handleSubmit} className="space-y-6">
           {/* CARD 1: INFORMACIÓN GENERAL */}
-          <div className="bg-card rounded-2xl border border-border/80 p-5 space-y-4 shadow-xs">
-            <div className="flex items-center gap-2 border-b border-border/60 pb-3">
+          <div className="card p-5 space-y-4">
+            <div className="flex items-center gap-2 border-b border-border pb-3">
               <Info size={18} className="text-primary" />
-              <h3 className="text-sm font-black text-foreground uppercase tracking-wide">
-                1. Información General
-              </h3>
+              <h3 className="font-semibold text-foreground">1. Información General</h3>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -434,13 +428,11 @@ export default function ComboFormModal({
           </div>
 
           {/* CARD 2: PRODUCTOS DEL COMBO */}
-          <div className="bg-card rounded-2xl border border-border/80 p-5 space-y-4 shadow-xs">
-            <div className="flex items-center justify-between border-b border-border/60 pb-3">
+          <div className="card p-5 space-y-4">
+            <div className="flex items-center justify-between border-b border-border pb-3">
               <div className="flex items-center gap-2">
                 <Package size={18} className="text-primary" />
-                <h3 className="text-sm font-black text-foreground uppercase tracking-wide">
-                  2. Productos del Combo
-                </h3>
+                <h3 className="font-semibold text-foreground">2. Productos del Combo</h3>
               </div>
               <span className="text-xs font-bold text-muted-foreground bg-secondary px-2.5 py-1 rounded-lg">
                 {items.length} Componente{items.length === 1 ? '' : 's'}
@@ -633,12 +625,10 @@ export default function ComboFormModal({
           </div>
 
           {/* CARD 3: PRECIO Y DESCUENTO */}
-          <div className="bg-card rounded-2xl border border-border/80 p-5 space-y-4 shadow-xs">
-            <div className="flex items-center gap-2 border-b border-border/60 pb-3">
+          <div className="card p-5 space-y-4">
+            <div className="flex items-center gap-2 border-b border-border pb-3">
               <DollarSign size={18} className="text-primary" />
-              <h3 className="text-sm font-black text-foreground uppercase tracking-wide">
-                3. Precio de Costo, Precio de Venta y Margen del Combo
-              </h3>
+              <h3 className="font-semibold text-foreground">3. Precio y Margen</h3>
             </div>
 
             {/* Pricing Mode Selector */}
@@ -792,12 +782,10 @@ export default function ComboFormModal({
           </div>
 
           {/* CARD 4: CONFIGURACIÓN */}
-          <div className="bg-card rounded-2xl border border-border/80 p-5 space-y-4 shadow-xs">
-            <div className="flex items-center gap-2 border-b border-border/60 pb-3">
+          <div className="card p-5 space-y-4">
+            <div className="flex items-center gap-2 border-b border-border pb-3">
               <Store size={18} className="text-primary" />
-              <h3 className="text-sm font-black text-foreground uppercase tracking-wide">
-                4. Configuración & Sucursales
-              </h3>
+              <h3 className="font-semibold text-foreground">4. Configuración & Sucursales</h3>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -907,12 +895,10 @@ export default function ComboFormModal({
           </div>
 
           {/* CARD 5: VIGENCIA */}
-          <div className="bg-card rounded-2xl border border-border/80 p-5 space-y-4 shadow-xs">
-            <div className="flex items-center gap-2 border-b border-border/60 pb-3">
+          <div className="card p-5 space-y-4">
+            <div className="flex items-center gap-2 border-b border-border pb-3">
               <Calendar size={18} className="text-primary" />
-              <h3 className="text-sm font-black text-foreground uppercase tracking-wide">
-                5. Vigencia y Horario
-              </h3>
+              <h3 className="font-semibold text-foreground">5. Vigencia y Horario</h3>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
