@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Minus, Plus, Trash2, User, Search, PlusCircle, CreditCard, Info, X, Pencil } from 'lucide-react';
+import { Minus, Plus, Trash2, User, Search, PlusCircle, CreditCard, Info, X, Pencil, Scale } from 'lucide-react';
 import type { CartItem, Customer } from './POSTerminal';
 import { useClientes } from '@/hooks/useClientes';
 import PosAddCustomerModal from './PosAddCustomerModal';
@@ -12,6 +12,7 @@ interface CartPanelProps {
   onUpdateDiscount: (id: string, discount: number) => void;
   onRemove: (id: string) => void;
   onEditWeight?: (item: CartItem) => void;
+  onOpenWeightScan?: () => void;
   globalDiscount: number;
   onSetGlobalDiscount: (d: number) => void;
   subtotal: number;
@@ -33,6 +34,7 @@ export default function CartPanel({
   onUpdateQty,
   onRemove,
   onEditWeight,
+  onOpenWeightScan,
   taxTotal,
   total,
   fiscalEnabled = false,
@@ -126,11 +128,11 @@ export default function CartPanel({
           </div>
           <button
             type="button"
-            onClick={() => onSearchSubmit && searchQuery.trim() && onSearchSubmit(searchQuery)}
+            onClick={() => onOpenWeightScan && onOpenWeightScan()}
             className="w-10 h-10 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center font-bold flex-shrink-0 transition-colors shadow-2xs"
-            title="Agregar producto escaneado / buscado"
+            title="Escanear producto pesado"
           >
-            <PlusCircle size={18} />
+            <Scale size={18} />
           </button>
         </div>
       </div>

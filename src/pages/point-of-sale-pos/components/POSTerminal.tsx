@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { RefreshCw, Banknote, CreditCard, XCircle, Pause, CheckCircle, FileText, ShoppingBag } from 'lucide-react';
 import POSHeader from './POSHeader';
@@ -36,6 +36,7 @@ import { useProductos } from '@/hooks/useProductos';
 import { useCombos } from '@/hooks/useCombos';
 import { initialProducts } from '@/pages/product-management/components/ProductManagementScreen';
 import { parseScaleBarcode } from '../utils/scaleUtils';
+import PosWeightScanModal from './PosWeightScanModal';
 
 const ADMIN_OWN_CASH: CashRegisterId = '1';
 const DEFAULT_CASHIER_CASH: CashRegisterId = '2';
@@ -98,6 +99,7 @@ export default function POSTerminal() {
   );
   const [cashSwitchOpen, setCashSwitchOpen] = useState(false);
   const [openCashModalOpen, setOpenCashModalOpen] = useState(false);
+  const [weightScanOpen, setWeightScanOpen] = useState(false);
 
   const activeCashSession = registers.find((c) => c.id === activeCashId);
   const activeCash = activeCashSession || getCashRegister(activeCashId);
@@ -243,6 +245,70 @@ export default function POSTerminal() {
 
   const { productosUi } = useProductos({ pagina: 1, limite: 500, estado: 'todos' });
   const { combos } = useCombos(true);
+
+  const realScaleCatalog = useMemo(() => {
+    const storeProducts = productosUi.map((p) => ({
+      id: p.id,
+      sku: p.sku,
+      barcode: p.barcode || '',
+      name: p.name,
+      price: p.salePrice,
+      cost: p.costPrice,
+      stock: p.currentStock,
+      unit: p.unit,
+      tax: p.tax,
+      image: p.image,
+      outOfStock: p.stockStatus === 'out',
+      isWeighted:
+        p.isWeightProduct ||
+        p.saleType === 'weight' ||
+        p.saleType === 'both' ||
+        p.unit.toLowerCase().includes('lb') ||
+        p.unit.toLowerCase().includes('kg'),
+      saleType: p.saleType,
+    }));
+
+    const storeSkus = new Set(storeProducts.map((p) => p.sku.toLowerCase()));
+    const demoExtras = initialProducts
+      .filter((ip) => !storeSkus.has(ip.sku.toLowerCase()))
+      .map((ip) => ({
+        id: ip.id,
+        sku: ip.sku,
+        barcode: ip.barcode || '',
+        name: ip.name,
+        price: ip.salePrice,
+        cost: ip.costPrice,
+        stock: ip.currentStock,
+        unit: ip.unit,
+        tax: ip.tax,
+        image: ip.image,
+        outOfStock: ip.stockStatus === 'out',
+        isWeighted:
+          ip.isWeightProduct ||
+          ip.saleType === 'weight' ||
+          ip.saleType === 'both' ||
+          ip.unit.toLowerCase().includes('lb') ||
+          ip.unit.toLowerCase().includes('kg'),
+        saleType: ip.saleType,
+      }));
+
+    const allProds = [...storeProducts, ...demoExtras];
+
+    return allProds.map((p) => ({
+      productId: p.id,
+      name: p.name,
+      sku: p.sku,
+      plu: (p as any).plu || '',
+      price: p.price,
+      cost: p.cost,
+      tax: p.tax,
+      unit: p.unit || 'lb',
+      barcode: p.barcode || '',
+      category: '',
+      image: p.image,
+      isWeightProduct: p.isWeighted,
+    }));
+  }, [productosUi]);
 
   const handleSearchSubmit = useCallback(
     (rawQuery: string) => {
@@ -675,6 +741,7 @@ export default function POSTerminal() {
             onUpdateDiscount={updateDiscount}
             onRemove={removeFromCart}
             onEditWeight={(item) => handleOpenScale(item.productId, item.qty)}
+            onOpenWeightScan={() => setWeightScanOpen(true)}
             globalDiscount={globalDiscount}
             onSetGlobalDiscount={setGlobalDiscount}
             subtotal={subtotal}
@@ -946,6 +1013,29 @@ export default function POSTerminal() {
             activeCash.open = true;
           }}
           onClose={() => setOpenCashModalOpen(false)}
+        />
+      )}
+      {weightScanOpen && (
+        <PosWeightScanModal
+          catalog={realScaleCatalog}
+          onConfirm={(matchedProduct, weight) => {
+            addToCart(
+              {
+                id: `cart-${matchedProduct.productId}-${Date.now()}`,
+                productId: matchedProduct.productId,
+                name: matchedProduct.name,
+                sku: matchedProduct.sku,
+                price: matchedProduct.price,
+                cost: matchedProduct.cost,
+                tax: matchedProduct.tax,
+                image: matchedProduct.image || '',
+                unit: matchedProduct.unit || 'lb',
+                isWeighted: true,
+              },
+              weight
+            );
+          }}
+          onClose={() => setWeightScanOpen(false)}
         />
       )}
     </div>
