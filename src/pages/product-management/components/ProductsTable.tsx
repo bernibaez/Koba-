@@ -16,6 +16,7 @@ import {
   Package,
   AlertTriangle,
   Calendar,
+  Scale,
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
@@ -183,6 +184,12 @@ export default function ProductsTable({
                   <SortIcon field="name" sortField={sortField} sortDir={sortDir} />
                 </div>
               </th>
+              <th className="px-3 py-3.5 text-center cursor-pointer select-none" onClick={() => onSort('plu')}>
+                <div className="flex items-center gap-1.5 justify-center">
+                  <span>PLU</span>
+                  <SortIcon field="plu" sortField={sortField} sortDir={sortDir} />
+                </div>
+              </th>
               <th className="px-4 py-3.5 text-left cursor-pointer select-none" onClick={() => onSort('category')}>
                 <div className="flex items-center gap-1.5">
                   <span>CATEGORÍA</span>
@@ -205,6 +212,11 @@ export default function ProductsTable({
                 <div className="flex items-center gap-1.5 justify-end">
                   <span>PRECIO VENTA</span>
                   <SortIcon field="salePrice" sortField={sortField} sortDir={sortDir} />
+                </div>
+              </th>
+              <th className="px-3 py-3.5 text-center select-none">
+                <div className="flex items-center gap-1.5 justify-center">
+                  <span>BALANZA</span>
                 </div>
               </th>
               <th className="px-4 py-3.5 text-center cursor-pointer select-none" onClick={() => onSort('currentStock')}>
@@ -275,6 +287,17 @@ export default function ProductsTable({
                     </div>
                   </td>
 
+                  {/* PLU */}
+                  <td className="px-3 py-3.5 text-center font-mono text-xs font-bold text-slate-800 dark:text-slate-200">
+                    {product.plu ? (
+                      <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-mono font-bold">
+                        {product.plu}
+                      </span>
+                    ) : (
+                      <span className="text-slate-400 font-normal">—</span>
+                    )}
+                  </td>
+
                   {/* Categoría */}
                   <td className="px-4 py-3.5 text-xs">
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
@@ -302,6 +325,21 @@ export default function ProductsTable({
                         <span className="text-[10px] text-emerald-600 font-bold ml-0.5">/{product.weightUnit || 'lb'}</span>
                       )}
                     </div>
+                  </td>
+
+                  {/* Balanza */}
+                  <td className="px-3 py-3.5 text-center text-xs">
+                    {product.generateScaleBarcode || (product.isWeightProduct && product.plu) ? (
+                      <span
+                        className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 shadow-2xs"
+                        title="Producto identificado mediante etiqueta de balanza"
+                      >
+                        <Scale size={12} className="text-emerald-600 dark:text-emerald-400" />
+                        <span>Balanza</span>
+                      </span>
+                    ) : (
+                      <span className="text-slate-400 font-normal">—</span>
+                    )}
                   </td>
 
                   {/* Stock */}

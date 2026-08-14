@@ -33,6 +33,13 @@ function errorSupabase(error: unknown): Error {
   return error instanceof Error ? error : new Error('Error de Supabase');
 }
 
+function isPluSchemaError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const e = error as { message?: string; details?: string; hint?: string; code?: string };
+  const combined = `${e.message ?? ''} ${e.details ?? ''} ${e.hint ?? ''} ${e.code ?? ''}`.toLowerCase();
+  return combined.includes('plu');
+}
+
 /** Mapeo DB → UI Product Management / POS */
 export function productoAUi(p: Producto): Product {
   let stockStatus: Product['stockStatus'] = 'normal';
@@ -174,7 +181,8 @@ export async function obtenerProductos(params: ProductosFiltro = {}): Promise<Pr
         (p) =>
           p.nombre.toLowerCase().includes(q) ||
           p.sku.toLowerCase().includes(q) ||
-          p.codigo_barras.toLowerCase().includes(q)
+          p.codigo_barras.toLowerCase().includes(q) ||
+          (p.plu && p.plu.toLowerCase().includes(q))
       );
     }
     if (params.categoria && params.categoria !== 'Todas') {
@@ -195,7 +203,7 @@ export async function obtenerProductos(params: ProductosFiltro = {}): Promise<Pr
 
   const q = params.busqueda?.trim() ? sanitizarBusquedaPostgrest(params.busqueda) : '';
   if (q) {
-    query = query.or(`nombre.ilike.%${q}%,sku.ilike.%${q}%,codigo_barras.ilike.%${q}%`);
+    query = query.or(`nombre.ilike.%${q}%,sku.ilike.%${q}%,codigo_barras.ilike.%${q}%,plu.ilike.%${q}%`);
   }
   if (params.categoria && params.categoria !== 'Todas') {
     query = query.eq('categoria', params.categoria);
@@ -205,7 +213,27 @@ export async function obtenerProductos(params: ProductosFiltro = {}): Promise<Pr
   }
   if (params.signal) query = query.abortSignal(params.signal);
 
-  const { data, error, count } = await query;
+  let { data, error, count } = await query;
+  if (error && q && isPluSchemaError(error)) {
+    let fallbackQuery = sb
+      .from('productos')
+      .select('*', { count: 'exact' })
+      .order('nombre')
+      .range(desde, hasta);
+    fallbackQuery = fallbackQuery.or(`nombre.ilike.%${q}%,sku.ilike.%${q}%,codigo_barras.ilike.%${q}%`);
+    if (params.categoria && params.categoria !== 'Todas') {
+      fallbackQuery = fallbackQuery.eq('categoria', params.categoria);
+    }
+    if (params.estado && params.estado !== 'todos') {
+      fallbackQuery = fallbackQuery.eq('estado', params.estado);
+    }
+    if (params.signal) fallbackQuery = fallbackQuery.abortSignal(params.signal);
+
+    const retry = await fallbackQuery;
+    data = retry.data;
+    error = retry.error;
+    count = retry.count;
+  }
   if (error) throw errorSupabase(error);
   return { datos: (data ?? []) as Producto[], total: count ?? 0, pagina, limite };
 }
@@ -259,6 +287,12 @@ export async function crearProducto(datos: Partial<Producto>): Promise<Producto>
     estado: rest.estado ?? 'activo',
   };
   const { data, error } = await sb.from('productos').insert(payload).select('*').single();
+  if (error && isPluSchemaError(error)) {
+    const { plu, ...payloadWithoutPlu } = payload as any;
+    const retry = await sb.from('productos').insert(payloadWithoutPlu).select('*').single();
+    if (retry.error) throw errorSupabase(retry.error);
+    return retry.data as Producto;
+  }
   if (error) throw errorSupabase(error);
   return data as Producto;
 }
@@ -319,6 +353,21 @@ export async function actualizarProducto(id: string, datos: Partial<Producto>): 
     .eq('id', id)
     .select('*')
     .single();
+  if (error && isPluSchemaError(error)) {
+    const { plu, ...restWithoutPlu } = rest as any;
+    const retry = await sb
+      .from('productos')
+      .update({
+        ...restWithoutPlu,
+        fecha_vencimiento: restWithoutPlu.fecha_vencimiento || null,
+        actualizado_en: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select('*')
+      .single();
+    if (retry.error) throw errorSupabase(retry.error);
+    return retry.data as Producto;
+  }
   if (error) throw errorSupabase(error);
   return data as Producto;
 }

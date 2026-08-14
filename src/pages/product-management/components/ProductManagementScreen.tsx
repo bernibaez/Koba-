@@ -228,6 +228,7 @@ export default function ProductManagementScreen() {
             setEditProduct(null);
           }}
           product={editProduct}
+          allProducts={products}
           onSave={handleSaveProduct}
           onPrintLabel={(p) => setLabelModalProducts([p])}
         />
@@ -360,6 +361,13 @@ export default function ProductManagementScreen() {
                   <span className="text-[11px] text-slate-400 font-semibold block uppercase mb-1">Código de Barras</span>
                   <span className="font-mono text-emerald-700 dark:text-emerald-400 font-extrabold bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-200/60 inline-block">
                     {viewingProduct.barcode || 'Sin Código'}
+                  </span>
+                </div>
+
+                <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800">
+                  <span className="text-[11px] text-slate-400 font-semibold block uppercase mb-1">PLU de Balanza</span>
+                  <span className="font-mono text-indigo-700 dark:text-indigo-400 font-extrabold bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded border border-indigo-200/60 inline-block">
+                    {viewingProduct.plu || '—'}
                   </span>
                 </div>
 

@@ -12,6 +12,7 @@ interface ProductFormModalProps {
   open: boolean;
   onClose: () => void;
   product: Product | null;
+  allProducts?: Product[];
   onSave: (p: Product) => void;
   onPrintLabel?: (p: Product) => void;
 }
@@ -52,7 +53,7 @@ function FormField({
   );
 }
 
-export default function ProductFormModal({ open, onClose, product, onSave, onPrintLabel }: ProductFormModalProps) {
+export default function ProductFormModal({ open, onClose, product, allProducts = [], onSave, onPrintLabel }: ProductFormModalProps) {
   const isEdit = !!product;
 
   const [weightState, setWeightState] = useState<WeightFormState>({
@@ -175,10 +176,36 @@ export default function ProductFormModal({ open, onClose, product, onSave, onPri
       stock === 0 ? 'out' : stock < minStk ? 'low' : 'normal';
 
     const isWeight = weightState.saleType === 'weight' || weightState.saleType === 'both';
+    const isScaleProduct = weightState.generateScaleBarcode;
+    const cleanPlu = (data.plu || '').trim();
+
+    // Validation 1: Scale product must be configured for sale by weight
+    if (isScaleProduct && !isWeight) {
+      toast.error('Los productos de balanza deben configurarse para venta por peso.');
+      return;
+    }
+
+    // Validation 2: Scale product requires PLU
+    if (isScaleProduct && !cleanPlu) {
+      toast.error('El PLU de balanza es obligatorio.');
+      return;
+    }
+
+    // Validation 3: Unique PLU validation
+    if (cleanPlu && allProducts && allProducts.length > 0) {
+      const duplicate = allProducts.find(
+        (p) => p.id !== product?.id && p.plu && p.plu.trim() === cleanPlu
+      );
+      if (duplicate) {
+        toast.error(`El PLU "${cleanPlu}" ya está asignado a otro producto ("${duplicate.name}").`);
+        return;
+      }
+    }
 
     const saved: Product = {
       id: product?.id ?? `prod-${Date.now()}`,
       ...data,
+      plu: cleanPlu || (product?.plu ?? ''),
       unit: isWeight ? (weightState.weightUnit === 'kg' ? 'Kilogramo' : weightState.weightUnit === 'lb' ? 'Libra' : data.unit) : data.unit,
       costPrice: cost,
       salePrice: sale,
