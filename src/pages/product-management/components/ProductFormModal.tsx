@@ -177,6 +177,7 @@ export default function ProductFormModal({ open, onClose, product, onSave, onPri
     const saved: Product = {
       id: product?.id ?? `prod-${Date.now()}`,
       ...data,
+      unit: isWeight ? (weightState.weightUnit === 'kg' ? 'Kilogramo' : weightState.weightUnit === 'lb' ? 'Libra' : data.unit) : data.unit,
       costPrice: cost,
       salePrice: sale,
       wholesalePrice: Number(data.wholesalePrice),
@@ -186,7 +187,7 @@ export default function ProductFormModal({ open, onClose, product, onSave, onPri
       stockStatus,
       saleType: weightState.saleType,
       weightUnit: weightState.weightUnit,
-      pricePerWeight: isWeight ? (weightState.pricePerWeight > 0 ? weightState.pricePerWeight : sale) : sale,
+      pricePerWeight: sale,
       minWeight: weightState.minWeight,
       maxWeight: weightState.maxWeight,
       allowDecimal: weightState.allowDecimal,
@@ -227,6 +228,9 @@ export default function ProductFormModal({ open, onClose, product, onSave, onPri
   const margin = costPrice && salePrice && Number(costPrice) > 0
     ? (((Number(salePrice) - Number(costPrice)) / Number(salePrice)) * 100).toFixed(1)
     : '0.0';
+
+  const isWeighted = weightState.saleType === 'weight' || weightState.saleType === 'both';
+  const weightUnitShort = weightState.weightUnit ? weightState.weightUnit.toUpperCase() : 'LB';
 
   if (!open) return null;
 
@@ -363,7 +367,7 @@ export default function ProductFormModal({ open, onClose, product, onSave, onPri
             )}
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <FormField label="Precio de Compra (RD$)" name="costPrice" error={errors.costPrice?.message} required>
+            <FormField label={isWeighted ? `Precio de Compra por ${weightUnitShort} (RD$)` : "Precio de Compra (RD$)"} name="costPrice" error={errors.costPrice?.message} required>
               <input
                 id="costPrice"
                 type="number"
@@ -378,7 +382,7 @@ export default function ProductFormModal({ open, onClose, product, onSave, onPri
               />
             </FormField>
 
-            <FormField label="Precio de Venta (RD$)" name="salePrice" error={errors.salePrice?.message} required>
+            <FormField label={isWeighted ? `Precio de Venta por ${weightUnitShort} (RD$)` : "Precio de Venta (RD$)"} name="salePrice" error={errors.salePrice?.message} required>
               <input
                 id="salePrice"
                 type="number"
@@ -394,10 +398,10 @@ export default function ProductFormModal({ open, onClose, product, onSave, onPri
             </FormField>
 
             <FormField
-              label="Precio Mayorista (RD$)"
+              label={isWeighted ? `Precio Mayorista por ${weightUnitShort} (RD$)` : "Precio Mayorista (RD$)"}
               name="wholesalePrice"
               error={errors.wholesalePrice?.message}
-              hint="Precio para compras al por mayor"
+              hint={isWeighted ? `Precio por ${weightUnitShort} para compras al por mayor` : "Precio para compras al por mayor"}
             >
               <input
                 id="wholesalePrice"
@@ -434,11 +438,11 @@ export default function ProductFormModal({ open, onClose, product, onSave, onPri
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <FormField
-              label="Stock Actual"
+              label={isWeighted ? `Stock Actual (${weightUnitShort})` : "Stock Actual"}
               name="currentStock"
               error={errors.currentStock?.message}
               required={!isEdit}
-              hint={isEdit ? 'No editable aquí — usa Ajustes de Stock para cambiar existencias' : 'Cantidad actual en inventario'}
+              hint={isEdit ? 'No editable aquí — usa Ajustes de Stock para cambiar existencias' : (isWeighted ? `Cantidad de ${weightUnitShort} actualmente en inventario` : 'Cantidad actual en inventario')}
             >
               <input
                 id="currentStock"
@@ -455,11 +459,11 @@ export default function ProductFormModal({ open, onClose, product, onSave, onPri
             </FormField>
 
             <FormField
-              label="Stock Mínimo"
+              label={isWeighted ? `Stock Mínimo (${weightUnitShort})` : "Stock Mínimo"}
               name="minStock"
               error={errors.minStock?.message}
               required
-              hint="Alerta cuando el stock baje de este nivel"
+              hint={isWeighted ? `Alerta cuando las ${weightUnitShort} bajen de este nivel` : "Alerta cuando el stock baje de este nivel"}
             >
               <input
                 id="minStock"

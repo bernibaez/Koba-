@@ -148,22 +148,6 @@ export default function WeightProductForm({
               </select>
             </div>
 
-            {/* Price per weight */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                Precio por {values.weightUnit.toUpperCase()} (RD$)
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                min={0}
-                value={values.pricePerWeight}
-                onChange={(e) => onChange({ pricePerWeight: parseFloat(e.target.value) || 0 })}
-                className="input-field h-10 text-xs font-bold tabular-nums"
-                placeholder="0.00"
-              />
-            </div>
-
             {/* Min Weight */}
             <div>
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
