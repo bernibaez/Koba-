@@ -327,6 +327,7 @@ export default function POSTerminal() {
         tax: p.tax,
         image: p.image,
         outOfStock: p.stockStatus === 'out',
+        plu: (p as any).plu || '',
         isWeighted:
           p.isWeightProduct ||
           p.saleType === 'weight' ||
@@ -343,6 +344,7 @@ export default function POSTerminal() {
           id: ip.id,
           sku: ip.sku,
           barcode: ip.barcode || '',
+          plu: (ip as any).plu || '',
           name: ip.name,
           price: ip.salePrice,
           cost: ip.costPrice,
@@ -366,6 +368,7 @@ export default function POSTerminal() {
         productId: p.id,
         name: p.name,
         sku: p.sku,
+        plu: p.plu,
         price: p.price,
         cost: p.cost,
         tax: p.tax,

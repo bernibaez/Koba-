@@ -6,7 +6,7 @@ import ProductFormModal from './ProductFormModal';
 import PriceLabelModal from './PriceLabelModal';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 import ModalShell from '@/components/ui/ModalShell';
-import { X, Package } from 'lucide-react';
+import { X, Package, Scale, ShoppingCart, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { exportTableToPdf, formatMoneyPdf } from '@/lib/exportPdf';
 import { useProductos } from '@/hooks/useProductos';
@@ -66,6 +66,8 @@ export default function ProductManagementScreen() {
   const [filterCategory, setFilterCategory] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterStock, setFilterStock] = useState('all');
+  const [productTypeTab, setProductTypeTab] = useState<'all' | 'normal' | 'balanza'>('all');
+  const [isNewScaleProductMode, setIsNewScaleProductMode] = useState(false);
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [editProduct, setEditProduct] = useState<Product | null>(null);
   const [viewingProduct, setViewingProduct] = useState<Product | null>(null);
@@ -94,7 +96,33 @@ export default function ProductManagementScreen() {
 
   const products = productosUi;
 
+  const normalCount = products.filter(
+    (p) =>
+      !p.isWeightProduct &&
+      p.saleType !== 'weight' &&
+      !p.generateScaleBarcode &&
+      !(p.plu && p.plu.trim().length > 0)
+  ).length;
+
+  const scaleCount = products.filter(
+    (p) =>
+      p.isWeightProduct ||
+      p.saleType === 'weight' ||
+      p.generateScaleBarcode ||
+      (p.plu && p.plu.trim().length > 0)
+  ).length;
+
   const filtered = products
+    .filter((p) => {
+      const isScale =
+        p.isWeightProduct ||
+        p.saleType === 'weight' ||
+        p.generateScaleBarcode ||
+        (p.plu && p.plu.trim().length > 0);
+      if (productTypeTab === 'normal') return !isScale;
+      if (productTypeTab === 'balanza') return isScale;
+      return true;
+    })
     .filter((p) => filterStock === 'all' || p.stockStatus === filterStock)
     .sort((a, b) => {
       const av = a[sortField];
@@ -226,9 +254,11 @@ export default function ProductManagementScreen() {
           onClose={() => {
             setAddModalOpen(false);
             setEditProduct(null);
+            setIsNewScaleProductMode(false);
           }}
           product={editProduct}
           allProducts={products}
+          defaultIsScaleProduct={isNewScaleProductMode || productTypeTab === 'balanza'}
           onSave={handleSaveProduct}
           onPrintLabel={(p) => setLabelModalProducts([p])}
         />
@@ -245,7 +275,11 @@ export default function ProductManagementScreen() {
   return (
     <div className="space-y-6">
       <ProductsHeader
-        onAdd={() => { setEditProduct(null); setAddModalOpen(true); }}
+        onAdd={() => {
+          setEditProduct(null);
+          setIsNewScaleProductMode(false);
+          setAddModalOpen(true);
+        }}
         onExport={handleExportPdf}
         totalProducts={products.length}
         activeProducts={products.filter((p) => p.status === 'active').length}
@@ -278,6 +312,87 @@ export default function ProductManagementScreen() {
         </div>
       </div>
 
+      {/* Sección de pestañas de productos: Normales vs Balanza */}
+      <div className="flex items-center gap-2 border-b border-border pb-1 overflow-x-auto">
+        <button
+          type="button"
+          onClick={() => setProductTypeTab('all')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-t-lg font-bold text-xs transition-all border-b-2 ${
+            productTypeTab === 'all'
+              ? 'border-primary text-primary bg-primary/10'
+              : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-secondary/60'
+          }`}
+        >
+          <Package size={16} />
+          <span>Todos los Productos</span>
+          <span className="ml-1 text-[10px] px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-extrabold">
+            {products.length}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setProductTypeTab('normal')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-t-lg font-bold text-xs transition-all border-b-2 ${
+            productTypeTab === 'normal'
+              ? 'border-blue-500 text-blue-600 dark:text-blue-400 bg-blue-500/10'
+              : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-secondary/60'
+          }`}
+        >
+          <ShoppingCart size={16} />
+          <span>Productos Estándar (Unidades)</span>
+          <span className="ml-1 text-[10px] px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-extrabold">
+            {normalCount}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setProductTypeTab('balanza')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-t-lg font-bold text-xs transition-all border-b-2 ${
+            productTypeTab === 'balanza'
+              ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10'
+              : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-secondary/60'
+          }`}
+        >
+          <Scale size={16} />
+          <span>Productos de Balanza (mscale / PLU)</span>
+          <span className="ml-1 text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-extrabold">
+            {scaleCount}
+          </span>
+        </button>
+      </div>
+
+      {/* Banner Informativo y Acción Rápida para Sección Balanza */}
+      {productTypeTab === 'balanza' && (
+        <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 font-bold">
+              <Scale size={20} />
+            </div>
+            <div>
+              <h4 className="font-bold text-emerald-900 dark:text-emerald-200 text-sm">
+                Sección Automática: Productos de Balanza (Peso Variable EAN-13)
+              </h4>
+              <p className="text-emerald-700 dark:text-emerald-300 mt-0.5">
+                Estos productos utilizan código PLU de 5 dígitos (ej. 00132) sincronizado con <strong>mscale</strong>. Al pasarlos por el lector en el POS, Mercato calcula automáticamente el peso y precio total.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setEditProduct(null);
+              setIsNewScaleProductMode(true);
+              setAddModalOpen(true);
+            }}
+            className="btn-primary !bg-emerald-600 hover:!bg-emerald-700 text-white font-bold shrink-0 shadow-sm flex items-center gap-1.5"
+          >
+            <Plus size={15} /> + Nuevo Producto Balanza
+          </button>
+        </div>
+      )}
+
       <ProductsToolbar
         search={search}
         onSearch={setSearch}
@@ -293,7 +408,11 @@ export default function ProductManagementScreen() {
           const selected = products.filter((p) => selectedIds.has(p.id));
           if (selected.length > 0) setLabelModalProducts(selected);
         }}
-        onAdd={() => { setEditProduct(null); setAddModalOpen(true); }}
+        onAdd={() => {
+          setEditProduct(null);
+          setIsNewScaleProductMode(productTypeTab === 'balanza');
+          setAddModalOpen(true);
+        }}
         totalFiltered={filtered.length}
         onExportPdf={handleExportPdf}
       />

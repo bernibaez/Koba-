@@ -15,6 +15,7 @@ interface ProductFormModalProps {
   allProducts?: Product[];
   onSave: (p: Product) => void;
   onPrintLabel?: (p: Product) => void;
+  defaultIsScaleProduct?: boolean;
 }
 
 type FormValues = Omit<Product, 'id' | 'stockStatus'>;
@@ -53,17 +54,17 @@ function FormField({
   );
 }
 
-export default function ProductFormModal({ open, onClose, product, allProducts = [], onSave, onPrintLabel }: ProductFormModalProps) {
+export default function ProductFormModal({ open, onClose, product, allProducts = [], onSave, onPrintLabel, defaultIsScaleProduct = false }: ProductFormModalProps) {
   const isEdit = !!product;
 
   const [weightState, setWeightState] = useState<WeightFormState>({
-    saleType: 'unit',
+    saleType: defaultIsScaleProduct ? 'weight' : 'unit',
     weightUnit: 'lb',
     pricePerWeight: 0,
     minWeight: 0.01,
     maxWeight: 999.99,
     allowDecimal: true,
-    generateScaleBarcode: false,
+    generateScaleBarcode: defaultIsScaleProduct,
   });
 
   const {
@@ -81,7 +82,7 @@ export default function ProductFormModal({ open, onClose, product, allProducts =
       name: '',
       category: 'Granos',
       brand: 'Molinos Modernos',
-      unit: 'Unidad',
+      unit: defaultIsScaleProduct ? 'Libra' : 'Unidad',
       supplier: 'Distribuidora El Caribe',
       costPrice: 0,
       salePrice: 0,
@@ -135,7 +136,7 @@ export default function ProductFormModal({ open, onClose, product, allProducts =
         name: '',
         category: 'Granos',
         brand: 'Molinos Modernos',
-        unit: 'Unidad',
+        unit: defaultIsScaleProduct ? 'Libra' : 'Unidad',
         supplier: 'Distribuidora El Caribe',
         costPrice: 0,
         salePrice: 0,
@@ -149,16 +150,16 @@ export default function ProductFormModal({ open, onClose, product, allProducts =
         status: 'active',
       });
       setWeightState({
-        saleType: 'unit',
+        saleType: defaultIsScaleProduct ? 'weight' : 'unit',
         weightUnit: 'lb',
         pricePerWeight: 0,
         minWeight: 0.01,
         maxWeight: 999.99,
         allowDecimal: true,
-        generateScaleBarcode: false,
+        generateScaleBarcode: defaultIsScaleProduct,
       });
     }
-  }, [product, reset, open]);
+  }, [product, reset, open, defaultIsScaleProduct]);
 
   const handleGenerateBarcode = () => {
     const code = generateUniqueBarcode();
