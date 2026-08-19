@@ -218,7 +218,7 @@ export async function obtenerHistorialVentas(params: {
 
   if (params.busqueda?.trim()) {
     const q = params.busqueda.trim();
-    query = query.or(`numero_factura.ilike.%${q}%,ncf.ilike.%${q}%`);
+    query = query.or(`numero_factura.ilike."%${q}%",ncf.ilike."%${q}%"`);
   }
   if (params.fechaInicio) query = query.gte('creado_en', params.fechaInicio);
   if (params.fechaFin) query = query.lte('creado_en', params.fechaFin + 'T23:59:59');

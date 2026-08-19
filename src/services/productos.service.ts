@@ -252,7 +252,7 @@ export async function obtenerProductos(params: ProductosFiltro = {}): Promise<Pr
 
   const q = params.busqueda?.trim() ? sanitizarBusquedaPostgrest(params.busqueda) : '';
   if (q) {
-    query = query.or(`nombre.ilike.%${q}%,sku.ilike.%${q}%,codigo_barras.ilike.%${q}%,plu.ilike.%${q}%`);
+    query = query.or(`nombre.ilike."%${q}%",sku.ilike."%${q}%",codigo_barras.ilike."%${q}%",plu.ilike."%${q}%"`);
   }
   if (params.categoria && params.categoria !== 'Todas') {
     query = query.eq('categoria', params.categoria);
@@ -269,7 +269,7 @@ export async function obtenerProductos(params: ProductosFiltro = {}): Promise<Pr
       .select('*', { count: 'exact' })
       .order('nombre')
       .range(desde, hasta);
-    fallbackQuery = fallbackQuery.or(`nombre.ilike.%${q}%,sku.ilike.%${q}%,codigo_barras.ilike.%${q}%`);
+    fallbackQuery = fallbackQuery.or(`nombre.ilike."%${q}%",sku.ilike."%${q}%",codigo_barras.ilike."%${q}%"`);
     if (params.categoria && params.categoria !== 'Todas') {
       fallbackQuery = fallbackQuery.eq('categoria', params.categoria);
     }
