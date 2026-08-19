@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { createPortal } from 'react-dom';
 import AppLayout from '@/components/AppLayout';
 import { ShoppingBag, RotateCcw, Plus, Search, Filter, Download, Eye, Edit2, Trash2, X, PackagePlus, Check, CheckCircle2, ShoppingCart, Minus, Package } from 'lucide-react';
 import { exportTableToPdf, formatMoneyPdf } from '@/lib/exportPdf';
@@ -903,8 +902,8 @@ export default function PurchasesPage() {
         </div>
 
         {/* Portal a body: evita containing block de page-enter/slide-up (transform) bajo el Topbar */}
-        {showProductModal && createPortal(
-          <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 modal-backdrop">
+        {showProductModal && (
+          <div className="dialog-inline-host">
             <div className="w-full max-w-3xl bg-card rounded-2xl border border-border shadow-2xl overflow-hidden flex flex-col max-h-[90vh] modal-panel">
               {/* Modal Header with Added Counter */}
               <div className="px-6 py-5 border-b border-border flex items-center justify-between gap-4 bg-primary/5">
@@ -1334,8 +1333,7 @@ export default function PurchasesPage() {
                 </button>
               </div>
             </div>
-          </div>,
-          document.body
+          </div>
         )}
       </AppLayout>
     );

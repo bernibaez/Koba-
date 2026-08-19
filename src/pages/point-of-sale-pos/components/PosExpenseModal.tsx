@@ -94,7 +94,7 @@ export default function PosExpenseModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/40" onClick={onClose}>
+    <div className="dialog-inline-host" onClick={onClose}>
       <div className="card w-full max-w-md p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
           <h3 className="font-bold text-foreground">Gasto de caja</h3>

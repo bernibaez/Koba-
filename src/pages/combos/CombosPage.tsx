@@ -184,6 +184,31 @@ export default function CombosPage() {
     );
   }
 
+  if (importOpen) {
+    return (
+      <AppLayout>
+        <ComboImportModal
+          isOpen={importOpen}
+          onClose={() => setImportOpen(false)}
+          onImportSuccess={() => refetch()}
+        />
+      </AppLayout>
+    );
+  }
+
+  if (detailCombo) {
+    return (
+      <AppLayout>
+        <ComboDetailModal
+          combo={detailCombo}
+          isOpen
+          onClose={() => setDetailCombo(null)}
+          onEdit={(combo) => handleEdit(combo)}
+        />
+      </AppLayout>
+    );
+  }
+
   return (
     <AppLayout>
       <div className="space-y-6 slide-up">
@@ -213,19 +238,6 @@ export default function CombosPage() {
           onToggleStatus={handleToggleStatus}
           onDeleteRequest={(combo) => setDeleteTargetCombo(combo)}
           onViewDetail={(combo) => setDetailCombo(combo)}
-        />
-
-        <ComboDetailModal
-          combo={detailCombo}
-          isOpen={!!detailCombo}
-          onClose={() => setDetailCombo(null)}
-          onEdit={(combo) => handleEdit(combo)}
-        />
-
-        <ComboImportModal
-          isOpen={importOpen}
-          onClose={() => setImportOpen(false)}
-          onImportSuccess={() => refetch()}
         />
 
         <ConfirmModal

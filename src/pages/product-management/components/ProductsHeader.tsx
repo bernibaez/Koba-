@@ -31,7 +31,7 @@ export default function ProductsHeader({
           <Download size={14} /> Exportar PDF
         </button>
         <button type="button" onClick={onImport} className="btn-secondary flex items-center gap-1.5 text-xs font-semibold">
-          <FileText size={15} /> Importar mscale / CSV
+          <FileText size={15} /> Importar / actualizar balanza
         </button>
         <button type="button" onClick={onAdd} className="btn-primary flex items-center gap-2 font-bold shadow-md">
           <Plus size={16} /> Nuevo Producto

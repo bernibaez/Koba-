@@ -154,7 +154,7 @@ export default function PosReturnModal({ onClose }: { onClose: () => void }) {
 
   if (registeredReturnCode) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/40 backdrop-blur-xs" onClick={onClose}>
+      <div className="dialog-inline-host" onClick={onClose}>
         <div className="card w-full max-w-md p-6 space-y-4 text-center shadow-2xl border-amber-500/30" onClick={(e) => e.stopPropagation()}>
           <div className="w-16 h-16 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mx-auto text-amber-600 dark:text-amber-400">
             <Clock size={36} />
@@ -195,7 +195,7 @@ export default function PosReturnModal({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/40 backdrop-blur-xs" onClick={onClose}>
+    <div className="dialog-inline-host" onClick={onClose}>
       <div className="card w-full max-w-xl p-5 space-y-4 max-h-[90vh] overflow-y-auto shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-border pb-3">
           <div className="flex items-center gap-2">

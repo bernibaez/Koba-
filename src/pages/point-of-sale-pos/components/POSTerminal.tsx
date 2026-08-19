@@ -738,7 +738,20 @@ export default function POSTerminal() {
   };
 
   return (
-    <div className="flex flex-col h-screen w-full bg-slate-100 dark:bg-slate-950 p-2 sm:p-3 overflow-hidden">
+    <div className="flex flex-col h-screen w-full bg-slate-100 dark:bg-slate-950 p-2 sm:p-3 overflow-y-auto">
+      {!(
+        paymentOpen ||
+        expenseOpen ||
+        holdOpen ||
+        scaleOpen ||
+        returnOpen ||
+        cashSwitchOpen ||
+        registerDetailsOpen ||
+        openCashModalOpen ||
+        weightScanOpen ||
+        lastFiscalInvoice
+      ) && (
+      <>
       {/* Top Header */}
       <POSHeader
         cartCount={cart.reduce((s, i) => s + i.qty, 0)}
@@ -961,9 +974,12 @@ export default function POSTerminal() {
         </div>
       </div>
 
+      </>
+      )}
+
       {/* Payment Drawer / Modal when clicking Efectivo or Pago Múltiple */}
       {paymentOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200">
+        <div className="dialog-inline-host">
           <div
             className={`w-full ${
               orderCompleted ? 'max-w-4xl' : 'max-w-2xl'

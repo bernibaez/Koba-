@@ -50,7 +50,7 @@ export default function PosAddCustomerModal({ onClose, onCreated }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop" onClick={onClose}>
+    <div className="dialog-inline-host" onClick={onClose}>
       <div
         className="card w-full max-w-md p-6 sm:p-7 space-y-5 modal-panel"
         onClick={(e) => e.stopPropagation()}

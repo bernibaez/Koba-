@@ -505,7 +505,7 @@ export default function CashClosurePage() {
 
         {/* Modal: Realizar Cierre de Hoy */}
         {showCreateModal && (
-          <div className="fixed inset-0 z-50 bg-foreground/40 flex items-center justify-center p-4" onClick={() => setShowCreateModal(false)}>
+          <div className="dialog-inline-host" onClick={() => setShowCreateModal(false)}>
             <div className="card w-full max-w-2xl p-6 space-y-5 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between border-b border-border pb-3">
                 <div className="flex items-center gap-2">
@@ -657,7 +657,7 @@ export default function CashClosurePage() {
 
         {/* Modal: Ver Detalle de Cierre */}
         {viewingClosure && (
-          <div className="fixed inset-0 z-50 bg-foreground/40 flex items-center justify-center p-4" onClick={() => setViewingClosure(null)}>
+          <div className="dialog-inline-host" onClick={() => setViewingClosure(null)}>
             <div className="card w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between border-b border-border pb-3">
                 <h3 className="font-bold text-foreground text-lg">Comprobante de Cierre {viewingClosure.code}</h3>

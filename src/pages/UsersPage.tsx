@@ -317,6 +317,8 @@ export default function UsersPage() {
   return (
     <AppLayout>
       <div className="space-y-6 slide-up">
+        {!(viewingUser || viewingAgent) && (
+        <>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Gestión de Usuarios</h1>
@@ -916,9 +918,10 @@ export default function UsersPage() {
             </div>
           </div>
         )}
+
+        </>
+        )}
       </div>
-
-
 
       <ModalShell open={!!viewingUser} onClose={() => setViewingUser(null)} size="md" className="p-6">
         {viewingUser && (

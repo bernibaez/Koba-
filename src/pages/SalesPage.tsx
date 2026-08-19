@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
 import AppLayout from '@/components/AppLayout';
 import {
@@ -932,6 +931,8 @@ export default function SalesPage() {
   return (
     <AppLayout>
       <div className="space-y-6 slide-up">
+        {!(viewingSale || viewingQuote || convertQuote || anulandoSale || editingSale || printingSale) && (
+        <>
         {/* Top Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
@@ -1637,11 +1638,14 @@ export default function SalesPage() {
           </div>
         )}
 
+        </>
+        )}
+
         {/* MODAL 1: VIEW SALE DETAIL & TAX BREAKDOWN */}
         {viewingSale &&
-          createPortal(
+          (
             <div
-              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/50 backdrop-blur-xs animate-in fade-in overflow-y-auto"
+              className="dialog-inline-host"
               onClick={() => setViewingSale(null)}
             >
               <div
@@ -1784,15 +1788,14 @@ export default function SalesPage() {
                 </button>
               </div>
             </div>
-          </div>,
-          document.body
+          </div>
         )}
 
         {/* VIEW QUOTE DETAIL */}
         {viewingQuote &&
-          createPortal(
+          (
             <div
-              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/50 backdrop-blur-xs animate-in fade-in overflow-y-auto"
+              className="dialog-inline-host"
               onClick={() => setViewingQuote(null)}
             >
               <div
@@ -1906,16 +1909,15 @@ export default function SalesPage() {
                 </button>
               </div>
             </div>
-          </div>,
-          document.body
+          </div>
         )}
 
 
         {/* MODAL 4: CONVERTIR COTIZACIÓN A VENTA */}
         {convertQuote &&
-          createPortal(
+          (
             <div
-              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/50 backdrop-blur-xs animate-in fade-in overflow-y-auto"
+              className="dialog-inline-host"
               onClick={() => setConvertQuote(null)}
             >
               <div
@@ -1967,15 +1969,14 @@ export default function SalesPage() {
                 </button>
               </div>
             </div>
-          </div>,
-          document.body
+          </div>
         )}
 
         {/* MODAL 5: ANULAR FACTURA */}
         {anulandoSale &&
-          createPortal(
+          (
             <div
-              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/50 backdrop-blur-xs animate-in fade-in overflow-y-auto"
+              className="dialog-inline-host"
               onClick={() => setAnulandoSale(null)}
             >
               <div
@@ -2022,15 +2023,14 @@ export default function SalesPage() {
                 </button>
               </div>
             </div>
-          </div>,
-          document.body
+          </div>
         )}
 
         {/* MODAL: EDITAR FACTURA */}
         {editingSale &&
-          createPortal(
+          (
             <div
-              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/50 backdrop-blur-xs animate-in fade-in overflow-y-auto"
+              className="dialog-inline-host"
               onClick={() => setEditingSale(null)}
             >
               <div
@@ -2165,15 +2165,14 @@ export default function SalesPage() {
                 </div>
               </form>
             </div>
-          </div>,
-          document.body
+          </div>
         )}
 
         {/* MODAL: IMPRIMIR FACTURA */}
         {printingSale &&
-          createPortal(
+          (
             <div
-              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/50 backdrop-blur-xs animate-in fade-in print:p-0 print:bg-white print:static overflow-y-auto"
+              className="dialog-inline-host print:p-0 print:bg-white print:static"
               onClick={() => setPrintingSale(null)}
             >
               <div
@@ -2421,8 +2420,7 @@ export default function SalesPage() {
                 </button>
               </div>
             </div>
-          </div>,
-          document.body
+          </div>
         )}
       </div>
     </AppLayout>

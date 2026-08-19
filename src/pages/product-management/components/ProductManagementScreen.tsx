@@ -11,6 +11,14 @@ import { X, Package, Scale, ShoppingCart, Plus, FileSpreadsheet } from 'lucide-r
 import { toast } from 'sonner';
 import { exportTableToPdf, formatMoneyPdf } from '@/lib/exportPdf';
 import { useProductos } from '@/hooks/useProductos';
+import {
+  actualizarProducto,
+  crearProducto,
+  obtenerProductos,
+  productoAUi,
+  uiAProductoInsert,
+} from '@/services/productos.service';
+import { normalizePlu } from '@/lib/scaleBarcode';
 
 import type { SaleType, WeightUnit } from '@/types/database';
 
@@ -91,7 +99,7 @@ export default function ProductManagementScreen() {
 
   const { productosUi, crear, actualizar, eliminar, refetch } = useProductos({
     pagina: 1,
-    limite: 200,
+    limite: 2000,
     busqueda: search,
     categoria: filterCategory === 'all' ? undefined : filterCategory,
     estado: estadoDb,
@@ -187,13 +195,55 @@ export default function ProductManagementScreen() {
   };
 
   const handleBatchImport = async (productsToImport: Product[]) => {
-    let successCount = 0;
+    const catalogRes = await obtenerProductos({ pagina: 1, limite: 5000, estado: 'todos' });
+    const catalog = catalogRes.datos.map(productoAUi);
+    let created = 0;
+    let updated = 0;
+
     for (const item of productsToImport) {
-      const { id: _localId, ...rest } = item;
-      await crear(rest);
-      successCount++;
+      const plu = normalizePlu(item.plu || '');
+      const existing =
+        catalog.find((p) => plu && normalizePlu(p.plu || '') === plu) ||
+        catalog.find((p) => plu && normalizePlu(p.barcode || '') === plu) ||
+        catalog.find((p) => item.id && p.id === item.id);
+
+      if (existing) {
+        await actualizarProducto(
+          existing.id,
+          uiAProductoInsert({
+            ...existing,
+            name: item.name,
+            salePrice: item.salePrice,
+            wholesalePrice: item.wholesalePrice || item.salePrice,
+            costPrice: item.costPrice > 0 ? item.costPrice : existing.costPrice,
+            pricePerWeight: item.salePrice,
+            plu: plu || existing.plu,
+            barcode: existing.barcode || item.barcode,
+            sku: existing.sku || item.sku,
+            isWeightProduct: true,
+            saleType: existing.saleType === 'both' ? 'both' : 'weight',
+            generateScaleBarcode: true,
+            unit: existing.unit && existing.unit !== 'Unidad' ? existing.unit : 'Libra',
+            weightUnit: existing.weightUnit || 'lb',
+            currentStock: existing.currentStock,
+            minStock: existing.minStock,
+            status: existing.status,
+            category: existing.category || item.category,
+            brand: existing.brand || item.brand,
+          })
+        );
+        updated += 1;
+      } else {
+        const { id: _localId, ...rest } = item;
+        await crearProducto(uiAProductoInsert(rest));
+        created += 1;
+      }
     }
-    toast.success(`Se completó la importación de ${successCount} productos.`);
+
+    await refetch();
+    toast.success(
+      `Balanza sincronizada: ${created} producto(s) nuevo(s) y ${updated} actualizado(s). El stock no se modificó.`
+    );
   };
 
   const handleDelete = async () => {
@@ -285,8 +335,31 @@ export default function ProductManagementScreen() {
     );
   }
 
+  if (importModalOpen) {
+    return (
+      <ProductImportModal
+        open={importModalOpen}
+        onClose={() => setImportModalOpen(false)}
+        existingProducts={products}
+        onImport={handleBatchImport}
+        defaultIsScaleMode={importIsScaleMode}
+      />
+    );
+  }
+
+  if (labelModalProducts) {
+    return (
+      <PriceLabelModal
+        products={labelModalProducts}
+        onClose={() => setLabelModalProducts(null)}
+      />
+    );
+  }
+
   return (
     <div className="space-y-6">
+      {!viewingProduct && !deleteId && (
+      <>
       <ProductsHeader
         onAdd={() => {
           setEditProduct(null);
@@ -396,7 +469,7 @@ export default function ProductManagementScreen() {
               }}
               className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-800 dark:text-emerald-200 font-bold text-sm border border-emerald-500/30 transition-all shrink-0"
             >
-              <FileSpreadsheet size={16} /> Importar mscale / Excel
+              <FileSpreadsheet size={16} /> Importar / actualizar balanza
             </button>
             <button
               type="button"
@@ -459,6 +532,9 @@ export default function ProductManagementScreen() {
           }
         }}
       />
+
+      </>
+      )}
 
       <ModalShell
         open={!!viewingProduct}
@@ -561,21 +637,6 @@ export default function ProductManagementScreen() {
           </>
         )}
       </ModalShell>
-
-      {labelModalProducts && (
-        <PriceLabelModal
-          products={labelModalProducts}
-          onClose={() => setLabelModalProducts(null)}
-        />
-      )}
-
-      <ProductImportModal
-        open={importModalOpen}
-        onClose={() => setImportModalOpen(false)}
-        existingProducts={products}
-        onImport={handleBatchImport}
-        defaultIsScaleMode={importIsScaleMode}
-      />
 
       <ConfirmModal
         open={!!deleteId}

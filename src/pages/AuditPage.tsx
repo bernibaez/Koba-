@@ -262,7 +262,7 @@ export default function AuditPage() {
 
         {/* Audit Log Detail Modal (Antes vs Después) */}
         {selectedLog && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/40" onClick={() => setSelectedLog(null)}>
+          <div className="dialog-inline-host" onClick={() => setSelectedLog(null)}>
             <div className="card w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between border-b border-border pb-3">
                 <div className="flex items-center gap-2">

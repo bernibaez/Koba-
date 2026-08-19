@@ -107,7 +107,7 @@ export default function PosCashOpenModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs overflow-y-auto"
+      className="dialog-inline-host"
       onClick={onClose}
     >
       <div

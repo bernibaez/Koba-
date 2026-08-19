@@ -74,6 +74,7 @@ export function useProductos(params: ProductosFiltro = {}) {
       const patch = uiAProductoInsert({
         barcode: product.barcode ?? '',
         sku: product.sku ?? '',
+        plu: product.plu,
         name: product.name ?? '',
         category: product.category ?? '',
         brand: product.brand ?? '',
@@ -89,6 +90,14 @@ export function useProductos(params: ProductosFiltro = {}) {
         expiryDate: product.expiryDate ?? null,
         warranty: product.warranty ?? '',
         status: product.status ?? 'active',
+        saleType: product.saleType,
+        weightUnit: product.weightUnit,
+        pricePerWeight: product.pricePerWeight,
+        allowDecimal: product.allowDecimal,
+        minWeight: product.minWeight,
+        maxWeight: product.maxWeight,
+        generateScaleBarcode: product.generateScaleBarcode,
+        isWeightProduct: product.isWeightProduct,
         id,
       });
       await actualizarProducto(id, patch);

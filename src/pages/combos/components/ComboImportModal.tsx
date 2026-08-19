@@ -61,7 +61,7 @@ export default function ComboImportModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+    <div className="dialog-inline-host">
       <div className="bg-card w-full max-w-lg rounded-3xl border border-border/80 shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         <div className="flex items-center justify-between p-6 border-b border-border/80 bg-secondary/30">
           <div className="flex items-center gap-3">

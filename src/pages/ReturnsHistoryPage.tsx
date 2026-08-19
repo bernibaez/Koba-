@@ -475,7 +475,7 @@ export default function ReturnsHistoryPage() {
         {/* Modal: Viewing Detail / Receipt & Admin Approval Dialog */}
         {selectedReturn && (
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/40 backdrop-blur-xs animate-in fade-in"
+            className="dialog-inline-host"
             onClick={() => {
               setSelectedReturn(null);
               setAutoModalDismissed(true);
@@ -614,7 +614,7 @@ export default function ReturnsHistoryPage() {
 
         {/* Modal: Rejection Reason Custom Dialog */}
         {rejectingReturn && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/50 backdrop-blur-xs animate-in fade-in" onClick={() => setRejectingReturn(null)}>
+          <div className="dialog-inline-host" onClick={() => setRejectingReturn(null)}>
             <form onSubmit={handleConfirmRejection} className="card w-full max-w-md p-6 space-y-4 shadow-2xl border-rose-500/30" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between border-b border-border pb-3">
                 <div className="flex items-center gap-2 text-rose-600 dark:text-rose-400">

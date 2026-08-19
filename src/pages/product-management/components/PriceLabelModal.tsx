@@ -144,7 +144,7 @@ export default function PriceLabelModal({ products, onClose }: PriceLabelModalPr
   return (
     <>
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/40 print:hidden"
+        className="dialog-inline-host print:p-0 print:bg-white print:static"
         onClick={onClose}
       >
         <div

@@ -25,7 +25,7 @@ export default function ComboStockAlertModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+    <div className="dialog-inline-host">
       <div className="bg-card w-full max-w-md rounded-3xl border border-danger/40 shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         {/* Modal Top Header */}
         <div className="bg-danger/10 p-6 border-b border-danger/20 text-center space-y-2">

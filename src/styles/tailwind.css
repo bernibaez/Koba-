@@ -133,16 +133,17 @@
       radial-gradient(ellipse 60% 40% at 50% 40%, color-mix(in srgb, var(--primary) 8%, transparent), transparent);
   }
 
-  /* —— Modales —— */
-  .modal-backdrop {
-    background-color: color-mix(in srgb, var(--foreground) 45%, transparent);
-    backdrop-filter: blur(3px);
-    animation: modalBackdropIn 220ms ease forwards;
+  /* —— Diálogos inline (en el flujo de la página, no flotantes) —— */
+  .dialog-inline-host {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
   }
 
   .modal-panel {
-    animation: modalPanelIn 340ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
-    transform-origin: center bottom;
+    animation: modalPanelIn 280ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    transform-origin: top center;
   }
 
   .busy-overlay-in {

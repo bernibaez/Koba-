@@ -42,30 +42,16 @@ export default function Modal({
       if (e.key === 'Escape' && !busy) onClose();
     };
     document.addEventListener('keydown', handleKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.removeEventListener('keydown', handleKey);
-      document.body.style.overflow = prev;
-    };
+    return () => document.removeEventListener('keydown', handleKey);
   }, [open, onClose, busy]);
 
   if (!open) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 modal-backdrop"
-      onClick={(e) => {
-        if (e.target === e.currentTarget && !busy) onClose();
-      }}
-      role="dialog"
-      aria-modal="true"
-      aria-label={title}
-      aria-busy={busy}
-    >
+    <div className="dialog-inline-host" role="dialog" aria-modal="true" aria-label={title} aria-busy={busy}>
       <div
         className={`
-          relative w-full ${sizeClasses[size]} bg-card border border-border/80 rounded-2xl shadow-floating
+          relative w-full ${sizeClasses[size]} bg-card border border-border/80 rounded-2xl
           max-h-[90vh] flex flex-col modal-panel
         `}
       >
@@ -79,7 +65,7 @@ export default function Modal({
             onClick={onClose}
             disabled={busy}
             className="p-2 rounded-xl text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors ml-4 flex-shrink-0 disabled:opacity-40"
-            aria-label="Cerrar modal"
+            aria-label="Cerrar"
           >
             <X size={20} />
           </button>

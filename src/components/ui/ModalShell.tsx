@@ -26,17 +26,13 @@ interface ModalShellProps {
   busyVariant?: BusyVariant;
 }
 
-/**
- * Contenedor animado reutilizable para modales ad-hoc (sin header fijo).
- * Añade backdrop + panel con animación y overlay flotante de "Guardando…".
- */
+/** Panel de diálogo en el flujo de la página (sin overlay flotante). */
 export default function ModalShell({
   open,
   onClose,
   children,
   size = 'lg',
   className = '',
-  disableBackdropClose = false,
   busy = false,
   busyLabel,
   busyVariant = 'saving',
@@ -47,34 +43,19 @@ export default function ModalShell({
       if (e.key === 'Escape' && !busy) onClose();
     };
     document.addEventListener('keydown', onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = prev;
-    };
+    return () => document.removeEventListener('keydown', onKey);
   }, [open, onClose, busy]);
 
   if (!open) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 modal-backdrop"
-      onClick={(e) => {
-        if (e.target !== e.currentTarget) return;
-        if (disableBackdropClose || busy) return;
-        onClose();
-      }}
-      role="dialog"
-      aria-modal="true"
-    >
+    <div className="dialog-inline-host" role="dialog" aria-modal="true">
       <div
         className={`
-          relative w-full ${SIZE[size]} max-h-[90vh] overflow-y-auto scrollbar-thin
-          card shadow-floating modal-panel
+          relative w-full ${SIZE[size]} overflow-y-auto scrollbar-thin
+          card modal-panel
           ${className}
         `}
-        onClick={(e) => e.stopPropagation()}
       >
         {children}
         <BusyOverlay show={busy} label={busyLabel} variant={busyVariant} contained />

@@ -51,7 +51,7 @@ export default function FiscalInvoiceModal({ invoice, onClose }: FiscalInvoiceMo
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 overflow-y-auto print:p-0 print:bg-white print:static print:inset-auto">
+    <div className="dialog-inline-host print:p-0 print:bg-white print:static">
       <div
         ref={modalRef}
         className="w-full max-w-4xl bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden flex flex-col max-h-[95vh] print:max-h-none print:shadow-none print:border-none print:w-full text-slate-800 dark:text-slate-200"
