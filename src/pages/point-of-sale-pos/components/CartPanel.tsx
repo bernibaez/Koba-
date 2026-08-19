@@ -112,8 +112,8 @@ export default function CartPanel({
         </div>
 
         {/* Product Search Input (Cols 7) */}
-        <div className="md:col-span-7 flex items-center gap-1">
-          <div className="relative flex-1">
+        <div className="md:col-span-7">
+          <div className="relative w-full">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-indigo-600 pointer-events-none" />
             <input
               id="pos-barcode-search-input"
@@ -126,14 +126,6 @@ export default function CartPanel({
               className="w-full bg-slate-50 dark:bg-slate-800 border border-indigo-500 rounded-xl pl-9 pr-3 h-10 text-xs font-semibold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder:text-slate-400 truncate"
             />
           </div>
-          <button
-            type="button"
-            onClick={() => onOpenWeightScan && onOpenWeightScan()}
-            className="w-10 h-10 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center font-bold flex-shrink-0 transition-colors shadow-2xs"
-            title="Escanear producto pesado"
-          >
-            <Scale size={18} />
-          </button>
         </div>
       </div>
 
