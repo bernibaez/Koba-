@@ -1,22 +1,18 @@
 import React, { useState } from 'react';
 import {
-  Edit3,
+  Eye,
+  Edit,
   Copy,
   Trash2,
-  Eye,
   Power,
-  Layers,
+  MoreVertical,
+  CheckCircle,
+  XCircle,
+  Package,
   Calendar,
-  Store,
-  ChevronLeft,
-  ChevronRight,
-  PackageCheck,
-  AlertTriangle,
-  ArrowUpDown,
+  Layers,
 } from 'lucide-react';
 import { Combo } from '@/lib/comboStore';
-import { TableRowSkeleton } from '@/components/ui/LoadingSkeleton';
-
 import CategoryIcon from '@/components/ui/CategoryIcon';
 
 interface CombosTableProps {
@@ -38,337 +34,240 @@ export default function CombosTable({
   onDeleteRequest,
   onViewDetail,
 }: CombosTableProps) {
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 8;
+  const [openActionsId, setOpenActionsId] = useState<string | null>(null);
 
-  // Sorting state
-  const [sortField, setSortField] = useState<keyof Combo>('name');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
-
-  const handleSort = (field: keyof Combo) => {
-    if (sortField === field) {
-      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
-    } else {
-      setSortField(field);
-      setSortDir('asc');
-    }
-  };
-
-  const sortedCombos = [...combos].sort((a, b) => {
-    const av = a[sortField];
-    const bv = b[sortField];
-    if (typeof av === 'string' && typeof bv === 'string') {
-      return sortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
-    }
-    if (typeof av === 'number' && typeof bv === 'number') {
-      return sortDir === 'asc' ? av - bv : bv - av;
-    }
-    return 0;
-  });
-
-  const totalPages = Math.ceil(sortedCombos.length / itemsPerPage) || 1;
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedCombos = sortedCombos.slice(startIndex, startIndex + itemsPerPage);
-
-  const formatCurrency = (val: number) => `RD$ ${val.toLocaleString('es-DO', { minimumFractionDigits: 2 })}`;
-
-  if (loading) {
-    return (
-      <div className="bg-card rounded-2xl border border-border/80 p-4 shadow-xs overflow-hidden">
-        <table className="w-full text-left text-sm">
-          <tbody>
-            <TableRowSkeleton cols={9} />
-            <TableRowSkeleton cols={9} />
-            <TableRowSkeleton cols={9} />
-            <TableRowSkeleton cols={9} />
-            <TableRowSkeleton cols={9} />
-          </tbody>
-        </table>
-      </div>
-    );
-  }
-
-  if (sortedCombos.length === 0) {
-    return (
-      <div className="bg-card rounded-2xl border border-border/80 p-12 text-center space-y-3 shadow-xs">
-        <div className="w-16 h-16 rounded-full bg-secondary/80 text-muted-foreground flex items-center justify-center mx-auto">
-          <Layers size={32} />
-        </div>
-        <h3 className="text-lg font-extrabold text-foreground">No se encontraron combos</h3>
-        <p className="text-sm text-muted-foreground max-w-md mx-auto">
-          No hay combos registradas que coincidan con la búsqueda o filtros aplicados.
-        </p>
-      </div>
-    );
-  }
+  const formatCurrency = (val: number) =>
+    `RD$ ${val.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   return (
-    <div className="bg-card rounded-2xl border border-border/80 shadow-xs overflow-hidden flex flex-col">
-      <div className="overflow-x-auto scrollbar-thin">
-        <table className="w-full text-left text-sm border-collapse min-w-[900px]">
+    <div className="card overflow-hidden border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-xs">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-border/80 bg-secondary/40 text-muted-foreground text-xs font-black uppercase tracking-wider select-none">
-              <th className="py-4 px-4">Combo</th>
-              <th className="py-4 px-3 cursor-pointer hover:text-foreground" onClick={() => handleSort('code')}>
-                <div className="flex items-center gap-1">
-                  Código
-                  <ArrowUpDown size={12} />
-                </div>
-              </th>
-              <th className="py-4 px-3 text-right">
-                <div className="flex items-center justify-end gap-1 text-slate-600 dark:text-slate-300">
-                  Precio Costo
-                </div>
-              </th>
-              <th className="py-4 px-3 text-right cursor-pointer hover:text-foreground" onClick={() => handleSort('price')}>
-                <div className="flex items-center justify-end gap-1 text-emerald-600 dark:text-emerald-400">
-                  Precio Venta
-                  <ArrowUpDown size={12} />
-                </div>
-              </th>
-              <th className="py-4 px-3 text-center">Margen Ganancia</th>
-              <th className="py-4 px-3 text-right cursor-pointer hover:text-foreground" onClick={() => handleSort('normalPrice')}>
-                <div className="flex items-center justify-end gap-1">
-                  Precio Normal
-                  <ArrowUpDown size={12} />
-                </div>
-              </th>
-              <th className="py-4 px-3 text-center">Ahorro Cliente</th>
-              <th className="py-4 px-3 text-center">Componentes</th>
-              <th className="py-4 px-3 text-center">Estado</th>
-              <th className="py-4 px-3">Vigencia / Sucursales</th>
-              <th className="py-4 px-4 text-center">Acciones</th>
+            <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/60 text-slate-600 dark:text-slate-400 text-xs font-bold uppercase tracking-wider">
+              <th className="text-left px-5 py-3.5">Combo</th>
+              <th className="text-left px-4 py-3.5">Código</th>
+              <th className="text-right px-5 py-3.5">Precio Venta</th>
+              <th className="text-right px-5 py-3.5">Ganancia</th>
+              <th className="text-center px-4 py-3.5">Componentes</th>
+              <th className="text-center px-4 py-3.5">Estado</th>
+              <th className="text-left px-4 py-3.5">Vigencia</th>
+              <th className="text-right px-5 py-3.5">Acciones</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-border/60">
-            {paginatedCombos.map((combo) => {
-              const isExpired = combo.endDate && new Date(combo.endDate) < new Date();
-              const comboCost = combo.totalCost ?? (combo.items ? combo.items.reduce((s, i) => s + (i.costPrice || 0) * (i.quantity || 1), 0) : 0);
-              const profitAmt = combo.price - comboCost;
-              const profitPct = combo.marginPercent ?? (combo.price > 0 ? ((profitAmt / combo.price) * 100) : 0);
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+            {loading ? (
+              <tr>
+                <td colSpan={8} className="px-4 py-12 text-center text-slate-400">
+                  Cargando combos desde Supabase...
+                </td>
+              </tr>
+            ) : combos.length === 0 ? (
+              <tr>
+                <td colSpan={8} className="px-4 py-12 text-center text-slate-400">
+                  <div className="flex flex-col items-center gap-2">
+                    <Layers size={28} className="opacity-40" />
+                    <span>No se encontraron combos registrados</span>
+                  </div>
+                </td>
+              </tr>
+            ) : (
+              combos.map((combo, i) => {
+                const openUpward = i >= combos.length - 2 || (combos.length > 3 && i >= combos.length / 2);
+                const isExpired = combo.endDate && new Date(combo.endDate) < new Date();
+                const comboCost =
+                  combo.totalCost ??
+                  (combo.items
+                    ? combo.items.reduce((s, it) => s + (it.costPrice || 0) * (it.quantity || 1), 0)
+                    : 0);
+                const profitAmt = combo.price - comboCost;
+                const profitPct =
+                  combo.marginPercent ?? (combo.price > 0 ? (profitAmt / combo.price) * 100 : 0);
 
-              return (
-                <tr
-                  key={combo.id}
-                  className="hover:bg-secondary/30 transition-colors group"
-                >
-                  {/* Combo info & icon */}
-                  <td className="py-3.5 px-4">
-                    <div className="flex items-center gap-3">
-                      <CategoryIcon category={combo.category} name={combo.name} isCombo size="md" />
-                      <div className="min-w-0">
-                        <p
-                          onClick={() => onViewDetail(combo)}
-                          className="font-extrabold text-foreground hover:text-primary transition-colors cursor-pointer truncate max-w-[200px]"
-                          title={combo.name}
-                        >
-                          {combo.name}
-                        </p>
-                        <p className="text-xs text-muted-foreground truncate">{combo.category}</p>
+                return (
+                  <tr
+                    key={combo.id}
+                    className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors"
+                  >
+                    <td className="px-5 py-3.5">
+                      <div className="flex items-center gap-3">
+                        <CategoryIcon category={combo.category} name={combo.name} isCombo size="md" />
+                        <div className="min-w-0">
+                          <button
+                            type="button"
+                            onClick={() => onViewDetail(combo)}
+                            className="font-bold text-xs text-slate-900 dark:text-white hover:text-primary transition-colors text-left truncate max-w-[220px] block"
+                          >
+                            {combo.name}
+                          </button>
+                          <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 font-medium">
+                            {combo.category}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </td>
+                    </td>
 
-                  {/* Code */}
-                  <td className="py-3.5 px-3">
-                    <div className="font-mono text-xs font-bold text-foreground">{combo.code}</div>
-                    <div className="font-mono text-[11px] text-muted-foreground">{combo.barcode}</div>
-                  </td>
-
-                  {/* Cost Price */}
-                  <td className="py-3.5 px-3 text-right">
-                    <span className="font-bold text-muted-foreground text-sm">{formatCurrency(comboCost)}</span>
-                  </td>
-
-                  {/* Sale Price */}
-                  <td className="py-3.5 px-3 text-right">
-                    <span className="font-black text-emerald-600 dark:text-emerald-400 text-base">{formatCurrency(combo.price)}</span>
-                  </td>
-
-                  {/* Profit Margin */}
-                  <td className="py-3.5 px-3 text-center">
-                    <div className="inline-flex flex-col items-center">
-                      <span className="text-xs font-black text-purple-600 dark:text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-md border border-purple-500/20 tabular-nums">
-                        +{profitPct.toFixed(1)}%
-                      </span>
-                      <span className="text-[10px] font-bold text-muted-foreground mt-0.5 tabular-nums">
-                        +{formatCurrency(profitAmt)}
-                      </span>
-                    </div>
-                  </td>
-
-                  {/* Normal price */}
-                  <td className="py-3.5 px-3 text-right">
-                    <span className="line-through text-xs font-semibold text-muted-foreground">
-                      {formatCurrency(combo.normalPrice)}
-                    </span>
-                  </td>
-
-                  {/* Savings */}
-                  <td className="py-3.5 px-3 text-center">
-                    <div className="inline-flex flex-col items-center">
-                      <span className="text-xs font-extrabold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
-                        -{combo.savingsPercent.toFixed(1)}%
-                      </span>
-                      <span className="text-[11px] font-bold text-muted-foreground mt-0.5">
-                        {formatCurrency(combo.savingsAmount)}
-                      </span>
-                    </div>
-                  </td>
-
-                  {/* Products count */}
-                  <td className="py-3.5 px-3 text-center">
-                    <button
-                      type="button"
-                      onClick={() => onViewDetail(combo)}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-secondary text-foreground text-xs font-extrabold hover:bg-primary/10 hover:text-primary transition-colors"
-                    >
-                      <PackageCheck size={14} />
-                      {combo.items.length} prods
-                    </button>
-                  </td>
-
-                  {/* Status */}
-                  <td className="py-3.5 px-3 text-center">
-                    <button
-                      type="button"
-                      onClick={() => onToggleStatus(combo.id)}
-                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold transition-all cursor-pointer ${
-                        combo.active
-                          ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20'
-                          : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 hover:bg-rose-500/20'
-                      }`}
-                      title="Haz clic para cambiar estado"
-                    >
-                      <span className={`w-2 h-2 rounded-full ${combo.active ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-                      {combo.active ? 'Activo' : 'Inactivo'}
-                    </button>
-                  </td>
-
-                  {/* Validity & Branches */}
-                  <td className="py-3.5 px-3">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-1.5 text-xs font-medium text-foreground">
-                        <Calendar size={13} className="text-muted-foreground" />
-                        {isExpired ? (
-                          <span className="text-danger font-bold flex items-center gap-1">
-                            <AlertTriangle size={12} /> Vencido ({combo.endDate})
-                          </span>
-                        ) : (
-                          <span>{combo.startDate} a {combo.endDate}</span>
-                        )}
+                    <td className="px-4 py-3.5">
+                      <div className="font-mono text-xs font-bold text-slate-900 dark:text-white">
+                        {combo.code}
                       </div>
-                      <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                        <Store size={12} />
-                        <span>{combo.allBranches ? 'Todas las sucursales' : `${combo.branches.length} sucursales`}</span>
+                      <div className="text-[11px] text-slate-400 font-medium font-mono mt-0.5">
+                        {combo.barcode || '—'}
                       </div>
-                    </div>
-                  </td>
+                    </td>
 
-                  {/* Actions */}
-                  <td className="py-3.5 px-4 text-center">
-                    <div className="flex items-center justify-center gap-1">
+                    <td className="px-5 py-3.5 text-right">
+                      <div className="font-extrabold text-xs tabular-nums text-slate-900 dark:text-white">
+                        {formatCurrency(combo.price)}
+                      </div>
+                      <div className="text-[10px] text-slate-400 font-medium mt-0.5 line-through">
+                        {formatCurrency(combo.normalPrice)}
+                      </div>
+                    </td>
+
+                    <td className="px-5 py-3.5 text-right">
+                      <div className="font-extrabold text-xs tabular-nums text-emerald-600 dark:text-emerald-400">
+                        {formatCurrency(profitAmt)}
+                      </div>
+                      <div className="text-[11px] text-slate-400 font-medium mt-0.5">
+                        {profitPct.toFixed(1)}% · ahorro {combo.savingsPercent.toFixed(1)}%
+                      </div>
+                    </td>
+
+                    <td className="px-4 py-3.5 text-center">
                       <button
                         type="button"
                         onClick={() => onViewDetail(combo)}
-                        className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
-                        title="Ver detalle del combo"
+                        className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700 hover:border-primary/40 transition-colors"
                       >
-                        <Eye size={16} />
+                        <Package size={14} />
+                        {combo.items.length} prods
                       </button>
+                    </td>
 
-                      <button
-                        type="button"
-                        onClick={() => onEdit(combo)}
-                        className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-                        title="Editar combo"
-                      >
-                        <Edit3 size={16} />
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => onDuplicate(combo.id)}
-                        className="p-1.5 rounded-lg text-muted-foreground hover:text-purple-600 hover:bg-purple-500/10 transition-colors"
-                        title="Duplicar combo"
-                      >
-                        <Copy size={16} />
-                      </button>
-
+                    <td className="px-4 py-3.5 text-center">
                       <button
                         type="button"
                         onClick={() => onToggleStatus(combo.id)}
-                        className={`p-1.5 rounded-lg transition-colors ${
+                        className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold border transition-colors ${
                           combo.active
-                            ? 'text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10'
-                            : 'text-muted-foreground hover:text-emerald-500 hover:bg-emerald-500/10'
+                            ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800'
+                            : 'bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-950/30 dark:text-rose-400 dark:border-rose-800'
                         }`}
-                        title={combo.active ? 'Desactivar' : 'Activar'}
+                        title="Clic para cambiar estado"
                       >
-                        <Power size={16} />
+                        {combo.active ? <CheckCircle size={13} /> : <XCircle size={13} />}
+                        <span>{combo.active ? 'Activo' : 'Inactivo'}</span>
                       </button>
+                    </td>
 
-                      <button
-                        type="button"
-                        onClick={() => onDeleteRequest(combo)}
-                        className="p-1.5 rounded-lg text-muted-foreground hover:text-danger hover:bg-danger/10 transition-colors"
-                        title="Eliminar combo"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
+                    <td className="px-4 py-3.5 text-xs">
+                      <div className="flex items-center gap-1.5 font-semibold text-slate-800 dark:text-slate-200">
+                        <Calendar size={13} className="text-slate-400 shrink-0" />
+                        {isExpired ? (
+                          <span className="text-rose-600 dark:text-rose-400">Vencido</span>
+                        ) : (
+                          <span>
+                            {combo.startDate || '—'} → {combo.endDate || '—'}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+
+                    <td className="px-5 py-3.5 text-right">
+                      <div className="relative inline-block text-left">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setOpenActionsId(openActionsId === combo.id ? null : combo.id)
+                          }
+                          className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 font-semibold text-xs flex items-center gap-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all cursor-pointer shadow-2xs"
+                        >
+                          <span>Acciones</span>
+                          <MoreVertical size={14} className="text-slate-400" />
+                        </button>
+
+                        {openActionsId === combo.id && (
+                          <>
+                            <div
+                              className="fixed inset-0 z-30"
+                              onClick={() => setOpenActionsId(null)}
+                            />
+                            <div
+                              className={`absolute right-0 ${
+                                openUpward ? 'bottom-full mb-1.5' : 'top-full mt-1.5'
+                              } w-48 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-2xl z-40 py-1 divide-y divide-slate-100 dark:divide-slate-800 text-xs animate-in fade-in zoom-in-95`}
+                            >
+                              <div className="py-1">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setOpenActionsId(null);
+                                    onViewDetail(combo);
+                                  }}
+                                  className="w-full text-left px-3.5 py-2 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2.5 font-semibold transition-colors cursor-pointer"
+                                >
+                                  <Eye size={15} className="text-emerald-600" />
+                                  <span>Ver Detalle</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setOpenActionsId(null);
+                                    onEdit(combo);
+                                  }}
+                                  className="w-full text-left px-3.5 py-2 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2.5 font-semibold transition-colors cursor-pointer"
+                                >
+                                  <Edit size={15} className="text-amber-500" />
+                                  <span>Editar Combo</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setOpenActionsId(null);
+                                    onDuplicate(combo.id);
+                                  }}
+                                  className="w-full text-left px-3.5 py-2 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2.5 font-semibold transition-colors cursor-pointer"
+                                >
+                                  <Copy size={15} className="text-blue-500" />
+                                  <span>Duplicar</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setOpenActionsId(null);
+                                    onToggleStatus(combo.id);
+                                  }}
+                                  className="w-full text-left px-3.5 py-2 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2.5 font-semibold transition-colors cursor-pointer"
+                                >
+                                  <Power size={15} className="text-slate-500" />
+                                  <span>{combo.active ? 'Desactivar' : 'Activar'}</span>
+                                </button>
+                              </div>
+                              <div className="py-1">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setOpenActionsId(null);
+                                    onDeleteRequest(combo);
+                                  }}
+                                  className="w-full text-left px-3.5 py-2 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 flex items-center gap-2.5 font-semibold transition-colors cursor-pointer"
+                                >
+                                  <Trash2 size={15} />
+                                  <span>Eliminar</span>
+                                </button>
+                              </div>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
           </tbody>
         </table>
-      </div>
-
-      {/* Pagination Bar */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 border-t border-border/80 bg-card">
-        <p className="text-xs font-semibold text-muted-foreground">
-          Mostrando <span className="font-extrabold text-foreground">{startIndex + 1}</span> a{' '}
-          <span className="font-extrabold text-foreground">
-            {Math.min(startIndex + itemsPerPage, sortedCombos.length)}
-          </span>{' '}
-          de <span className="font-extrabold text-foreground">{sortedCombos.length}</span> combos
-        </p>
-
-        <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            disabled={currentPage === 1}
-            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-            className="p-2 rounded-xl border border-border/80 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-secondary text-foreground transition-colors"
-          >
-            <ChevronLeft size={16} />
-          </button>
-
-          {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
-            <button
-              key={`page-${pageNum}`}
-              type="button"
-              onClick={() => setCurrentPage(pageNum)}
-              className={`w-8 h-8 rounded-xl text-xs font-black transition-all ${
-                currentPage === pageNum
-                  ? 'bg-primary text-primary-foreground shadow-xs'
-                  : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
-              }`}
-            >
-              {pageNum}
-            </button>
-          ))}
-
-          <button
-            type="button"
-            disabled={currentPage === totalPages}
-            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-            className="p-2 rounded-xl border border-border/80 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-secondary text-foreground transition-colors"
-          >
-            <ChevronRight size={16} />
-          </button>
-        </div>
       </div>
     </div>
   );

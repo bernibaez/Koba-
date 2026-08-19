@@ -15,21 +15,16 @@ import { toast } from 'sonner';
 export default function CombosPage() {
   const { combos, loading, refetch, guardar, eliminar } = useCombos();
 
-  // Filters & Search
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [branchFilter, setBranchFilter] = useState('all');
   const [validityFilter, setValidityFilter] = useState('all');
-  const [showFilters, setShowFilters] = useState(false);
 
-  // Modals state
   const [formOpen, setFormOpen] = useState(false);
   const [editingCombo, setEditingCombo] = useState<Combo | null>(null);
   const [detailCombo, setDetailCombo] = useState<Combo | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [deleteTargetCombo, setDeleteTargetCombo] = useState<Combo | null>(null);
 
-  // Keyboard Shortcuts Listener
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'n') {
@@ -37,16 +32,11 @@ export default function CombosPage() {
         setEditingCombo(null);
         setFormOpen(true);
       }
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
-        e.preventDefault();
-        setShowFilters((prev) => !prev);
-      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Filtering Logic
   const filteredCombos = combos.filter((combo) => {
     const matchSearch =
       search === '' ||
@@ -60,22 +50,16 @@ export default function CombosPage() {
       (statusFilter === 'active' && combo.active) ||
       (statusFilter === 'inactive' && !combo.active);
 
-    const matchBranch =
-      branchFilter === 'all' ||
-      combo.allBranches ||
-      combo.branches.includes(branchFilter);
-
     const now = new Date();
-    const isExpired = combo.endDate && new Date(combo.endDate) < now;
+    const isExpired = Boolean(combo.endDate && new Date(combo.endDate) < now);
     const matchValidity =
       validityFilter === 'all' ||
       (validityFilter === 'valid' && !isExpired) ||
       (validityFilter === 'expired' && isExpired);
 
-    return matchSearch && matchStatus && matchBranch && matchValidity;
+    return matchSearch && matchStatus && matchValidity;
   });
 
-  // Handlers
   const handleOpenNew = () => {
     setEditingCombo(null);
     setFormOpen(true);
@@ -138,50 +122,54 @@ export default function CombosPage() {
     }
   };
 
+  const exportHeaders = [
+    'Código',
+    'Nombre del Combo',
+    'Categoría',
+    'Precio Combo',
+    'Precio Normal',
+    'Ahorro',
+    'Prods',
+    'Estado',
+    'Vigencia',
+  ];
+
+  const exportRows = filteredCombos.map((c) => [
+    c.code,
+    c.name,
+    c.category,
+    formatMoneyPdf(c.price),
+    formatMoneyPdf(c.normalPrice),
+    `${formatMoneyPdf(c.savingsAmount)} (${c.savingsPercent.toFixed(1)}%)`,
+    c.items.length,
+    c.active ? 'ACTIVO' : 'INACTIVO',
+    `${c.startDate} - ${c.endDate}`,
+  ]);
+
   const handleExportPDF = () => {
     exportTableToPdf({
       title: 'Reporte Oficial de Combos y Ofertas Combinadas',
-      subtitle: 'Mercato - Catálogo de combos vigentes y descontables en POS',
-      filename: 'combos-mercato.pdf',
+      subtitle: 'MarketERP - Catálogo de combos vigentes y descontables en POS',
+      filename: 'combos-marketerp.pdf',
       landscape: true,
-      headers: [
-        'Código',
-        'Nombre del Combo',
-        'Categoría',
-        'Precio Combo',
-        'Precio Normal',
-        'Ahorro',
-        'Prods',
-        'Estado',
-        'Vigencia',
-        'Sucursales',
-      ],
-      rows: filteredCombos.map((c) => [
-        c.code,
-        c.name,
-        c.category,
-        formatMoneyPdf(c.price),
-        formatMoneyPdf(c.normalPrice),
-        `${formatMoneyPdf(c.savingsAmount)} (${c.savingsPercent.toFixed(1)}%)`,
-        c.items.length,
-        c.active ? 'ACTIVO' : 'INACTIVO',
-        `${c.startDate} - ${c.endDate}`,
-        c.allBranches ? 'Todas' : c.branches.join(', '),
-      ]),
+      headers: exportHeaders,
+      rows: exportRows,
     });
   };
 
-  const handleResetFilters = () => {
-    setSearch('');
-    setStatusFilter('all');
-    setBranchFilter('all');
-    setValidityFilter('all');
+  const handleExportExcel = () => {
+    exportTableToExcel({
+      title: 'Combos y Ofertas',
+      filename: 'combos-marketerp.csv',
+      headers: exportHeaders,
+      rows: exportRows,
+    });
   };
 
   if (formOpen) {
     return (
       <AppLayout>
-        <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
+        <div className="space-y-6 slide-up">
           <ComboFormModal
             isOpen={formOpen}
             onClose={() => {
@@ -198,32 +186,25 @@ export default function CombosPage() {
 
   return (
     <AppLayout>
-      <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
-        {/* Header Component */}
+      <div className="space-y-6 slide-up">
         <CombosHeader
           combos={combos}
           onNewCombo={handleOpenNew}
-          onExport={handleExportPDF}
           onImport={() => setImportOpen(true)}
-          onToggleFilters={() => setShowFilters((prev) => !prev)}
-          showFilters={showFilters}
         />
 
-        {/* Toolbar Component */}
         <CombosToolbar
           search={search}
           onSearchChange={setSearch}
           statusFilter={statusFilter}
           onStatusFilterChange={setStatusFilter}
-          branchFilter={branchFilter}
-          onBranchFilterChange={setBranchFilter}
           validityFilter={validityFilter}
           onValidityFilterChange={setValidityFilter}
-          showFilters={showFilters}
-          onResetFilters={handleResetFilters}
+          resultCount={filteredCombos.length}
+          onExportPdf={handleExportPDF}
+          onExportExcel={handleExportExcel}
         />
 
-        {/* Main Table Component */}
         <CombosTable
           combos={filteredCombos}
           loading={loading}
@@ -234,7 +215,6 @@ export default function CombosPage() {
           onViewDetail={(combo) => setDetailCombo(combo)}
         />
 
-        {/* Detail Inspection Modal */}
         <ComboDetailModal
           combo={detailCombo}
           isOpen={!!detailCombo}
@@ -242,14 +222,12 @@ export default function CombosPage() {
           onEdit={(combo) => handleEdit(combo)}
         />
 
-        {/* Import Dataset Modal */}
         <ComboImportModal
           isOpen={importOpen}
           onClose={() => setImportOpen(false)}
           onImportSuccess={() => refetch()}
         />
 
-        {/* Confirm Delete Modal */}
         <ConfirmModal
           open={!!deleteTargetCombo}
           onClose={() => setDeleteTargetCombo(null)}

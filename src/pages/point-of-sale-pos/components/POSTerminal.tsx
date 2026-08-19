@@ -106,7 +106,18 @@ export default function POSTerminal() {
   const isRemoteAdmin = isAdminUser && !activeCash.isAdminBox;
 
   useEffect(() => {
-    if (isAdminUser || registers.length === 0) return;
+    if (registers.length === 0) return;
+
+    // Admin: asegurar caja principal real (UUID/código de DB), no el fallback fijo "1"
+    if (isAdminUser) {
+      const exists = registers.some((c) => c.id === activeCashId);
+      if (!exists) {
+        const adminBox = registers.find((c) => c.isAdminBox) || registers[0];
+        if (adminBox) setActiveCashId(adminBox.id as CashRegisterId);
+      }
+      return;
+    }
+
     const current = registers.find((c) => c.id === activeCashId);
     if (current?.isAdminBox) {
       const fallback = registers.find((c) => !c.isAdminBox);
@@ -987,6 +998,9 @@ export default function POSTerminal() {
       {registerDetailsOpen && (
         <RegisterDetailsModal
           onClose={() => setRegisterDetailsOpen(false)}
+          cajaId={String(activeCashId)}
+          cajaLabel={activeCash.label}
+          includeUserSales={isAdminUser}
         />
       )}
       {lastFiscalInvoice && (

@@ -374,6 +374,28 @@
     box-shadow: none !important;
     border-radius: 0 !important;
     overflow: visible !important;
+    display: block !important;
+    z-index: 99999 !important;
+  }
+
+  /* Hoja de etiquetas: fuera de pantalla en UI, visible al imprimir */
+  .label-print-sheet {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: auto !important;
+    max-width: 100% !important;
+  }
+
+  .label-print-grid {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+  }
+
+  .label-print-item {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
   }
 
   /* Si no existe un contenedor explícito de factura, permite visibilidad general */
@@ -388,5 +410,16 @@
 
   .print\:hidden {
     display: none !important;
+  }
+}
+
+/* Fuera de impresión: la hoja de etiquetas no se ve en pantalla */
+@media screen {
+  .label-print-sheet {
+    position: fixed !important;
+    left: -10000px !important;
+    top: 0 !important;
+    width: 80mm;
+    pointer-events: none;
   }
 }

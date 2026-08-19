@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  Menu, Search, Bell, Sun, Moon, ChevronDown, X, Settings, LogOut, User,
+  Menu, Search, Bell, Sun, Moon, ChevronDown, X, Settings, LogOut, User, Users,
   Store, RotateCcw, Lock, ShoppingCart, Package, ArrowLeftRight, Sliders, Scale, DollarSign, BarChart2, ShieldCheck, UserCheck, ShoppingBag, HandCoins, Wallet, Briefcase
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
@@ -435,6 +435,14 @@ export default function Topbar({
                 </Link>
               ))}
               <div className="border-t border-border/80">
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="w-full flex items-center gap-3.5 px-5 py-3 text-base font-bold text-foreground/80 hover:bg-secondary hover:text-foreground transition-colors"
+                >
+                  <Users size={18} className="text-primary" />
+                  Cambiar usuario
+                </button>
                 <button
                   type="button"
                   onClick={handleLogout}

@@ -170,6 +170,9 @@ export async function obtenerHistorialVentas(params: {
   fechaInicio?: string;
   fechaFin?: string;
   busqueda?: string;
+  cajaId?: string;
+  cajeroId?: string;
+  excluirAnuladas?: boolean;
   signal?: AbortSignal;
 }): Promise<{ datos: VentaConDetalle[]; total: number }> {
   const pagina = params.pagina ?? 1;
@@ -195,6 +198,15 @@ export async function obtenerHistorialVentas(params: {
     if (params.fechaFin) {
       list = list.filter((v) => v.creado_en <= params.fechaFin! + 'T23:59:59');
     }
+    if (params.cajaId) {
+      list = list.filter((v) => String(v.caja_id ?? '') === String(params.cajaId));
+    }
+    if (params.cajeroId) {
+      list = list.filter((v) => String(v.cajero_id ?? '') === String(params.cajeroId));
+    }
+    if (params.excluirAnuladas) {
+      list = list.filter((v) => v.estado !== 'anulada' && (v.estado as string) !== 'cancelled');
+    }
     return { datos: list.slice(desde, hasta + 1), total: list.length };
   }
 
@@ -210,6 +222,9 @@ export async function obtenerHistorialVentas(params: {
   }
   if (params.fechaInicio) query = query.gte('creado_en', params.fechaInicio);
   if (params.fechaFin) query = query.lte('creado_en', params.fechaFin + 'T23:59:59');
+  if (params.cajaId) query = query.eq('caja_id', params.cajaId);
+  if (params.cajeroId) query = query.eq('cajero_id', params.cajeroId);
+  if (params.excluirAnuladas) query = query.neq('estado', 'anulada');
   if (params.signal) query = query.abortSignal(params.signal);
 
   const { data, error, count } = await query;
@@ -243,6 +258,61 @@ export async function obtenerHistorialVentas(params: {
   }));
 
   return { datos, total: count ?? 0 };
+}
+
+/** Ventas del turno (caja/cajero) con detalle de ítems — para resumen POS / admin. */
+export async function obtenerVentasTurno(params: {
+  cajaId?: string;
+  cajeroId?: string;
+  desde?: string;
+  limite?: number;
+}): Promise<VentaConDetalle[]> {
+  const { datos } = await obtenerHistorialVentas({
+    pagina: 1,
+    limite: params.limite ?? 200,
+    cajaId: params.cajaId,
+    cajeroId: params.cajeroId,
+    fechaInicio: params.desde?.slice(0, 10),
+    excluirAnuladas: true,
+  });
+
+  if (datos.length === 0) return [];
+
+  // Filtrar por hora exacta de apertura si se indicó timestamp completo
+  const desdeIso = params.desde;
+  const filtradas = desdeIso
+    ? datos.filter((v) => !desdeIso || v.creado_en >= desdeIso)
+    : datos;
+
+  const sb = tryGetSupabase();
+  if (!sb) {
+    return filtradas.map((v) => {
+      const local = getLocalVentas().find((x) => x.id === v.id);
+      return local ?? v;
+    });
+  }
+
+  const ids = filtradas.map((v) => v.id);
+  const { data: detalles } = await sb.from('detalle_ventas').select('*').in('venta_id', ids);
+  const byVenta = new Map<string, DetalleVenta[]>();
+  for (const d of detalles ?? []) {
+    const row = d as DetalleVenta;
+    const arr = byVenta.get(row.venta_id) ?? [];
+    arr.push({
+      ...row,
+      precio_unitario: Number(row.precio_unitario),
+      costo_unitario: Number(row.costo_unitario),
+      cantidad: Number(row.cantidad),
+      porcentaje_impuesto: Number(row.porcentaje_impuesto || 0),
+      subtotal: Number(row.subtotal),
+    });
+    byVenta.set(row.venta_id, arr);
+  }
+
+  return filtradas.map((v) => ({
+    ...v,
+    detalle_ventas: byVenta.get(v.id) ?? [],
+  }));
 }
 
 export async function obtenerVentaPorNumeroFactura(
