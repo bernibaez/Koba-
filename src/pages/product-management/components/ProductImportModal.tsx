@@ -43,66 +43,96 @@ function padPlu(rawPlu: string | number): string {
   return digits.padStart(5, '0');
 }
 
-function parseCsvOrTsv(text: string, forceScaleMode = false): ParsedImportRow[] {
-  const cleanText = stripNullBytes(text);
-  const lines = cleanText
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter((l) => l.length > 0);
+function parseAnyFileContent(rawText: string, forceScaleMode = false): ParsedImportRow[] {
+  const text = stripNullBytes(rawText);
+  if (!text) return [];
 
-  if (lines.length === 0) return [];
+  let rows: string[][] = [];
 
-  // Detect delimiter (, or \t or ;)
-  const firstLine = lines[0];
-  let delimiter = ',';
-  if (firstLine.includes('\t')) delimiter = '\t';
-  else if (firstLine.includes(';')) delimiter = ';';
-
-  const rows = lines.map((line) => {
-    const regex = new RegExp(`(?:^|${delimiter})(?:"([^"]*)"|([^"${delimiter}]*))`, 'g');
-    const matches: string[] = [];
-    let match;
-    while ((match = regex.exec(line)) !== null) {
-      const val = match[1] !== undefined ? match[1] : match[2];
-      matches.push(val ? val.trim() : '');
+  // Check if text is HTML table (common format for exported .xls files from mscale/Excel)
+  if (text.includes('<table') || text.includes('<tr')) {
+    try {
+      const doc = new DOMParser().parseFromString(text, 'text/html');
+      const trs = Array.from(doc.querySelectorAll('tr'));
+      rows = trs
+        .map((tr) => {
+          const cells = Array.from(tr.querySelectorAll('td, th'));
+          return cells.map((c) => c.textContent?.trim() || '');
+        })
+        .filter((r) => r.some((c) => c.length > 0));
+    } catch (_e) {
+      rows = [];
     }
-    return matches;
-  });
+  }
+
+  // If not HTML table or DOMParser returned empty, parse delimited text lines
+  if (rows.length === 0) {
+    const lines = text
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0);
+
+    if (lines.length === 0) return [];
+
+    const firstLine = lines[0];
+    let delimiter = ',';
+    if (firstLine.includes('\t')) delimiter = '\t';
+    else if (firstLine.includes(';')) delimiter = ';';
+    else if (firstLine.includes('|')) delimiter = '|';
+    else if (/\s{2,}/.test(firstLine)) delimiter = 'SPLIT_MULTI_SPACE';
+
+    rows = lines.map((line) => {
+      if (delimiter === 'SPLIT_MULTI_SPACE') {
+        return line.split(/\s{2,}/).map((s) => s.trim());
+      }
+      const regex = new RegExp(`(?:^|${delimiter})(?:"([^"]*)"|([^"${delimiter}]*))`, 'g');
+      const matches: string[] = [];
+      let match;
+      while ((match = regex.exec(line)) !== null) {
+        const val = match[1] !== undefined ? match[1] : match[2];
+        matches.push(val ? val.trim() : '');
+      }
+      return matches;
+    });
+  }
 
   if (rows.length === 0) return [];
 
+  // Inspect headers
   const headers = rows[0].map((h) => h.toLowerCase().trim());
-  const hasHeader =
-    headers.some((h) => h.includes('plu') || h.includes('name') || h.includes('nombre') || h.includes('price') || h.includes('precio') || h.includes('sku') || h.includes('code'));
+  const hasHeader = headers.some((h) =>
+    ['plu', 'name', 'nombre', 'price', 'precio', 'sku', 'code', 'codigo', 'modo', 'mode'].some((t) => h.includes(t))
+  );
 
   const dataRows = hasHeader ? rows.slice(1) : rows;
 
-  const getColIdx = (terms: string[]) =>
+  const findIdx = (terms: string[]) =>
     headers.findIndex((h) => terms.some((t) => h.includes(t)));
 
-  const pluIdx = getColIdx(['plu no', 'pluno', 'plu']);
-  const nameIdx = getColIdx(['name', 'nombre', 'descripcion', 'description', 'item']);
-  const codeIdx = getColIdx(['code', 'codigo', 'sku', 'barcode', 'codigo_barras']);
-  const priceIdx = getColIdx(['price', 'precio', 'precio_venta', 'saleprice', 'precio/lb']);
-  const costIdx = getColIdx(['cost', 'costo', 'precio_costo', 'costprice']);
-  const modeIdx = getColIdx(['mode', 'modo', 'tipo', 'sale_type', 'saletype', 'type']);
-  const catIdx = getColIdx(['category', 'categoria', 'cat']);
-  const stockIdx = getColIdx(['stock', 'existencia', 'cant', 'cantidad', 'currentstock']);
+  const pluIdx = findIdx(['plu no', 'pluno', 'plu_no', 'plu-no', 'plu']);
+  const nameIdx = findIdx(['name', 'nombre', 'descripcion', 'description', 'item', 'articulo', 'producto']);
+  const codeIdx = findIdx(['code', 'codigo', 'sku', 'barcode', 'codigo_barras', 'ean']);
+  const priceIdx = findIdx(['price', 'precio', 'precio_venta', 'saleprice', 'precio/lb', 'unitprice']);
+  const costIdx = findIdx(['cost', 'costo', 'precio_costo', 'costprice']);
+  const modeIdx = findIdx(['mode', 'modo', 'tipo', 'sale_type', 'saletype', 'type', 'unit', 'unidad']);
+  const catIdx = findIdx(['category', 'categoria', 'cat']);
+  const stockIdx = findIdx(['stock', 'existencia', 'cant', 'cantidad', 'currentstock']);
 
   const parsedList: ParsedImportRow[] = [];
 
   dataRows.forEach((cols, i) => {
     if (cols.length === 0 || (cols.length === 1 && !cols[0])) return;
 
-    let rawPlu = pluIdx >= 0 ? cols[pluIdx] : '';
-    let name = nameIdx >= 0 ? cols[nameIdx] : '';
-    let rawCode = codeIdx >= 0 ? cols[codeIdx] : '';
-    let rawPrice = priceIdx >= 0 ? cols[priceIdx] : '';
-    let rawCost = costIdx >= 0 ? cols[costIdx] : '';
-    let rawMode = modeIdx >= 0 ? cols[modeIdx] : '';
-    let category = catIdx >= 0 ? cols[catIdx] : '';
-    let rawStock = stockIdx >= 0 ? cols[stockIdx] : '';
+    let rawPlu = pluIdx >= 0 && cols[pluIdx] !== undefined ? cols[pluIdx] : '';
+    let name = nameIdx >= 0 && cols[nameIdx] !== undefined ? cols[nameIdx] : '';
+    let rawCode = codeIdx >= 0 && cols[codeIdx] !== undefined ? cols[codeIdx] : '';
+    let rawPrice = priceIdx >= 0 && cols[priceIdx] !== undefined ? cols[priceIdx] : '';
+    let rawCost = costIdx >= 0 && cols[costIdx] !== undefined ? cols[costIdx] : '';
+    let rawMode = modeIdx >= 0 && cols[modeIdx] !== undefined ? cols[modeIdx] : '';
+    let category = catIdx >= 0 && cols[catIdx] !== undefined ? cols[catIdx] : '';
+    let rawStock = stockIdx >= 0 && cols[stockIdx] !== undefined ? cols[stockIdx] : '';
 
+    // If no header, infer based on mscale columns: [0] = PLU, [1] = Name, [2] = Code, [3] = Price, [4] = Mode
     if (!hasHeader) {
       rawPlu = cols[0] || '';
       name = cols[1] || '';
@@ -181,7 +211,7 @@ export default function ProductImportModal({
     reader.onload = (event) => {
       const text = event.target?.result as string;
       if (!text) return;
-      const rows = parseCsvOrTsv(text, isScaleModeToggle);
+      const rows = parseAnyFileContent(text, isScaleModeToggle);
       setParsedRows(rows);
       if (rows.length > 0) {
         toast.success(`Se leyeron ${rows.length} producto(s) del archivo "${file.name}"`);
@@ -197,7 +227,7 @@ export default function ProductImportModal({
       toast.error('Ingresa o pega el contenido del archivo plano.');
       return;
     }
-    const rows = parseCsvOrTsv(pasteContent, isScaleModeToggle);
+    const rows = parseAnyFileContent(pasteContent, isScaleModeToggle);
     setParsedRows(rows);
     if (rows.length > 0) {
       toast.success(`Se detectaron ${rows.length} producto(s) correctamente`);
