@@ -32,14 +32,20 @@ interface ParsedImportRow {
   validationError?: string;
 }
 
+function stripNullBytes(str: string): string {
+  if (!str) return '';
+  return str.replace(/[\u0000\0]/g, '').trim();
+}
+
 function padPlu(rawPlu: string | number): string {
-  const digits = String(rawPlu || '').replace(/\D/g, '');
+  const digits = stripNullBytes(String(rawPlu || '')).replace(/\D/g, '');
   if (!digits) return '';
   return digits.padStart(5, '0');
 }
 
 function parseCsvOrTsv(text: string, forceScaleMode = false): ParsedImportRow[] {
-  const lines = text
+  const cleanText = stripNullBytes(text);
+  const lines = cleanText
     .split(/\r?\n/)
     .map((l) => l.trim())
     .filter((l) => l.length > 0);

@@ -35,6 +35,11 @@ export function exportTableToPdf({
     return;
   }
 
+  const cleanHeaders = headers.map((h) => h.replace(/[\u0000\0]/g, ''));
+  const cleanRows = rows.map((r) =>
+    r.map((c) => (typeof c === 'string' ? c.replace(/[\u0000\0]/g, '') : c))
+  );
+
   const doc = new jsPDF({
     orientation: landscape ? 'landscape' : 'portrait',
     unit: 'mm',
@@ -62,8 +67,8 @@ export function exportTableToPdf({
 
   autoTable(doc, {
     startY: subtitle ? 40 : 36,
-    head: [headers],
-    body: rows.map((row) => row.map((cell) => String(cell ?? ''))),
+    head: [cleanHeaders],
+    body: cleanRows.map((row) => row.map((cell) => String(cell ?? ''))),
     styles: {
       fontSize: 8,
       cellPadding: 2.5,

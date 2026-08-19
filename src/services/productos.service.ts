@@ -89,6 +89,18 @@ function stripExtendedColumns(payload: Record<string, any>): Record<string, any>
   return corePayload;
 }
 
+export function sanitizePayloadForPostgres<T extends Record<string, any>>(obj: T): T {
+  const result: any = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (typeof value === 'string') {
+      result[key] = value.replace(/[\u0000\0]/g, '');
+    } else {
+      result[key] = value;
+    }
+  }
+  return result as T;
+}
+
 /** Mapeo DB → UI Product Management / POS */
 export function productoAUi(p: Producto): Product {
   let stockStatus: Product['stockStatus'] = 'normal';
@@ -319,7 +331,7 @@ export async function crearProducto(datos: Partial<Producto>): Promise<Producto>
   const { id, creado_en, actualizado_en, ...rest } = datos;
   const cleanBarcode = rest.codigo_barras?.trim();
   const cleanSku = rest.sku?.trim();
-  const payload = {
+  const payload = sanitizePayloadForPostgres({
     ...rest,
     ...(esUuid(id) ? { id } : {}),
     codigo_barras: cleanBarcode || `GEN-${Date.now()}`,
@@ -336,7 +348,7 @@ export async function crearProducto(datos: Partial<Producto>): Promise<Producto>
     es_pesado: rest.es_pesado ?? false,
     fecha_vencimiento: rest.fecha_vencimiento || null,
     estado: rest.estado ?? 'activo',
-  };
+  });
   const { data, error } = await sb.from('productos').insert(payload).select('*').single();
   if (error && isSchemaColumnError(error)) {
     const cleanPayload = stripExtendedColumns(payload as any);
@@ -394,13 +406,14 @@ export async function actualizarProducto(id: string, datos: Partial<Producto>): 
   }
   const sb = getSupabase();
   const { id: _omitId, creado_en: _c, ...rest } = datos;
+  const updatePayload = sanitizePayloadForPostgres({
+    ...rest,
+    fecha_vencimiento: rest.fecha_vencimiento || null,
+    actualizado_en: new Date().toISOString(),
+  });
   const { data, error } = await sb
     .from('productos')
-    .update({
-      ...rest,
-      fecha_vencimiento: rest.fecha_vencimiento || null,
-      actualizado_en: new Date().toISOString(),
-    })
+    .update(updatePayload)
     .eq('id', id)
     .select('*')
     .single();
