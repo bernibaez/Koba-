@@ -2,6 +2,13 @@ import { tryGetSupabase, isSupabaseConfigured, getSupabase } from './clienteSupa
 import { type EstadoProducto, type Producto } from '@/types/database';
 import { getStoredProducts, saveStoredProducts } from '@/lib/productStore';
 import type { Product } from '@/pages/product-management/components/ProductManagementScreen';
+import {
+  decodeVariableWeightBarcode,
+  extractPluFromCode,
+  normalizePlu,
+  pluSearchVariants,
+  productMatchesScanCode,
+} from '@/lib/scaleBarcode';
 
 export type ProductosFiltro = {
   pagina?: number;
@@ -135,7 +142,7 @@ export function productoAUi(p: Producto): Product {
     id: p.id,
     barcode: p.codigo_barras ?? '',
     sku: p.sku ?? '',
-    plu: p.plu ?? '',
+    plu: normalizePlu(p.plu) || p.plu || '',
     name: p.nombre ?? '',
     category: p.categoria ?? 'General',
     brand: p.marca ?? '',
@@ -181,7 +188,7 @@ export function uiAProductoInsert(p: Omit<Product, 'id' | 'stockStatus'> & { id?
     ...(esUuid(p.id) ? { id: p.id } : {}),
     codigo_barras: p.barcode,
     sku: p.sku,
-    plu: p.plu || null,
+    plu: normalizePlu(p.plu) || p.plu || null,
     nombre: p.name,
     categoria: p.category,
     marca: p.brand || null,
@@ -215,6 +222,7 @@ function localAsProductos(): Producto[] {
       id: p.id,
       codigo_barras: p.barcode,
       sku: p.sku,
+      plu: normalizePlu(p.plu) || p.plu || null,
       nombre: p.name,
       categoria: p.category,
       marca: p.brand,
@@ -469,4 +477,58 @@ export async function obtenerProductoPorCodigoBarras(
   const { data, error } = await query.maybeSingle();
   if (error) throw errorSupabase(error);
   return data as Producto | null;
+}
+
+function productoCoincideConCodigo(p: Producto, codigo: string): boolean {
+  return productMatchesScanCode(
+    { plu: p.plu, barcode: p.codigo_barras, sku: p.sku },
+    codigo
+  );
+}
+
+/** Busca un producto por código de barras, SKU, PLU o etiqueta variable de balanza. */
+export async function buscarProductoPorCodigoEscaneado(
+  codigo: string,
+  signal?: AbortSignal
+): Promise<Producto | null> {
+  const clean = codigo.trim();
+  if (!clean) return null;
+
+  const decoded = decodeVariableWeightBarcode(clean);
+  const plu = decoded.isVariableWeight ? decoded.plu : extractPluFromCode(clean);
+  const variants = plu ? pluSearchVariants(plu) : [];
+
+  const matchesLocal = (list: Producto[]) =>
+    list.find((p) => productoCoincideConCodigo(p, clean)) ?? null;
+
+  const sb = tryGetSupabase();
+  if (!sb) {
+    return matchesLocal(localAsProductos());
+  }
+
+  const orParts = new Set<string>([`codigo_barras.eq.${clean}`, `sku.eq.${clean}`]);
+  if (plu) {
+    for (const v of variants) {
+      orParts.add(`plu.eq.${v}`);
+      orParts.add(`codigo_barras.eq.${v}`);
+      orParts.add(`sku.eq.${v}`);
+      orParts.add(`sku.eq.PLU-${v}`);
+    }
+    orParts.add(`codigo_barras.eq.20${plu}`);
+    orParts.add(`codigo_barras.eq.21${plu}`);
+  }
+
+  let query = sb.from('productos').select('*').or([...orParts].join(',')).limit(20);
+  if (signal) query = query.abortSignal(signal);
+
+  const { data, error } = await query;
+  if (error && isSchemaColumnError(error)) {
+    const fallback = await obtenerProductoPorCodigoBarras(clean, signal);
+    if (fallback) return fallback;
+    return null;
+  }
+  if (error) throw errorSupabase(error);
+
+  const rows = (data ?? []) as Producto[];
+  return matchesLocal(rows);
 }

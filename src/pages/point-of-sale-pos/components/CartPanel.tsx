@@ -118,7 +118,7 @@ export default function CartPanel({
             <input
               id="pos-barcode-search-input"
               type="text"
-              placeholder="Escanear código de barras o buscar por SKU / Nombre [Enter]..."
+              placeholder="Escanear código, PLU o etiqueta de balanza / SKU / Nombre [Enter]..."
               value={searchQuery}
               onChange={(e) => onSearchChange && onSearchChange(e.target.value)}
               onKeyDown={handleKeyDown}

@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form';
 import type { Product } from './ProductManagementScreen';
 import { Package, Printer, Sparkles } from 'lucide-react';
 import { generateUniqueBarcode } from '@/lib/barcodeUtils';
+import { normalizePlu } from '@/lib/scaleBarcode';
 import { logAuditEvent } from '@/lib/auditStore';
 import { toast } from 'sonner';
 import WeightProductForm, { type WeightFormState } from '@/components/weight/WeightProductForm';
@@ -178,7 +179,7 @@ export default function ProductFormModal({ open, onClose, product, allProducts =
 
     const isWeight = weightState.saleType === 'weight' || weightState.saleType === 'both';
     const isScaleProduct = weightState.generateScaleBarcode;
-    const cleanPlu = (data.plu || '').trim();
+    const cleanPlu = normalizePlu((data.plu || '').trim()) || (data.plu || '').trim();
 
     const cleanBarcode = (data.barcode || '').trim();
     const cleanSku = (data.sku || '').trim();
@@ -198,7 +199,10 @@ export default function ProductFormModal({ open, onClose, product, allProducts =
     // Validation 3: Unique PLU validation
     if (cleanPlu && allProducts && allProducts.length > 0) {
       const duplicate = allProducts.find(
-        (p) => p.id !== product?.id && p.plu && p.plu.trim() === cleanPlu
+        (p) =>
+          p.id !== product?.id &&
+          p.plu &&
+          (normalizePlu(p.plu) || p.plu.trim()) === cleanPlu
       );
       if (duplicate) {
         toast.error(`El PLU "${cleanPlu}" ya está asignado a otro producto ("${duplicate.name}").`);

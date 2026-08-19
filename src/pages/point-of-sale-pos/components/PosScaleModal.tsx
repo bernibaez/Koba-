@@ -13,7 +13,7 @@ interface Props {
 }
 
 export default function PosScaleModal({ onClose, onConfirm, initialProductId, initialWeight }: Props) {
-  const { productosUi } = useProductos({ pagina: 1, limite: 200, estado: 'activo' });
+  const { productosUi } = useProductos({ pagina: 1, limite: 1000, estado: 'activo' });
 
   const catalogProducts: ScaleProduct[] = useMemo(() => {
     if (!Array.isArray(productosUi) || productosUi.length === 0) return [];
@@ -32,6 +32,7 @@ export default function PosScaleModal({ onClose, onConfirm, initialProductId, in
       productId: p.id,
       name: p.name || 'Producto sin nombre',
       sku: p.sku || '',
+      plu: p.plu || '',
       price: p.salePrice ?? 0,
       cost: p.costPrice ?? 0,
       tax: p.tax ?? 0,
@@ -39,6 +40,7 @@ export default function PosScaleModal({ onClose, onConfirm, initialProductId, in
       barcode: p.barcode || '',
       category: p.category || '',
       image: p.image,
+      isWeightProduct: true,
     }));
   }, [productosUi]);
 

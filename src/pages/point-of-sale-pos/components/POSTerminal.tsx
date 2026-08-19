@@ -36,6 +36,8 @@ import { useProductos } from '@/hooks/useProductos';
 import { useCombos } from '@/hooks/useCombos';
 import { initialProducts } from '@/pages/product-management/components/ProductManagementScreen';
 import { parseScaleBarcode } from '../utils/scaleUtils';
+import { decodeVariableWeightBarcode, isVariableWeightBarcode, productMatchesScanCode } from '@/lib/scaleBarcode';
+import { buscarProductoPorCodigoEscaneado, productoAUi } from '@/services/productos.service';
 import PosWeightScanModal from './PosWeightScanModal';
 
 const ADMIN_OWN_CASH: CashRegisterId = '1';
@@ -251,6 +253,7 @@ export default function POSTerminal() {
       id: p.id,
       sku: p.sku,
       barcode: p.barcode || '',
+      plu: p.plu || '',
       name: p.name,
       price: p.salePrice,
       cost: p.costPrice,
@@ -275,6 +278,7 @@ export default function POSTerminal() {
         id: ip.id,
         sku: ip.sku,
         barcode: ip.barcode || '',
+        plu: ip.plu || '',
         name: ip.name,
         price: ip.salePrice,
         cost: ip.costPrice,
@@ -298,7 +302,7 @@ export default function POSTerminal() {
       productId: p.id,
       name: p.name,
       sku: p.sku,
-      plu: (p as any).plu || '',
+      plu: p.plu || '',
       price: p.price,
       cost: p.cost,
       tax: p.tax,
@@ -311,9 +315,75 @@ export default function POSTerminal() {
   }, [productosUi]);
 
   const handleSearchSubmit = useCallback(
-    (rawQuery: string) => {
+    async (rawQuery: string) => {
       const q = rawQuery.trim();
       if (!q) return;
+
+      const addWeightedFromScale = (
+        product: {
+          productId: string;
+          name: string;
+          sku: string;
+          price: number;
+          cost: number;
+          tax: number;
+          image?: string;
+          unit: string;
+        },
+        weight: number
+      ) => {
+        addToCart(
+          {
+            id: `cart-${product.productId}-${Date.now()}`,
+            productId: product.productId,
+            name: product.name,
+            sku: product.sku,
+            price: product.price,
+            cost: product.cost,
+            tax: product.tax,
+            image: product.image || '',
+            unit: product.unit || 'lb',
+            isWeighted: true,
+          },
+          weight
+        );
+        toast.success(
+          `Producto balanza agregado: ${product.name} (${weight} ${product.unit || 'lb'})`
+        );
+        setSearchQuery('');
+      };
+
+      const scaleParsed = parseScaleBarcode(q, realScaleCatalog);
+      if (scaleParsed?.isFromEan13) {
+        addWeightedFromScale(scaleParsed.product, scaleParsed.weight);
+        return;
+      }
+
+      if (isVariableWeightBarcode(q)) {
+        try {
+          const fromDb = await buscarProductoPorCodigoEscaneado(q);
+          if (fromDb) {
+            const ui = productoAUi(fromDb);
+            const decoded = decodeVariableWeightBarcode(q);
+            addWeightedFromScale(
+              {
+                productId: ui.id,
+                name: ui.name,
+                sku: ui.sku,
+                price: ui.salePrice,
+                cost: ui.costPrice,
+                tax: ui.tax,
+                image: ui.image,
+                unit: ui.unit || ui.weightUnit || 'lb',
+              },
+              decoded.weight
+            );
+            return;
+          }
+        } catch {
+          // Continúa con la búsqueda local
+        }
+      }
 
       const storeProducts = productosUi.map((p) => ({
         id: p.id,
@@ -327,7 +397,7 @@ export default function POSTerminal() {
         tax: p.tax,
         image: p.image,
         outOfStock: p.stockStatus === 'out',
-        plu: (p as any).plu || '',
+        plu: p.plu || '',
         isWeighted:
           p.isWeightProduct ||
           p.saleType === 'weight' ||
@@ -344,7 +414,7 @@ export default function POSTerminal() {
           id: ip.id,
           sku: ip.sku,
           barcode: ip.barcode || '',
-          plu: (ip as any).plu || '',
+          plu: ip.plu || '',
           name: ip.name,
           price: ip.salePrice,
           cost: ip.costPrice,
@@ -363,53 +433,9 @@ export default function POSTerminal() {
         }));
 
       const allProds = [...storeProducts, ...demoExtras];
-
-      const realScaleCatalog = allProds.map((p) => ({
-        productId: p.id,
-        name: p.name,
-        sku: p.sku,
-        plu: p.plu,
-        price: p.price,
-        cost: p.cost,
-        tax: p.tax,
-        unit: p.unit || 'lb',
-        barcode: p.barcode || '',
-        category: '',
-        image: p.image,
-      }));
-
-      // Check scale barcode parse (e.g. 2001001015004 or scale barcode)
-      const scaleParsed = parseScaleBarcode(q, realScaleCatalog);
-      if (scaleParsed) {
-        addToCart(
-          {
-            id: `cart-${scaleParsed.product.productId}-${Date.now()}`,
-            productId: scaleParsed.product.productId,
-            name: scaleParsed.product.name,
-            sku: scaleParsed.product.sku,
-            price: scaleParsed.price,
-            cost: scaleParsed.product.cost,
-            tax: scaleParsed.product.tax,
-            image: scaleParsed.product.image || '',
-            unit: scaleParsed.product.unit || 'lb',
-            isWeighted: true,
-          },
-          scaleParsed.weight
-        );
-        toast.success(
-          `Producto balanza agregado: ${scaleParsed.product.name} (${scaleParsed.weight} ${
-            scaleParsed.product.unit || 'lb'
-          })`
-        );
-        setSearchQuery('');
-        return;
-      }
-
       const qLower = q.toLowerCase();
 
-      let matchedProd = allProds.find(
-        (p) => p.barcode.toLowerCase() === qLower || p.sku.toLowerCase() === qLower
-      );
+      let matchedProd = allProds.find((p) => productMatchesScanCode(p, q));
 
       if (!matchedProd) {
         matchedProd = allProds.find((p) => p.name.toLowerCase() === qLower);
@@ -420,6 +446,7 @@ export default function POSTerminal() {
           (p) =>
             p.barcode.toLowerCase().includes(qLower) ||
             p.sku.toLowerCase().includes(qLower) ||
+            (p.plu && p.plu.toLowerCase().includes(qLower)) ||
             p.name.toLowerCase().includes(qLower)
         );
       }
@@ -501,7 +528,7 @@ export default function POSTerminal() {
 
       toast.error(`No se encontró producto ni combo con SKU o código: "${q}"`);
     },
-    [addToCart, handleOpenScale, productosUi, combos]
+    [addToCart, handleOpenScale, productosUi, combos, realScaleCatalog]
   );
 
   useEffect(() => {

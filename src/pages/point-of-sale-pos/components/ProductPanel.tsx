@@ -9,6 +9,7 @@ import { scaleProducts } from '../utils/scaleUtils';
 import { useProductos } from '@/hooks/useProductos';
 import { useCombos } from '@/hooks/useCombos';
 import { initialProducts } from '@/pages/product-management/components/ProductManagementScreen';
+import { extractPluFromCode, isVariableWeightBarcode, productMatchesScanCode } from '@/lib/scaleBarcode';
 
 import CategoryIcon from '@/components/ui/CategoryIcon';
 import WeightBadge from '@/components/weight/WeightBadge';
@@ -19,6 +20,7 @@ interface Product {
   id: string;
   sku: string;
   barcode: string;
+  plu?: string;
   name: string;
   category: string;
   price: number;
@@ -73,7 +75,13 @@ export default function ProductPanel({ onAddToCart, onOpenScale, searchQuery }: 
   // State for Mixed Sale Type Modal
   const [mixedProduct, setMixedProduct] = useState<Product | null>(null);
 
-  const { productosUi } = useProductos({ pagina: 1, limite: 500, busqueda: activeSearch, estado: 'todos' });
+  const catalogSearch = useMemo(() => {
+    const term = activeSearch.trim();
+    if (isVariableWeightBarcode(term)) return extractPluFromCode(term);
+    return term;
+  }, [activeSearch]);
+
+  const { productosUi } = useProductos({ pagina: 1, limite: 500, busqueda: catalogSearch, estado: 'todos' });
   const { combos } = useCombos(true);
 
   const products: Product[] = useMemo(() => {
@@ -84,6 +92,7 @@ export default function ProductPanel({ onAddToCart, onOpenScale, searchQuery }: 
           id: p.id,
           sku: p.sku,
           barcode: p.barcode,
+          plu: p.plu,
           name: p.name,
           category: p.category,
           price: p.salePrice,
@@ -114,6 +123,7 @@ export default function ProductPanel({ onAddToCart, onOpenScale, searchQuery }: 
           id: ip.id,
           sku: ip.sku,
           barcode: ip.barcode,
+          plu: ip.plu,
           name: ip.name,
           category: ip.category,
           price: ip.salePrice,
@@ -152,7 +162,9 @@ export default function ProductPanel({ onAddToCart, onOpenScale, searchQuery }: 
       term === '' ||
       p.name.toLowerCase().includes(term) ||
       p.barcode.toLowerCase().includes(term) ||
-      p.sku.toLowerCase().includes(term);
+      p.sku.toLowerCase().includes(term) ||
+      (p.plu && p.plu.toLowerCase().includes(term)) ||
+      productMatchesScanCode(p, activeSearch.trim());
     return matchCat && matchSearch;
   });
 

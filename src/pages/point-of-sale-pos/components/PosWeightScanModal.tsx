@@ -1,7 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { X, Scale, Barcode, AlertCircle, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
-import { decodeVariableWeightBarcode, type ScaleProduct } from '../utils/scaleUtils';
+import { parseScaleBarcode, type ScaleProduct } from '../utils/scaleUtils';
+import { decodeVariableWeightBarcode } from '@/lib/scaleBarcode';
+import { buscarProductoPorCodigoEscaneado, productoAUi } from '@/services/productos.service';
 
 interface PosWeightScanModalProps {
   catalog: ScaleProduct[];
@@ -73,18 +75,51 @@ export default function PosWeightScanModal({
     };
   }, [scanInput]);
 
-  const processBarcode = (code: string) => {
+  const processBarcode = async (code: string) => {
     const clean = code.trim();
     if (!clean) return;
 
     setStatus('processing');
     setErrorMessage(null);
 
-    // 1. Decode EAN-13 variable weight barcode
-    const decoded = decodeVariableWeightBarcode(clean);
+    let parsed = parseScaleBarcode(clean, catalog);
 
-    if (!decoded.isVariableWeight) {
-      const err = decoded.error || 'El código de peso no es válido.';
+    if (!parsed?.isFromEan13) {
+      try {
+        const fromDb = await buscarProductoPorCodigoEscaneado(clean);
+        const decoded = decodeVariableWeightBarcode(clean);
+        if (fromDb && decoded.isVariableWeight) {
+          const ui = productoAUi(fromDb);
+          parsed = {
+            product: {
+              productId: ui.id,
+              name: ui.name,
+              sku: ui.sku,
+              plu: ui.plu || '',
+              price: ui.salePrice,
+              cost: ui.costPrice,
+              tax: ui.tax,
+              unit: ui.unit || ui.weightUnit || 'lb',
+              barcode: ui.barcode || '',
+              category: ui.category || '',
+              image: ui.image,
+              isWeightProduct: ui.isWeightProduct,
+            },
+            weight: decoded.weight,
+            price: ui.salePrice,
+            total: Math.round(ui.salePrice * decoded.weight * 100) / 100,
+            isFromEan13: true,
+          };
+        }
+      } catch {
+        // Se muestra el error de catálogo más abajo
+      }
+    }
+
+    if (!parsed?.isFromEan13) {
+      const err = parsed
+        ? 'Este código no es una etiqueta de peso variable de balanza.'
+        : 'No existe un producto configurado con este PLU.';
       setErrorMessage(err);
       setStatus('error');
       toast.error(err);
@@ -92,36 +127,7 @@ export default function PosWeightScanModal({
       return;
     }
 
-    const plu = decoded.plu; // e.g. "00132" (conserva ceros a la izquierda)
-    const fullPrefix = clean.substring(0, 7); // e.g. "2000132"
-
-    // 2. Search catalog by PLU
-    const matchedProduct = catalog.find((p) => {
-      const pPlu = (p.plu || '').trim();
-      const pBarcode = (p.barcode || '').trim();
-      const pSku = (p.sku || '').trim().toUpperCase();
-
-      return (
-        (pPlu && pPlu === plu) ||
-        pBarcode === plu ||
-        pBarcode === fullPrefix ||
-        pSku === plu ||
-        pSku === fullPrefix ||
-        pSku.includes(plu) ||
-        pBarcode.includes(plu) ||
-        p.productId === plu ||
-        p.productId === `prod-${plu}`
-      );
-    });
-
-    if (!matchedProduct) {
-      const err = 'No existe un producto configurado con este PLU.';
-      setErrorMessage(err);
-      setStatus('error');
-      toast.error(err);
-      setScanInput('');
-      return;
-    }
+    const matchedProduct = parsed.product;
 
     // 3. Validate product is configured for weight
     const isWeighted =
@@ -147,11 +153,10 @@ export default function PosWeightScanModal({
       return;
     }
 
-    // 5. Success! Add to cart with exact weight
-    const subtotal = Math.round(matchedProduct.price * decoded.weight * 100) / 100;
-    onConfirm(matchedProduct, decoded.weight);
+    const subtotal = Math.round(matchedProduct.price * parsed.weight * 100) / 100;
+    onConfirm(matchedProduct, parsed.weight);
     toast.success(
-      `Producto balanza agregado: ${matchedProduct.name} (${decoded.weight} ${matchedProduct.unit || 'lb'}) — Subtotal: RD$ ${subtotal.toFixed(2)}`
+      `Producto balanza agregado: ${matchedProduct.name} (${parsed.weight} ${matchedProduct.unit || 'lb'}) — Subtotal: RD$ ${subtotal.toFixed(2)}`
     );
     onClose();
   };
