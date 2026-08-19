@@ -63,19 +63,20 @@ export function decodeVariableWeightBarcode(
 ): DecodedVariableWeightBarcode {
   const clean = barcode.trim();
 
-  if (!validateEan13(clean)) {
+  // Permite códigos de balanza de 12 o 13 dígitos
+  if (!/^\d{12,13}$/.test(clean)) {
     return {
       isVariableWeight: false,
       plu: '',
       weight: 0,
       unit: 'lb',
       rawBarcode: clean,
-      error: 'El código de peso no es válido (Fallo de suma de control EAN-13).',
+      error: 'El código de peso debe tener 12 o 13 dígitos numéricos.',
     };
   }
 
   const prefix = clean.substring(0, 2);
-  // Valid prefixes: user configured prefix, or standard in-store 20-29 range
+  // Prefijos de balanza válidos en supermercados (20-29 o el configurado)
   const validPrefixes = Array.from(new Set([configuredPrefix, '20', '21', '22', '23', '24', '25', '26', '27', '28', '29']));
 
   if (!validPrefixes.includes(prefix)) {
@@ -89,7 +90,7 @@ export function decodeVariableWeightBarcode(
     };
   }
 
-  const plu = clean.substring(2, 7); // e.g. "00132" (conserva ceros a la izquierda)
+  const plu = clean.substring(2, 7); // e.g. "00132"
   const weightRaw = parseInt(clean.substring(7, 12), 10);
   const weight = Math.round((weightRaw / 1000) * 1000) / 1000;
 
