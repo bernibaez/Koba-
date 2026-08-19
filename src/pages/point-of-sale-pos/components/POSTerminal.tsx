@@ -724,7 +724,6 @@ export default function POSTerminal() {
         onClear={clearCart}
         onHold={() => setHoldOpen(true)}
         onExpense={() => setExpenseOpen(true)}
-        onScale={() => handleOpenScale()}
         onReturn={() => setReturnOpen(true)}
         onCancelDelete={() => setAwaitingDeleteScan(false)}
         onSwitchCash={() => setCashSwitchOpen(true)}
