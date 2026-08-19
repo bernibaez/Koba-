@@ -93,7 +93,23 @@ export function sanitizePayloadForPostgres<T extends Record<string, any>>(obj: T
   const result: any = {};
   for (const [key, value] of Object.entries(obj)) {
     if (typeof value === 'string') {
-      result[key] = value.replace(/[\u0000\0]/g, '');
+      const cleaned = value.replace(/[\u0000\0]/g, '').trim();
+      if (
+        (key === 'fecha_vencimiento' ||
+          key === 'proveedor_id' ||
+          key === 'imagen_url' ||
+          key === 'garantia' ||
+          key === 'plu') &&
+        !cleaned
+      ) {
+        result[key] = null;
+      } else {
+        result[key] = cleaned;
+      }
+    } else if (typeof value === 'number') {
+      result[key] = Number.isNaN(value) || !Number.isFinite(value) ? 0 : value;
+    } else if (value === undefined) {
+      result[key] = null;
     } else {
       result[key] = value;
     }
@@ -350,13 +366,12 @@ export async function crearProducto(datos: Partial<Producto>): Promise<Producto>
     estado: rest.estado ?? 'activo',
   });
   const { data, error } = await sb.from('productos').insert(payload).select('*').single();
-  if (error && isSchemaColumnError(error)) {
+  if (error) {
     const cleanPayload = stripExtendedColumns(payload as any);
     const retry = await sb.from('productos').insert(cleanPayload).select('*').single();
-    if (retry.error) throw errorSupabase(retry.error);
-    return retry.data as Producto;
+    if (retry.data) return retry.data as Producto;
+    throw errorSupabase(error);
   }
-  if (error) throw errorSupabase(error);
   return data as Producto;
 }
 
@@ -417,22 +432,17 @@ export async function actualizarProducto(id: string, datos: Partial<Producto>): 
     .eq('id', id)
     .select('*')
     .single();
-  if (error && isSchemaColumnError(error)) {
-    const cleanPayload = stripExtendedColumns(rest as any);
+  if (error) {
+    const cleanPayload = stripExtendedColumns(updatePayload as any);
     const retry = await sb
       .from('productos')
-      .update({
-        ...cleanPayload,
-        fecha_vencimiento: cleanPayload.fecha_vencimiento || null,
-        actualizado_en: new Date().toISOString(),
-      })
+      .update(cleanPayload)
       .eq('id', id)
       .select('*')
       .single();
-    if (retry.error) throw errorSupabase(retry.error);
-    return retry.data as Producto;
+    if (retry.data) return retry.data as Producto;
+    throw errorSupabase(error);
   }
-  if (error) throw errorSupabase(error);
   return data as Producto;
 }
 
