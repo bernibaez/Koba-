@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 
 interface RegisterDetailsModalProps {
   onClose: () => void;
-  cajaId: string;
+  cajaId?: string;
   cajaLabel?: string;
   /** Si true (admin), incluye ventas del usuario aunque el turno esté a nombre de otro cajero. */
   includeUserSales?: boolean;
@@ -21,7 +21,7 @@ function money(n: number) {
 
 export default function RegisterDetailsModal({
   onClose,
-  cajaId,
+  cajaId = 'principal',
   cajaLabel = 'Caja',
   includeUserSales = false,
   locationName = 'SUPERMERCADO REMANENTE',
