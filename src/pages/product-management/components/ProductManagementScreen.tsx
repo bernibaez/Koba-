@@ -17,8 +17,10 @@ import {
   obtenerProductos,
   productoAUi,
   uiAProductoInsert,
+  upsertProductoImportacion,
 } from '@/services/productos.service';
 import { normalizePlu } from '@/lib/scaleBarcode';
+import { findExistingImportProduct, isGenericScaleItemCode } from '@/lib/scaleImport';
 
 import type { SaleType, WeightUnit } from '@/types/database';
 
@@ -202,15 +204,15 @@ export default function ProductManagementScreen() {
 
     for (const item of productsToImport) {
       const plu = normalizePlu(item.plu || '');
-      const existing =
-        catalog.find((p) => plu && normalizePlu(p.plu || '') === plu) ||
-        catalog.find((p) => plu && normalizePlu(p.barcode || '') === plu) ||
-        catalog.find((p) => item.id && p.id === item.id);
+      const existing = findExistingImportProduct(catalog, {
+        id: item.id,
+        plu,
+        barcode: item.barcode,
+        sku: item.sku,
+      });
 
-      if (existing) {
-        await actualizarProducto(
-          existing.id,
-          uiAProductoInsert({
+      const payload = existing
+        ? uiAProductoInsert({
             ...existing,
             name: item.name,
             salePrice: item.salePrice,
@@ -218,8 +220,12 @@ export default function ProductManagementScreen() {
             costPrice: item.costPrice > 0 ? item.costPrice : existing.costPrice,
             pricePerWeight: item.salePrice,
             plu: plu || existing.plu,
-            barcode: existing.barcode || item.barcode,
-            sku: existing.sku || item.sku,
+            barcode: isGenericScaleItemCode(existing.barcode)
+              ? item.barcode || existing.barcode
+              : existing.barcode || item.barcode,
+            sku: isGenericScaleItemCode(existing.sku)
+              ? item.sku || existing.sku
+              : existing.sku || item.sku,
             isWeightProduct: true,
             saleType: existing.saleType === 'both' ? 'both' : 'weight',
             generateScaleBarcode: true,
@@ -231,12 +237,23 @@ export default function ProductManagementScreen() {
             category: existing.category || item.category,
             brand: existing.brand || item.brand,
           })
-        );
-        updated += 1;
-      } else {
-        const { id: _localId, ...rest } = item;
-        await crearProducto(uiAProductoInsert(rest));
+        : (() => {
+            const { id: _localId, ...rest } = item;
+            return uiAProductoInsert(rest);
+          })();
+
+      const result = existing
+        ? { data: await actualizarProducto(existing.id, payload), created: false }
+        : await upsertProductoImportacion(payload);
+
+      if (result.created) {
         created += 1;
+        catalog.push(productoAUi(result.data));
+      } else {
+        updated += 1;
+        const idx = catalog.findIndex((p) => p.id === result.data.id);
+        if (idx >= 0) catalog[idx] = productoAUi(result.data);
+        else catalog.push(productoAUi(result.data));
       }
     }
 

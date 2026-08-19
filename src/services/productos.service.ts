@@ -66,34 +66,89 @@ function errorSupabase(error: unknown): Error {
   return error instanceof Error ? error : new Error('Error de Supabase');
 }
 
+const EXTENDED_PRODUCTO_COLUMNS = [
+  'plu',
+  'sale_type',
+  'weight_unit',
+  'price_per_weight',
+  'allow_decimal',
+  'min_weight',
+  'max_weight',
+  'generate_scale_barcode',
+  'is_weight_product',
+] as const;
+
+/** Columnas que PostgREST reportó ausentes en este proyecto (cache de sesión). */
+const missingProductoColumns = new Set<string>();
+
 function isSchemaColumnError(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
+  if (isUniqueConflictError(error)) return false;
   const e = error as { message?: string; details?: string; hint?: string; code?: string };
   const combined = `${e.message ?? ''} ${e.details ?? ''} ${e.hint ?? ''} ${e.code ?? ''}`.toLowerCase();
   return (
     e.code === 'PGRST204' ||
     e.code === '42703' ||
-    combined.includes('plu') ||
-    combined.includes('column') ||
     combined.includes('schema cache') ||
+    combined.includes('could not find the') ||
     combined.includes('does not exist')
   );
 }
 
+function rememberMissingColumnsFromError(error: unknown): void {
+  if (!error || typeof error !== 'object') return;
+  const e = error as { message?: string; details?: string; hint?: string };
+  const combined = `${e.message ?? ''} ${e.details ?? ''} ${e.hint ?? ''}`;
+  for (const match of combined.matchAll(/Could not find the '([^']+)' column/gi)) {
+    if (match[1]) missingProductoColumns.add(match[1]);
+  }
+  for (const col of EXTENDED_PRODUCTO_COLUMNS) {
+    if (new RegExp(`\\b${col}\\b`, 'i').test(combined)) {
+      missingProductoColumns.add(col);
+    }
+  }
+}
+
 function stripExtendedColumns(payload: Record<string, any>): Record<string, any> {
-  const {
-    plu,
-    sale_type,
-    weight_unit,
-    price_per_weight,
-    allow_decimal,
-    min_weight,
-    max_weight,
-    generate_scale_barcode,
-    is_weight_product,
-    ...corePayload
-  } = payload;
-  return corePayload;
+  const next = { ...payload };
+  for (const col of EXTENDED_PRODUCTO_COLUMNS) {
+    delete next[col];
+  }
+  return next;
+}
+
+function omitMissingProductoColumns(payload: Record<string, any>): Record<string, any> {
+  if (missingProductoColumns.size === 0) return payload;
+  const next = { ...payload };
+  for (const col of missingProductoColumns) {
+    delete next[col];
+  }
+  return next;
+}
+
+async function writeProducto(
+  action: 'insert' | 'update',
+  payload: Record<string, any>,
+  id?: string
+): Promise<{ data: Producto | null; error: unknown }> {
+  const sb = getSupabase();
+  const body = omitMissingProductoColumns(payload);
+  const run = async (row: Record<string, any>) => {
+    if (action === 'insert') {
+      return sb.from('productos').insert(row).select('*').single();
+    }
+    return sb.from('productos').update(row).eq('id', id!).select('*').single();
+  };
+
+  const first = await run(body);
+  if (!first.error) return { data: first.data as Producto, error: null };
+  if (!isSchemaColumnError(first.error)) return { data: null, error: first.error };
+
+  rememberMissingColumnsFromError(first.error);
+  const retryBody = omitMissingProductoColumns(stripExtendedColumns(payload));
+  const retry = await run(retryBody);
+  if (!retry.error) return { data: retry.data as Producto, error: null };
+  return { data: null, error: retry.error };
 }
 
 export function sanitizePayloadForPostgres<T extends Record<string, any>>(obj: T): T {
@@ -142,7 +197,12 @@ export function productoAUi(p: Producto): Product {
     id: p.id,
     barcode: p.codigo_barras ?? '',
     sku: p.sku ?? '',
-    plu: normalizePlu(p.plu) || p.plu || '',
+    plu:
+      normalizePlu(p.plu) ||
+      p.plu ||
+      normalizePlu(p.codigo_barras) ||
+      normalizePlu(String(p.sku ?? '').replace(/^PLU-/i, '')) ||
+      '',
     name: p.nombre ?? '',
     category: p.categoria ?? 'General',
     brand: p.marca ?? '',
@@ -351,7 +411,6 @@ export async function crearProducto(datos: Partial<Producto>): Promise<Producto>
     return localAsProductos().find((p) => p.sku === datos.sku)!;
   }
 
-  const sb = getSupabase();
   const { id, creado_en, actualizado_en, ...rest } = datos;
   const cleanBarcode = rest.codigo_barras?.trim();
   const cleanSku = rest.sku?.trim();
@@ -373,13 +432,8 @@ export async function crearProducto(datos: Partial<Producto>): Promise<Producto>
     fecha_vencimiento: rest.fecha_vencimiento || null,
     estado: rest.estado ?? 'activo',
   });
-  const { data, error } = await sb.from('productos').insert(payload).select('*').single();
-  if (error) {
-    const cleanPayload = stripExtendedColumns(payload as any);
-    const retry = await sb.from('productos').insert(cleanPayload).select('*').single();
-    if (retry.data) return retry.data as Producto;
-    throw errorSupabase(error);
-  }
+  const { data, error } = await writeProducto('insert', payload as Record<string, any>);
+  if (error) throw errorSupabase(error);
   return data as Producto;
 }
 
@@ -427,31 +481,101 @@ export async function actualizarProducto(id: string, datos: Partial<Producto>): 
   if (!esUuid(id)) {
     throw new Error('Este producto aún no está en Supabase (id local). Créalo de nuevo para sincronizarlo.');
   }
-  const sb = getSupabase();
   const { id: _omitId, creado_en: _c, ...rest } = datos;
   const updatePayload = sanitizePayloadForPostgres({
     ...rest,
     fecha_vencimiento: rest.fecha_vencimiento || null,
     actualizado_en: new Date().toISOString(),
   });
-  const { data, error } = await sb
-    .from('productos')
-    .update(updatePayload)
-    .eq('id', id)
-    .select('*')
-    .single();
-  if (error) {
-    const cleanPayload = stripExtendedColumns(updatePayload as any);
-    const retry = await sb
-      .from('productos')
-      .update(cleanPayload)
-      .eq('id', id)
-      .select('*')
-      .single();
-    if (retry.data) return retry.data as Producto;
-    throw errorSupabase(error);
-  }
+  const { data, error } = await writeProducto('update', updatePayload as Record<string, any>, id);
+  if (error) throw errorSupabase(error);
   return data as Producto;
+}
+
+async function buscarProductoExistenteParaImport(datos: Partial<Producto>): Promise<Producto | null> {
+  const sb = tryGetSupabase();
+  if (!sb) {
+    const plu = normalizePlu(datos.plu);
+    return (
+      localAsProductos().find((p) => {
+        if (datos.codigo_barras && p.codigo_barras === datos.codigo_barras) return true;
+        if (datos.sku && p.sku === datos.sku) return true;
+        if (plu && normalizePlu(p.plu) === plu) return true;
+        if (plu && normalizePlu(p.codigo_barras) === plu) return true;
+        return false;
+      }) ?? null
+    );
+  }
+
+  const orParts = new Set<string>();
+  if (datos.codigo_barras?.trim()) orParts.add(`codigo_barras.eq.${datos.codigo_barras.trim()}`);
+  if (datos.sku?.trim()) orParts.add(`sku.eq.${datos.sku.trim()}`);
+  const plu = normalizePlu(datos.plu);
+  if (plu) {
+    for (const v of pluSearchVariants(plu)) {
+      if (!missingProductoColumns.has('plu')) orParts.add(`plu.eq.${v}`);
+      orParts.add(`codigo_barras.eq.${v}`);
+      orParts.add(`sku.eq.${v}`);
+      orParts.add(`sku.eq.PLU-${v}`);
+    }
+  }
+  if (orParts.size === 0) return null;
+
+  const run = async (parts: string[]) =>
+    sb.from('productos').select('*').or(parts.join(',')).limit(5);
+
+  let { data, error } = await run([...orParts]);
+  if (error && isSchemaColumnError(error)) {
+    rememberMissingColumnsFromError(error);
+    const fallback = [...orParts].filter((p) => !p.startsWith('plu.'));
+    if (fallback.length === 0) return null;
+    const retry = await run(fallback);
+    data = retry.data;
+    error = retry.error;
+  }
+  if (error) throw errorSupabase(error);
+  const rows = (data ?? []) as Producto[];
+  if (rows.length === 0) return null;
+  if (plu) {
+    const byPlu = rows.find(
+      (p) =>
+        normalizePlu(p.plu) === plu ||
+        normalizePlu(p.codigo_barras) === plu ||
+        normalizePlu(String(p.sku || '').replace(/^PLU-/i, '')) === plu
+    );
+    if (byPlu) return byPlu;
+  }
+  return rows[0];
+}
+
+/** Crea o actualiza por PLU/SKU/barcode. No pisa el stock existente. */
+export async function upsertProductoImportacion(
+  datos: Partial<Producto>
+): Promise<{ data: Producto; created: boolean }> {
+  const existing = await buscarProductoExistenteParaImport(datos);
+  if (existing) {
+    const updated = await actualizarProducto(existing.id, {
+      ...datos,
+      stock_actual: existing.stock_actual,
+      stock_minimo: datos.stock_minimo ?? existing.stock_minimo,
+    });
+    return { data: updated, created: false };
+  }
+
+  try {
+    const created = await crearProducto(datos);
+    return { data: created, created: true };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message.toLowerCase() : '';
+    if (!msg.includes('ya existe') && !isUniqueConflictError(e)) throw e;
+    const again = await buscarProductoExistenteParaImport(datos);
+    if (!again) throw e;
+    const updated = await actualizarProducto(again.id, {
+      ...datos,
+      stock_actual: again.stock_actual,
+    });
+    return { data: updated, created: false };
+  }
 }
 
 export async function eliminarProducto(id: string): Promise<void> {

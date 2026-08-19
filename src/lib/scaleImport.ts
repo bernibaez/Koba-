@@ -1,4 +1,4 @@
-import { normalizePlu } from '@/lib/scaleBarcode';
+import { digitsOnly, normalizePlu } from '@/lib/scaleBarcode';
 
 export interface ParsedImportRow {
   id: string;
@@ -42,6 +42,48 @@ export function padPlu(rawPlu: string | number): string {
   return normalizePlu(stripNullBytes(String(rawPlu || ''))) || '';
 }
 
+/** Code 0000001 / 0000000 de la balanza: no es único, no usarlo como barcode/SKU. */
+export function isGenericScaleItemCode(code: string | null | undefined): boolean {
+  const digits = digitsOnly(code);
+  if (!digits) return true;
+  if (/^0+$/.test(digits)) return true;
+  if (digits.length >= 6 && /^0*1$/.test(digits)) return true;
+  return false;
+}
+
+function pluFromProductIdentity(p: ScaleImportMatchProduct): string {
+  return (
+    padPlu(p.plu || '') ||
+    padPlu(p.barcode || '') ||
+    padPlu(String(p.sku || '').replace(/^PLU-/i, ''))
+  );
+}
+
+export function findExistingImportProduct<T extends ScaleImportMatchProduct>(
+  catalog: T[],
+  item: { id?: string; plu?: string; barcode?: string; sku?: string }
+): T | undefined {
+  const plu = padPlu(item.plu || '') || padPlu(item.barcode || '');
+  const itemSku = (item.sku || '').trim().toUpperCase();
+  const itemBarcode = (item.barcode || '').trim();
+
+  return catalog.find((p) => {
+    if (item.id && p.id === item.id) return true;
+    const pPlu = pluFromProductIdentity(p);
+    if (plu && pPlu && pPlu === plu) return true;
+    if (itemSku && p.sku && p.sku.trim().toUpperCase() === itemSku) return true;
+    if (
+      itemBarcode &&
+      p.barcode &&
+      p.barcode.trim() === itemBarcode &&
+      !isGenericScaleItemCode(itemBarcode)
+    ) {
+      return true;
+    }
+    return false;
+  });
+}
+
 function looksLikeScaleDump(text: string): boolean {
   return /1P\d{4,5}[A-Za-z]/.test(text);
 }
@@ -75,8 +117,17 @@ function buildRow(
       ? Math.round(partial.costPrice * 100) / 100
       : Math.round(salePrice * 0.7 * 100) / 100;
   const currentStock = partial.currentStock ?? 0;
-  const barcode = (partial.barcode || '').trim() || formattedPlu || `20${(formattedPlu || '00001')}00000`;
-  const sku = (partial.sku || '').trim() || (formattedPlu ? `PLU-${formattedPlu}` : `SKU-${Date.now()}-${index + 1}`);
+  const rawCode = (partial.barcode || partial.sku || '').trim();
+  const genericCode = isGenericScaleItemCode(rawCode);
+  // Identidad estable por PLU: el Code 0000001 de la balanza se repite y choca con UNIQUE.
+  const barcode = partial.isWeight && formattedPlu
+    ? formattedPlu
+    : (genericCode ? '' : rawCode) || formattedPlu || `20${formattedPlu || '00001'}00000`;
+  const sku =
+    partial.isWeight && formattedPlu
+      ? `PLU-${formattedPlu}`
+      : (genericCode ? '' : (partial.sku || '').trim()) ||
+        (formattedPlu ? `PLU-${formattedPlu}` : `SKU-${Date.now()}-${index + 1}`);
 
   let validationError = '';
   if (!name) validationError = 'Nombre de producto requerido';
@@ -342,14 +393,7 @@ export function annotateImportMatches(
 ): ParsedImportRow[] {
   return rows.map((row) => {
     if (!row.isValid) return { ...row, matchStatus: 'create' as const };
-    const plu = padPlu(row.plu);
-    const existing = existingProducts.find((p) => {
-      const pPlu = padPlu(p.plu || '');
-      if (plu && pPlu && pPlu === plu) return true;
-      if (plu && padPlu(p.barcode || '') === plu) return true;
-      if (row.sku && p.sku && p.sku.trim().toUpperCase() === row.sku.trim().toUpperCase()) return true;
-      return false;
-    });
+    const existing = findExistingImportProduct(existingProducts, row);
     if (!existing) return { ...row, matchStatus: 'create' as const };
 
     const samePrice = Math.round((existing.salePrice || 0) * 100) === Math.round(row.salePrice * 100);
