@@ -32,7 +32,7 @@ interface POSHeaderProps {
   onClear: () => void;
   onHold: () => void;
   onExpense: () => void;
-  onScale: () => void;
+  onScale?: () => void;
   onReturn: () => void;
   onCancelDelete: () => void;
   onSwitchCash: () => void;
@@ -155,15 +155,6 @@ export default function POSHeader({
             title="Registrar detalles (Maleta)"
           >
             <Briefcase size={18} strokeWidth={2.3} />
-          </button>
-
-          <button
-            type="button"
-            onClick={onScale}
-            className="p-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white transition-all shadow-xs active:scale-95 border border-teal-500"
-            title="Balanza (Pesados SKU: 200)"
-          >
-            <Scale size={18} strokeWidth={2.3} />
           </button>
 
           <button
