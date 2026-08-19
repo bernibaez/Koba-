@@ -4,6 +4,7 @@ import { Package, Download, Plus, FileText } from 'lucide-react';
 interface ProductsHeaderProps {
   onAdd: () => void;
   onExport: () => void;
+  onImport?: () => void;
   totalProducts: number;
   activeProducts: number;
   lowStockCount: number;
@@ -12,6 +13,7 @@ interface ProductsHeaderProps {
 export default function ProductsHeader({
   onAdd,
   onExport,
+  onImport,
 }: ProductsHeaderProps) {
   return (
     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -28,8 +30,8 @@ export default function ProductsHeader({
         <button type="button" onClick={onExport} className="btn-secondary flex items-center gap-1.5 text-xs font-semibold">
           <Download size={14} /> Exportar PDF
         </button>
-        <button type="button" className="btn-secondary flex items-center gap-1.5 text-xs font-semibold">
-          <FileText size={15} /> Importar
+        <button type="button" onClick={onImport} className="btn-secondary flex items-center gap-1.5 text-xs font-semibold">
+          <FileText size={15} /> Importar mscale / CSV
         </button>
         <button type="button" onClick={onAdd} className="btn-primary flex items-center gap-2 font-bold shadow-md">
           <Plus size={16} /> Nuevo Producto

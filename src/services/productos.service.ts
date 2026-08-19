@@ -24,20 +24,69 @@ function sanitizarBusquedaPostgrest(raw: string): string {
   return raw.replace(/[%_,.()"'\\*]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+function isUniqueConflictError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  const e = err as { code?: string; status?: number; message?: string; details?: string };
+  return (
+    e.code === '23505' ||
+    e.status === 409 ||
+    (typeof e.message === 'string' &&
+      (e.message.toLowerCase().includes('duplicate') ||
+        e.message.toLowerCase().includes('unique') ||
+        e.message.toLowerCase().includes('conflict')))
+  );
+}
+
 function errorSupabase(error: unknown): Error {
   if (error && typeof error === 'object') {
-    const e = error as { message?: string; details?: string; hint?: string; code?: string };
+    const e = error as { message?: string; details?: string; hint?: string; code?: string; status?: number };
+    if (isUniqueConflictError(e)) {
+      const combined = `${e.message ?? ''} ${e.details ?? ''} ${e.hint ?? ''}`.toLowerCase();
+      if (combined.includes('codigo_barras') || combined.includes('codigo_barras_key')) {
+        return new Error('Ya existe un producto registrado con este Código de Barras.');
+      }
+      if (combined.includes('sku') || combined.includes('sku_key')) {
+        return new Error('Ya existe un producto registrado con este SKU.');
+      }
+      if (combined.includes('plu') || combined.includes('plu_key')) {
+        return new Error('Ya existe un producto registrado con este PLU.');
+      }
+      return new Error('Ya existe un producto registrado con esos datos (Código de barras, SKU o PLU duplicado).');
+    }
     const parts = [e.message, e.details, e.hint].filter(Boolean);
     return new Error(parts.join(' — ') || 'Error de Supabase');
   }
   return error instanceof Error ? error : new Error('Error de Supabase');
 }
 
-function isPluSchemaError(error: unknown): boolean {
+function isSchemaColumnError(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
   const e = error as { message?: string; details?: string; hint?: string; code?: string };
   const combined = `${e.message ?? ''} ${e.details ?? ''} ${e.hint ?? ''} ${e.code ?? ''}`.toLowerCase();
-  return combined.includes('plu');
+  return (
+    e.code === 'PGRST204' ||
+    e.code === '42703' ||
+    combined.includes('plu') ||
+    combined.includes('column') ||
+    combined.includes('schema cache') ||
+    combined.includes('does not exist')
+  );
+}
+
+function stripExtendedColumns(payload: Record<string, any>): Record<string, any> {
+  const {
+    plu,
+    sale_type,
+    weight_unit,
+    price_per_weight,
+    allow_decimal,
+    min_weight,
+    max_weight,
+    generate_scale_barcode,
+    is_weight_product,
+    ...corePayload
+  } = payload;
+  return corePayload;
 }
 
 /** Mapeo DB → UI Product Management / POS */
@@ -214,7 +263,7 @@ export async function obtenerProductos(params: ProductosFiltro = {}): Promise<Pr
   if (params.signal) query = query.abortSignal(params.signal);
 
   let { data, error, count } = await query;
-  if (error && q && isPluSchemaError(error)) {
+  if (error && q && isSchemaColumnError(error)) {
     let fallbackQuery = sb
       .from('productos')
       .select('*', { count: 'exact' })
@@ -268,12 +317,14 @@ export async function crearProducto(datos: Partial<Producto>): Promise<Producto>
 
   const sb = getSupabase();
   const { id, creado_en, actualizado_en, ...rest } = datos;
+  const cleanBarcode = rest.codigo_barras?.trim();
+  const cleanSku = rest.sku?.trim();
   const payload = {
     ...rest,
     ...(esUuid(id) ? { id } : {}),
-    codigo_barras: rest.codigo_barras || `GEN-${Date.now()}`,
-    sku: rest.sku || `SKU-${Date.now()}`,
-    nombre: rest.nombre || 'Sin nombre',
+    codigo_barras: cleanBarcode || `GEN-${Date.now()}`,
+    sku: cleanSku || `SKU-${Date.now()}`,
+    nombre: rest.nombre?.trim() || 'Sin nombre',
     categoria: rest.categoria || 'General',
     unidad: rest.unidad || 'Unidad',
     precio_costo: Number(rest.precio_costo ?? 0),
@@ -287,9 +338,9 @@ export async function crearProducto(datos: Partial<Producto>): Promise<Producto>
     estado: rest.estado ?? 'activo',
   };
   const { data, error } = await sb.from('productos').insert(payload).select('*').single();
-  if (error && isPluSchemaError(error)) {
-    const { plu, ...payloadWithoutPlu } = payload as any;
-    const retry = await sb.from('productos').insert(payloadWithoutPlu).select('*').single();
+  if (error && isSchemaColumnError(error)) {
+    const cleanPayload = stripExtendedColumns(payload as any);
+    const retry = await sb.from('productos').insert(cleanPayload).select('*').single();
     if (retry.error) throw errorSupabase(retry.error);
     return retry.data as Producto;
   }
@@ -353,13 +404,13 @@ export async function actualizarProducto(id: string, datos: Partial<Producto>): 
     .eq('id', id)
     .select('*')
     .single();
-  if (error && isPluSchemaError(error)) {
-    const { plu, ...restWithoutPlu } = rest as any;
+  if (error && isSchemaColumnError(error)) {
+    const cleanPayload = stripExtendedColumns(rest as any);
     const retry = await sb
       .from('productos')
       .update({
-        ...restWithoutPlu,
-        fecha_vencimiento: restWithoutPlu.fecha_vencimiento || null,
+        ...cleanPayload,
+        fecha_vencimiento: cleanPayload.fecha_vencimiento || null,
         actualizado_en: new Date().toISOString(),
       })
       .eq('id', id)

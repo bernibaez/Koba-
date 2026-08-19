@@ -180,6 +180,9 @@ export default function ProductFormModal({ open, onClose, product, allProducts =
     const isScaleProduct = weightState.generateScaleBarcode;
     const cleanPlu = (data.plu || '').trim();
 
+    const cleanBarcode = (data.barcode || '').trim();
+    const cleanSku = (data.sku || '').trim();
+
     // Validation 1: Scale product must be configured for sale by weight
     if (isScaleProduct && !isWeight) {
       toast.error('Los productos de balanza deben configurarse para venta por peso.');
@@ -199,6 +202,28 @@ export default function ProductFormModal({ open, onClose, product, allProducts =
       );
       if (duplicate) {
         toast.error(`El PLU "${cleanPlu}" ya está asignado a otro producto ("${duplicate.name}").`);
+        return;
+      }
+    }
+
+    // Validation 4: Unique Barcode validation
+    if (cleanBarcode && allProducts && allProducts.length > 0) {
+      const duplicate = allProducts.find(
+        (p) => p.id !== product?.id && p.barcode && p.barcode.trim() === cleanBarcode
+      );
+      if (duplicate) {
+        toast.error(`El Código de Barras "${cleanBarcode}" ya está asignado a otro producto ("${duplicate.name}").`);
+        return;
+      }
+    }
+
+    // Validation 5: Unique SKU validation
+    if (cleanSku && allProducts && allProducts.length > 0) {
+      const duplicate = allProducts.find(
+        (p) => p.id !== product?.id && p.sku && p.sku.trim().toLowerCase() === cleanSku.toLowerCase()
+      );
+      if (duplicate) {
+        toast.error(`El SKU "${cleanSku}" ya está asignado a otro producto ("${duplicate.name}").`);
         return;
       }
     }

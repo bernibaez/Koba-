@@ -4,9 +4,10 @@ import ProductsToolbar from './ProductsToolbar';
 import ProductsTable from './ProductsTable';
 import ProductFormModal from './ProductFormModal';
 import PriceLabelModal from './PriceLabelModal';
+import ProductImportModal from './ProductImportModal';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 import ModalShell from '@/components/ui/ModalShell';
-import { X, Package, Scale, ShoppingCart, Plus } from 'lucide-react';
+import { X, Package, Scale, ShoppingCart, Plus, FileSpreadsheet } from 'lucide-react';
 import { toast } from 'sonner';
 import { exportTableToPdf, formatMoneyPdf } from '@/lib/exportPdf';
 import { useProductos } from '@/hooks/useProductos';
@@ -69,6 +70,8 @@ export default function ProductManagementScreen() {
   const [productTypeTab, setProductTypeTab] = useState<'all' | 'normal' | 'balanza'>('all');
   const [isNewScaleProductMode, setIsNewScaleProductMode] = useState(false);
   const [addModalOpen, setAddModalOpen] = useState(false);
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [importIsScaleMode, setImportIsScaleMode] = useState(false);
   const [editProduct, setEditProduct] = useState<Product | null>(null);
   const [viewingProduct, setViewingProduct] = useState<Product | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -183,6 +186,16 @@ export default function ProductManagementScreen() {
     }
   };
 
+  const handleBatchImport = async (productsToImport: Product[]) => {
+    let successCount = 0;
+    for (const item of productsToImport) {
+      const { id: _localId, ...rest } = item;
+      await crear(rest);
+      successCount++;
+    }
+    toast.success(`Se completó la importación de ${successCount} productos.`);
+  };
+
   const handleDelete = async () => {
     if (!deleteId) return;
     setDeleteLoading(true);
@@ -281,6 +294,10 @@ export default function ProductManagementScreen() {
           setAddModalOpen(true);
         }}
         onExport={handleExportPdf}
+        onImport={() => {
+          setImportIsScaleMode(false);
+          setImportModalOpen(true);
+        }}
         totalProducts={products.length}
         activeProducts={products.filter((p) => p.status === 'active').length}
         lowStockCount={products.filter((p) => p.stockStatus === 'low' || p.stockStatus === 'out').length}
@@ -363,33 +380,36 @@ export default function ProductManagementScreen() {
         </button>
       </div>
 
-      {/* Banner Informativo y Acción Rápida para Sección Balanza */}
+      {/* Banner Minimalista Ajustado para Sección Balanza */}
       {productTypeTab === 'balanza' && (
-        <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 font-bold">
-              <Scale size={20} />
-            </div>
-            <div>
-              <h4 className="font-bold text-emerald-900 dark:text-emerald-200 text-sm">
-                Sección Automática: Productos de Balanza (Peso Variable EAN-13)
-              </h4>
-              <p className="text-emerald-700 dark:text-emerald-300 mt-0.5">
-                Estos productos utilizan código PLU de 5 dígitos (ej. 00132) sincronizado con <strong>mscale</strong>. Al pasarlos por el lector en el POS, Mercato calcula automáticamente el peso y precio total.
-              </p>
-            </div>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-5 py-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/25">
+          <div className="flex items-center gap-2.5 text-emerald-800 dark:text-emerald-200 font-semibold text-sm">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+            <span>Catálogo Balanza: Productos con PLU de 5 dígitos en sincronización con <strong>mscale</strong></span>
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              setEditProduct(null);
-              setIsNewScaleProductMode(true);
-              setAddModalOpen(true);
-            }}
-            className="btn-primary !bg-emerald-600 hover:!bg-emerald-700 text-white font-bold shrink-0 shadow-sm flex items-center gap-1.5"
-          >
-            <Plus size={15} /> + Nuevo Producto Balanza
-          </button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => {
+                setImportIsScaleMode(true);
+                setImportModalOpen(true);
+              }}
+              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-800 dark:text-emerald-200 font-bold text-sm border border-emerald-500/30 transition-all shrink-0"
+            >
+              <FileSpreadsheet size={16} /> Importar mscale / Excel
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setEditProduct(null);
+                setIsNewScaleProductMode(true);
+                setAddModalOpen(true);
+              }}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm shadow-sm transition-all shrink-0 hover:scale-[1.01]"
+            >
+              <Plus size={16} /> Nuevo Producto Balanza
+            </button>
+          </div>
         </div>
       )}
 
@@ -548,6 +568,14 @@ export default function ProductManagementScreen() {
           onClose={() => setLabelModalProducts(null)}
         />
       )}
+
+      <ProductImportModal
+        open={importModalOpen}
+        onClose={() => setImportModalOpen(false)}
+        existingProducts={products}
+        onImport={handleBatchImport}
+        defaultIsScaleMode={importIsScaleMode}
+      />
 
       <ConfirmModal
         open={!!deleteId}
