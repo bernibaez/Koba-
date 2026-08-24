@@ -329,10 +329,10 @@ export default function ProductsTable({
 
                   {/* Balanza */}
                   <td className="px-3 py-3.5 text-center text-xs">
-                    {product.generateScaleBarcode || (product.isWeightProduct && product.plu) ? (
+                    {product.isWeightProduct || product.saleType === 'weight' || product.saleType === 'both' ? (
                       <span
                         className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 shadow-2xs"
-                        title="Producto identificado mediante etiqueta de balanza"
+                        title="Producto de peso variable para balanza"
                       >
                         <Scale size={12} className="text-emerald-600 dark:text-emerald-400" />
                         <span>Balanza</span>
