@@ -12,6 +12,7 @@ import PosReturnModal from './PosReturnModal';
 import PosCashSwitchModal from './PosCashSwitchModal';
 import RegisterDetailsModal from './RegisterDetailsModal';
 import PosCashOpenModal from './PosCashOpenModal';
+import PosCashCloseModal from './PosCashCloseModal';
 import FiscalInvoiceModal from '@/components/FiscalInvoiceModal';
 import { getCashRegister, type CashRegisterId } from '@/lib/cashRegisters';
 import { useCashRegisters } from '@/hooks/useCashRegisters';
@@ -72,7 +73,7 @@ export default function POSTerminal() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const isAdminUser = user?.role === 'Administrador';
-  const { registers } = useCashRegisters();
+  const { registers, refetch: refetchRegisters } = useCashRegisters();
   const [cart, setCart] = useState<CartItem[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [globalDiscount, setGlobalDiscount] = useState(0);
@@ -101,10 +102,12 @@ export default function POSTerminal() {
   );
   const [cashSwitchOpen, setCashSwitchOpen] = useState(false);
   const [openCashModalOpen, setOpenCashModalOpen] = useState(false);
+  const [closeCashModalOpen, setCloseCashModalOpen] = useState(false);
   const [weightScanOpen, setWeightScanOpen] = useState(false);
 
   const activeCashSession = registers.find((c) => c.id === activeCashId);
   const activeCash = activeCashSession || getCashRegister(activeCashId);
+  const cashIsOpen = Boolean(activeCashSession?.open);
   const isRemoteAdmin = isAdminUser && !activeCash.isAdminBox;
 
   useEffect(() => {
@@ -748,6 +751,7 @@ export default function POSTerminal() {
         cashSwitchOpen ||
         registerDetailsOpen ||
         openCashModalOpen ||
+        closeCashModalOpen ||
         weightScanOpen ||
         lastFiscalInvoice
       ) && (
@@ -768,7 +772,9 @@ export default function POSTerminal() {
         onCancelDelete={() => setAwaitingDeleteScan(false)}
         onSwitchCash={() => setCashSwitchOpen(true)}
         onOpenRegisterDetails={() => setRegisterDetailsOpen(true)}
+        cashIsOpen={cashIsOpen}
         onOpenCash={() => setOpenCashModalOpen(true)}
+        onCloseCash={() => setCloseCashModalOpen(true)}
       />
 
       {/* Main Grid: Left Panel (Cart) & Right Panel (Products Catalog) */}
@@ -1033,8 +1039,12 @@ export default function POSTerminal() {
               return;
             }
             setActiveCashId(id);
+            void refetchRegisters();
           }}
-          onClose={() => setCashSwitchOpen(false)}
+          onClose={() => {
+            setCashSwitchOpen(false);
+            void refetchRegisters();
+          }}
         />
       )}
       {registerDetailsOpen && (
@@ -1055,9 +1065,18 @@ export default function POSTerminal() {
         <PosCashOpenModal
           initialCajaId={String(activeCashId)}
           onSuccess={() => {
-            activeCash.open = true;
+            void refetchRegisters();
           }}
           onClose={() => setOpenCashModalOpen(false)}
+        />
+      )}
+      {closeCashModalOpen && (
+        <PosCashCloseModal
+          initialCajaId={String(activeCashId)}
+          onSuccess={() => {
+            void refetchRegisters();
+          }}
+          onClose={() => setCloseCashModalOpen(false)}
         />
       )}
       {weightScanOpen && (

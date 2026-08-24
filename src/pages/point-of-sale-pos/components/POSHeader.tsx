@@ -12,6 +12,7 @@ import {
   Calendar,
   Monitor,
   PlayCircle,
+  Lock,
   User,
   Settings,
   LogOut,
@@ -37,7 +38,9 @@ interface POSHeaderProps {
   onCancelDelete: () => void;
   onSwitchCash: () => void;
   onOpenRegisterDetails?: () => void;
+  cashIsOpen?: boolean;
   onOpenCash?: () => void;
+  onCloseCash?: () => void;
 }
 
 export default function POSHeader({
@@ -56,7 +59,9 @@ export default function POSHeader({
   onCancelDelete,
   onSwitchCash,
   onOpenRegisterDetails,
+  cashIsOpen = false,
   onOpenCash,
+  onCloseCash,
 }: POSHeaderProps) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -191,7 +196,17 @@ export default function POSHeader({
         </div>
 
         <div className="flex items-center gap-2">
-          {onOpenCash && (
+          {cashIsOpen && onCloseCash ? (
+            <button
+              type="button"
+              onClick={onCloseCash}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-black transition-all shadow-sm active:scale-95 border border-rose-500"
+              title="Cerrar turno de caja y hacer arqueo"
+            >
+              <Lock size={15} />
+              <span className="hidden sm:inline">Cierre de Caja</span>
+            </button>
+          ) : onOpenCash ? (
             <button
               type="button"
               onClick={onOpenCash}
@@ -201,7 +216,7 @@ export default function POSHeader({
               <PlayCircle size={15} />
               <span className="hidden sm:inline">Iniciar Caja</span>
             </button>
-          )}
+          ) : null}
 
           <button
             type="button"

@@ -9,7 +9,9 @@ import type { CierreCaja, Perfil } from '@/types/database';
 
 export function useCashRegisters() {
   const { user } = useAuth();
-  const [registers, setRegisters] = useState<CashRegisterSession[]>(CASH_REGISTERS);
+  const [registers, setRegisters] = useState<CashRegisterSession[]>(() =>
+    CASH_REGISTERS.map((r) => ({ ...r, open: false, openedAt: '—' }))
+  );
   const [dbUsers, setDbUsers] = useState<Perfil[]>([]);
   const [loading, setLoading] = useState(true);
 
