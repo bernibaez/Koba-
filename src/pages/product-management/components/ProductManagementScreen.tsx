@@ -109,29 +109,16 @@ export default function ProductManagementScreen() {
 
   const products = productosUi;
 
-  const normalCount = products.filter(
-    (p) =>
-      !p.isWeightProduct &&
-      p.saleType !== 'weight' &&
-      !p.generateScaleBarcode &&
-      !(p.plu && p.plu.trim().length > 0)
-  ).length;
+  const isVariableWeight = (p: Product) =>
+    Boolean(p.isWeightProduct || p.saleType === 'weight' || p.saleType === 'both');
 
-  const scaleCount = products.filter(
-    (p) =>
-      p.isWeightProduct ||
-      p.saleType === 'weight' ||
-      p.generateScaleBarcode ||
-      (p.plu && p.plu.trim().length > 0)
-  ).length;
+  const normalCount = products.filter((p) => !isVariableWeight(p)).length;
+
+  const scaleCount = products.filter((p) => isVariableWeight(p)).length;
 
   const filtered = products
     .filter((p) => {
-      const isScale =
-        p.isWeightProduct ||
-        p.saleType === 'weight' ||
-        p.generateScaleBarcode ||
-        (p.plu && p.plu.trim().length > 0);
+      const isScale = isVariableWeight(p);
       if (productTypeTab === 'normal') return !isScale;
       if (productTypeTab === 'balanza') return isScale;
       return true;
