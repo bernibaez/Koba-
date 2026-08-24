@@ -10,12 +10,26 @@ function esUuid(value: string | undefined | null): boolean {
 async function expandCajaIds(cajaId?: string): Promise<Set<string>> {
   const ids = new Set<string>();
   if (!cajaId) return ids;
-  ids.add(String(cajaId).trim());
+  const raw = String(cajaId).trim();
+  ids.add(raw);
+  if (raw.toLowerCase().startsWith('caja-')) {
+    ids.add(raw.slice(5));
+  } else if (/^\d+$/.test(raw)) {
+    ids.add(`caja-${raw}`);
+  }
   try {
     const cajas = await obtenerCajas({ soloActivas: false }).catch(() => []);
     for (const caja of cajas) {
-      const keys = [caja.id, caja.codigo].filter(Boolean).map(String);
-      if (keys.includes(String(cajaId))) {
+      const keys = [
+        caja.id,
+        caja.codigo,
+        caja.nombre,
+        `Caja #${caja.codigo}`,
+        `Caja ${caja.codigo}`,
+      ]
+        .filter(Boolean)
+        .map(String);
+      if (keys.some((k) => ids.has(k) || k.toLowerCase() === raw.toLowerCase())) {
         keys.forEach((k) => ids.add(k));
       }
     }
@@ -359,8 +373,9 @@ export interface ResumenCajaAbierta {
 }
 
 export async function calcularResumenCajaAbierta(cajaId: string, cajeroId?: string): Promise<ResumenCajaAbierta> {
+  const ids = await expandCajaIds(cajaId);
   const abierta = await obtenerCajaAbierta(cajaId, cajeroId);
-  const apertura = abierta?.monto_apertura ?? 0;
+  const apertura = Number(abierta?.monto_apertura ?? 0);
   const desde = abierta?.abierta_en || new Date().toISOString().slice(0, 10);
 
   let totalVentas = 0;
@@ -371,10 +386,11 @@ export async function calcularResumenCajaAbierta(cajaId: string, cajeroId?: stri
 
   try {
     const { obtenerVentasTurno } = await import('./ventas.service');
+    const searchCajaIds = Array.from(ids);
     const ventas = await obtenerVentasTurno({
-      cajaId: abierta?.caja_id || cajaId,
+      cajaId: searchCajaIds.length > 0 ? searchCajaIds : cajaId,
       desde,
-      limite: 500,
+      limite: 1000,
     });
     for (const v of ventas) {
       totalVentas += Number(v.monto_total) || 0;
@@ -384,14 +400,34 @@ export async function calcularResumenCajaAbierta(cajaId: string, cajeroId?: stri
       totalOtros += Number(v.monto_credito) || 0;
     }
   } catch {
-    totalVentas = abierta?.total_ventas ?? 0;
-    totalEfectivo = abierta?.total_efectivo ?? 0;
-    totalTarjeta = abierta?.total_tarjeta ?? 0;
-    totalTransferencia = abierta?.total_transferencia ?? 0;
+    totalVentas = Number(abierta?.total_ventas ?? 0);
+    totalEfectivo = Number(abierta?.total_efectivo ?? 0);
+    totalTarjeta = Number(abierta?.total_tarjeta ?? 0);
+    totalTransferencia = Number(abierta?.total_transferencia ?? 0);
   }
 
-  const totalEntradas = 0;
-  const totalRetiros = 0;
+  let totalEntradas = 0;
+  let totalRetiros = 0;
+  try {
+    const { obtenerMovimientosCaja } = await import('./movimientosCaja.service');
+    const movimientos = await obtenerMovimientosCaja(abierta?.id, abierta?.caja_id || cajaId);
+    const desdeTime = desde ? new Date(desde).getTime() : 0;
+    for (const m of movimientos) {
+      if (desdeTime > 0 && m.creado_en) {
+        const mt = new Date(m.creado_en).getTime();
+        if (!isNaN(mt) && mt < desdeTime - 5000) continue;
+      }
+      const monto = Number(m.monto || 0);
+      if (m.tipo === 'entrada' || m.tipo === 'aporte') {
+        totalEntradas += monto;
+      } else if (m.tipo === 'salida' || m.tipo === 'retiro' || m.tipo === 'gasto') {
+        totalRetiros += monto;
+      }
+    }
+  } catch {
+    // Ignorar si falla la carga de movimientos
+  }
+
   const totalDevoluciones = 0;
   const montoEsperado = apertura + totalEfectivo + totalEntradas - totalRetiros - totalDevoluciones;
 

@@ -170,7 +170,7 @@ export async function obtenerHistorialVentas(params: {
   fechaInicio?: string;
   fechaFin?: string;
   busqueda?: string;
-  cajaId?: string;
+  cajaId?: string | string[];
   cajeroId?: string;
   excluirAnuladas?: boolean;
   signal?: AbortSignal;
@@ -199,7 +199,12 @@ export async function obtenerHistorialVentas(params: {
       list = list.filter((v) => v.creado_en <= params.fechaFin! + 'T23:59:59');
     }
     if (params.cajaId) {
-      list = list.filter((v) => String(v.caja_id ?? '') === String(params.cajaId));
+      if (Array.isArray(params.cajaId)) {
+        const allowed = new Set(params.cajaId.map(String));
+        list = list.filter((v) => allowed.has(String(v.caja_id ?? '')));
+      } else {
+        list = list.filter((v) => String(v.caja_id ?? '') === String(params.cajaId));
+      }
     }
     if (params.cajeroId) {
       list = list.filter((v) => String(v.cajero_id ?? '') === String(params.cajeroId));
@@ -222,7 +227,17 @@ export async function obtenerHistorialVentas(params: {
   }
   if (params.fechaInicio) query = query.gte('creado_en', params.fechaInicio);
   if (params.fechaFin) query = query.lte('creado_en', params.fechaFin + 'T23:59:59');
-  if (params.cajaId) query = query.eq('caja_id', params.cajaId);
+  if (params.cajaId) {
+    if (Array.isArray(params.cajaId)) {
+      if (params.cajaId.length === 1) {
+        query = query.eq('caja_id', params.cajaId[0]);
+      } else if (params.cajaId.length > 1) {
+        query = query.in('caja_id', params.cajaId);
+      }
+    } else {
+      query = query.eq('caja_id', params.cajaId);
+    }
+  }
   if (params.cajeroId) query = query.eq('cajero_id', params.cajeroId);
   if (params.excluirAnuladas) query = query.neq('estado', 'anulada');
   if (params.signal) query = query.abortSignal(params.signal);
@@ -262,14 +277,14 @@ export async function obtenerHistorialVentas(params: {
 
 /** Ventas del turno (caja/cajero) con detalle de ítems — para resumen POS / admin. */
 export async function obtenerVentasTurno(params: {
-  cajaId?: string;
+  cajaId?: string | string[];
   cajeroId?: string;
   desde?: string;
   limite?: number;
 }): Promise<VentaConDetalle[]> {
   const { datos } = await obtenerHistorialVentas({
     pagina: 1,
-    limite: params.limite ?? 200,
+    limite: params.limite ?? 500,
     cajaId: params.cajaId,
     cajeroId: params.cajeroId,
     fechaInicio: params.desde?.slice(0, 10),
@@ -278,10 +293,13 @@ export async function obtenerVentasTurno(params: {
 
   if (datos.length === 0) return [];
 
-  // Filtrar por hora exacta de apertura si se indicó timestamp completo
-  const desdeIso = params.desde;
-  const filtradas = desdeIso
-    ? datos.filter((v) => !desdeIso || v.creado_en >= desdeIso)
+  // Filtrar por hora exacta de apertura comparando timestamps numéricos
+  const desdeTime = params.desde ? new Date(params.desde).getTime() : 0;
+  const filtradas = desdeTime > 0
+    ? datos.filter((v) => {
+        const t = new Date(v.creado_en).getTime();
+        return !isNaN(t) ? t >= desdeTime - 5000 : true;
+      })
     : datos;
 
   const sb = tryGetSupabase();
