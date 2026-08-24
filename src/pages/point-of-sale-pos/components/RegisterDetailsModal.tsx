@@ -41,8 +41,14 @@ export default function RegisterDetailsModal({
       setLoading(true);
       try {
         const abierta = await obtenerCajaAbierta(cajaId).catch(() => null);
-        const desde =
-          abierta?.abierta_en || new Date(new Date().setHours(0, 0, 0, 0)).toISOString();
+        if (!abierta) {
+          if (alive) {
+            setAbiertaEn('');
+            setVentas([]);
+          }
+          return;
+        }
+        const desde = abierta.abierta_en;
         if (alive) setAbiertaEn(desde);
 
         const porCaja = await obtenerVentasTurno({
@@ -213,6 +219,10 @@ export default function RegisterDetailsModal({
           {loading ? (
             <div className="py-16 text-center text-slate-400 font-semibold">
               Cargando ventas del turno…
+            </div>
+          ) : !abiertaEn ? (
+            <div className="py-16 text-center text-slate-400 font-semibold">
+              No hay un turno de caja iniciado. Las ventas del cierre anterior no se muestran aquí.
             </div>
           ) : (
             <>

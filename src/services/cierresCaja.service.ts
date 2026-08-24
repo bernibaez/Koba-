@@ -1,6 +1,33 @@
 import { getSupabase, isSupabaseConfigured, tryGetSupabase } from './clienteSupabase';
 import { CIERRE_COLUMNS, type CierreCaja } from '@/types/database';
 import { getCashClosures, saveCashClosure, type CashClosure } from '@/lib/cashClosureStore';
+import { obtenerCajas } from './cajas.service';
+
+function esUuid(value: string | undefined | null): boolean {
+  return !!value && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+async function expandCajaIds(cajaId?: string): Promise<Set<string>> {
+  const ids = new Set<string>();
+  if (!cajaId) return ids;
+  ids.add(String(cajaId).trim());
+  try {
+    const cajas = await obtenerCajas({ soloActivas: false }).catch(() => []);
+    for (const caja of cajas) {
+      const keys = [caja.id, caja.codigo].filter(Boolean).map(String);
+      if (keys.includes(String(cajaId))) {
+        keys.forEach((k) => ids.add(k));
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return ids;
+}
+
+function isOpenStatus(estado?: string | null): boolean {
+  return String(estado || '').toLowerCase() === 'abierta';
+}
 
 function localToDb(c: CashClosure): CierreCaja {
   return {
@@ -21,6 +48,63 @@ function localToDb(c: CashClosure): CierreCaja {
     abierta_en: c.openedAt,
     cerrada_en: c.closedAt || null,
   };
+}
+
+export function cierreDbARegistro(
+  c: CierreCaja,
+  extra?: Partial<Pick<CashClosure, 'userName' | 'username' | 'cashRegisterLabel' | 'notes' | 'baseCash'>>
+): CashClosure {
+  const local = getCashClosures().find((x) => x.id === c.id);
+  const closedAt = c.cerrada_en || local?.closedAt || '';
+  return {
+    id: c.id,
+    code: c.codigo,
+    userId: c.cajero_id ?? local?.userId ?? '',
+    username: extra?.username || local?.username || '',
+    userName: extra?.userName || local?.userName || '',
+    openedAt: c.abierta_en || local?.openedAt || '',
+    closedAt,
+    date: (closedAt || c.abierta_en || new Date().toISOString()).slice(0, 10),
+    cashRegisterId: c.caja_id,
+    cashRegisterLabel: extra?.cashRegisterLabel || local?.cashRegisterLabel || `Caja ${c.caja_id}`,
+    totalSales: Number(c.total_ventas ?? local?.totalSales ?? 0),
+    totalCash: Number(c.total_efectivo ?? local?.totalCash ?? 0),
+    totalCard: Number(c.total_tarjeta ?? local?.totalCard ?? 0),
+    cardCount: local?.cardCount ?? 0,
+    totalTransfer: Number(c.total_transferencia ?? local?.totalTransfer ?? 0),
+    transferCount: local?.transferCount ?? 0,
+    totalCheque: local?.totalCheque ?? 0,
+    chequeCount: local?.chequeCount ?? 0,
+    totalCredit: local?.totalCredit ?? 0,
+    creditCount: local?.creditCount ?? 0,
+    expectedCash: Number(c.monto_esperado ?? 0),
+    countedCash: Number(c.monto_real ?? 0),
+    difference: Number(c.monto_diferencia ?? 0),
+    baseCash: extra?.baseCash ?? Number(c.monto_apertura ?? local?.baseCash ?? 0),
+    status: c.estado,
+    notes: extra?.notes || local?.notes,
+  };
+}
+
+function persistirRegistroCierre(
+  db: CierreCaja,
+  extra?: Partial<Pick<CashClosure, 'userName' | 'username' | 'cashRegisterLabel' | 'notes'>>
+): CashClosure {
+  const registro = cierreDbARegistro(db, extra);
+  saveCashClosure(registro);
+  return registro;
+}
+
+/** Historial de cierres ya cerrados para la pantalla Cierre de Caja. */
+export async function obtenerRegistrosCierreCaja(): Promise<CashClosure[]> {
+  const rows = await obtenerCierresCaja();
+  const cerrados = rows.filter((c) => String(c.estado).toLowerCase() === 'cerrada');
+  const mapped = cerrados.map((c) => cierreDbARegistro(c));
+  const seen = new Set(mapped.map((c) => c.id));
+  const locales = getCashClosures().filter(
+    (c) => (c.status === 'cerrada' || !!c.closedAt) && !seen.has(c.id)
+  );
+  return [...mapped, ...locales].sort((a, b) => (a.closedAt < b.closedAt ? 1 : -1));
 }
 
 export async function obtenerCierresCaja(params?: {
@@ -116,6 +200,12 @@ export async function guardarCierreCaja(datos: NuevoCierreInput): Promise<Cierre
     .select(CIERRE_COLUMNS)
     .single();
   if (error) throw error;
+  persistirRegistroCierre(data as CierreCaja, {
+    userName: datos.cajero_nombre,
+    username: datos.cajero_username,
+    cashRegisterLabel: datos.caja_label,
+    notes: datos.notes,
+  });
   return data as CierreCaja;
 }
 
@@ -132,6 +222,7 @@ export type NuevoInicioCajaInput = {
 };
 
 export async function iniciarCaja(datos: NuevoInicioCajaInput): Promise<CierreCaja> {
+  await cerrarSesionesAbiertasDeCaja(datos.caja_id).catch(() => 0);
   const code = datos.codigo || `AP-${Date.now().toString().slice(-6)}`;
   return guardarCierreCaja({
     codigo: code,
@@ -154,30 +245,96 @@ export async function iniciarCaja(datos: NuevoInicioCajaInput): Promise<CierreCa
   });
 }
 
-export async function obtenerCajaAbierta(cajaId?: string, cajeroId?: string): Promise<CierreCaja | null> {
+async function listarSesionesAbiertas(): Promise<CierreCaja[]> {
   const sb = tryGetSupabase();
   if (!sb) {
-    const list = getCashClosures().map(localToDb);
-    const abierta = list.find(
-      (c) =>
-        c.estado === 'abierta' &&
-        (!cajaId || c.caja_id === cajaId) &&
-        (!cajeroId || c.cajero_id === cajeroId)
-    );
-    return abierta ?? null;
+    return getCashClosures().map(localToDb).filter((c) => isOpenStatus(c.estado));
   }
+  const { data, error } = await sb
+    .from('cierres_caja')
+    .select(CIERRE_COLUMNS)
+    .eq('estado', 'abierta')
+    .order('abierta_en', { ascending: false })
+    .limit(50);
+  if (error) throw error;
+  const remote = (data ?? []) as CierreCaja[];
+  const local = getCashClosures().map(localToDb).filter((c) => isOpenStatus(c.estado));
+  const seen = new Set(remote.map((c) => c.id));
+  return [...remote, ...local.filter((c) => !seen.has(c.id))];
+}
+
+/** Cierra todos los turnos abiertos de una caja (código o UUID). */
+export async function cerrarSesionesAbiertasDeCaja(cajaId?: string): Promise<number> {
+  const ids = await expandCajaIds(cajaId);
+  const abiertas = await listarSesionesAbiertas();
+  const toClose = abiertas.filter((c) => {
+    if (ids.size === 0) return true;
+    return ids.has(String(c.caja_id));
+  });
+  if (toClose.length === 0) return 0;
+
+  const now = new Date().toISOString();
+  const sb = tryGetSupabase();
+  if (sb) {
+    const uuids = toClose.map((c) => c.id).filter(esUuid);
+    if (uuids.length > 0) {
+      const { error } = await sb
+        .from('cierres_caja')
+        .update({ estado: 'cerrada', cerrada_en: now })
+        .in('id', uuids)
+        .eq('estado', 'abierta');
+      if (error) throw error;
+    }
+  }
+
+  for (const row of toClose) {
+    const existing = getCashClosures().find((c) => c.id === row.id);
+    if (existing) {
+      saveCashClosure({
+        ...existing,
+        status: 'cerrada',
+        closedAt: now,
+      });
+    }
+  }
+  return toClose.length;
+}
+
+export async function obtenerCajaAbierta(cajaId?: string, cajeroId?: string): Promise<CierreCaja | null> {
+  const ids = await expandCajaIds(cajaId);
+  const sb = tryGetSupabase();
+
+  const pickMatch = (list: CierreCaja[]): CierreCaja | null => {
+    const abiertas = list.filter((c) => isOpenStatus(c.estado));
+    if (abiertas.length === 0) return null;
+    if (ids.size > 0) {
+      const byCaja = abiertas.find((c) => ids.has(String(c.caja_id)));
+      if (byCaja) return byCaja;
+    }
+    if (cajeroId) {
+      const byCajero = abiertas.find((c) => c.cajero_id === cajeroId);
+      if (byCajero) return byCajero;
+    }
+    return ids.size > 0 ? null : abiertas[0];
+  };
+
+  if (!sb) {
+    return pickMatch(getCashClosures().map(localToDb));
+  }
+
   let query = sb
     .from('cierres_caja')
     .select(CIERRE_COLUMNS)
     .eq('estado', 'abierta')
-    .order('abierta_en', { ascending: false });
+    .order('abierta_en', { ascending: false })
+    .limit(20);
 
-  if (cajaId) query = query.eq('caja_id', cajaId);
-  if (cajeroId) query = query.eq('cajero_id', cajeroId);
-
-  const { data, error } = await query.maybeSingle();
+  const { data, error } = await query;
   if (error) throw error;
-  return (data as CierreCaja) ?? null;
+  const matched = pickMatch((data ?? []) as CierreCaja[]);
+  if (matched) return matched;
+
+  return pickMatch(getCashClosures().map(localToDb));
 }
 
 export interface ResumenCajaAbierta {
@@ -201,8 +358,8 @@ export interface ResumenCajaAbierta {
   estado: string;
 }
 
-export async function calcularResumenCajaAbierta(cajaId: string): Promise<ResumenCajaAbierta> {
-  const abierta = await obtenerCajaAbierta(cajaId);
+export async function calcularResumenCajaAbierta(cajaId: string, cajeroId?: string): Promise<ResumenCajaAbierta> {
+  const abierta = await obtenerCajaAbierta(cajaId, cajeroId);
   const apertura = abierta?.monto_apertura ?? 0;
   const desde = abierta?.abierta_en || new Date().toISOString().slice(0, 10);
 
@@ -215,7 +372,7 @@ export async function calcularResumenCajaAbierta(cajaId: string): Promise<Resume
   try {
     const { obtenerVentasTurno } = await import('./ventas.service');
     const ventas = await obtenerVentasTurno({
-      cajaId,
+      cajaId: abierta?.caja_id || cajaId,
       desde,
       limite: 500,
     });
@@ -240,8 +397,8 @@ export async function calcularResumenCajaAbierta(cajaId: string): Promise<Resume
 
   return {
     cierre_id: abierta?.id,
-    caja_id: cajaId,
-    caja_label: `Caja #${cajaId}`,
+    caja_id: abierta?.caja_id || cajaId,
+    caja_label: `Caja #${abierta?.caja_id || cajaId}`,
     cajero_id: abierta?.cajero_id,
     cajero_nombre: (abierta as CierreCaja & { cajero_nombre?: string })?.cajero_nombre,
     cajero_username: (abierta as CierreCaja & { cajero_username?: string })?.cajero_username,
@@ -285,9 +442,87 @@ export interface CerrarTurnoInput {
 }
 
 export async function cerrarTurnoCaja(input: CerrarTurnoInput): Promise<CierreCaja> {
-  const code = `CR-${Date.now().toString().slice(-6)}`;
-  return guardarCierreCaja({
-    codigo: code,
+  try {
+    const abierta =
+    (input.cierre_id
+      ? ({ id: input.cierre_id } as Pick<CierreCaja, 'id'>)
+      : null) || (await obtenerCajaAbierta(input.caja_id, input.cajero_id ?? undefined));
+
+  const now = new Date().toISOString();
+  const closureCode = `CC-${Date.now().toString().slice(-8)}`;
+  const extraUi = {
+    userName: input.cajero_nombre,
+    username: input.cajero_username,
+    cashRegisterLabel: input.caja_label,
+    notes: input.notes,
+  };
+  const updateFields = {
+    codigo: closureCode,
+    monto_apertura: input.monto_apertura,
+    monto_esperado: input.monto_esperado,
+    monto_real: input.monto_real,
+    monto_diferencia: input.monto_diferencia,
+    total_ventas: input.total_ventas ?? 0,
+    total_efectivo: input.total_efectivo ?? 0,
+    total_tarjeta: input.total_tarjeta ?? 0,
+    total_transferencia: input.total_transferencia ?? 0,
+    estado: 'cerrada' as const,
+    cerrada_en: now,
+  };
+
+  if (abierta?.id) {
+    if (!isSupabaseConfigured() || !esUuid(abierta.id)) {
+      const current = getCashClosures();
+      const existing = current.find((c) => c.id === abierta.id) ?? current.find((c) => c.status === 'abierta');
+      if (existing) {
+        const closed: CashClosure = {
+          ...existing,
+          code: closureCode,
+          expectedCash: input.monto_esperado,
+          countedCash: input.monto_real,
+          difference: input.monto_diferencia,
+          totalSales: input.total_ventas ?? existing.totalSales,
+          totalCash: input.total_efectivo ?? existing.totalCash,
+          totalCard: input.total_tarjeta ?? existing.totalCard,
+          totalTransfer: input.total_transferencia ?? existing.totalTransfer,
+          status: 'cerrada',
+          closedAt: now,
+          notes: input.notes,
+          userName: input.cajero_nombre || existing.userName,
+          username: input.cajero_username || existing.username,
+          cashRegisterLabel: input.caja_label || existing.cashRegisterLabel,
+          baseCash: input.monto_apertura,
+        };
+        saveCashClosure(closed);
+        return localToDb(closed);
+      }
+    } else {
+      const sb = getSupabase();
+      let { data, error } = await sb
+        .from('cierres_caja')
+        .update(updateFields)
+        .eq('id', abierta.id)
+        .select(CIERRE_COLUMNS)
+        .single();
+      if (error) {
+        const { codigo: _omitCodigo, ...withoutCode } = updateFields;
+        const retry = await sb
+          .from('cierres_caja')
+          .update(withoutCode)
+          .eq('id', abierta.id)
+          .select(CIERRE_COLUMNS)
+          .single();
+        data = retry.data;
+        error = retry.error;
+      }
+      if (error) throw error;
+      persistirRegistroCierre(data as CierreCaja, extraUi);
+      return data as CierreCaja;
+    }
+  }
+
+  const saved = await guardarCierreCaja({
+    codigo: closureCode,
     caja_id: input.caja_id,
     caja_label: input.caja_label,
     cajero_id: input.cajero_id,
@@ -304,6 +539,11 @@ export async function cerrarTurnoCaja(input: CerrarTurnoInput): Promise<CierreCa
     estado: 'cerrada',
     notes: input.notes,
   });
+  persistirRegistroCierre(saved, extraUi);
+  return saved;
+  } finally {
+    await cerrarSesionesAbiertasDeCaja(input.caja_id).catch(() => 0);
+  }
 }
 
 

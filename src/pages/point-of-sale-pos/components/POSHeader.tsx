@@ -196,27 +196,32 @@ export default function POSHeader({
         </div>
 
         <div className="flex items-center gap-2">
-          {cashIsOpen && onCloseCash ? (
-            <button
-              type="button"
-              onClick={onCloseCash}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-black transition-all shadow-sm active:scale-95 border border-rose-500"
-              title="Cerrar turno de caja y hacer arqueo"
-            >
-              <Lock size={15} />
-              <span className="hidden sm:inline">Cierre de Caja</span>
-            </button>
-          ) : onOpenCash ? (
-            <button
-              type="button"
-              onClick={onOpenCash}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black transition-all shadow-sm active:scale-95 border border-emerald-500"
-              title="Iniciar o abrir turno de caja con fondo inicial"
-            >
-              <PlayCircle size={15} />
-              <span className="hidden sm:inline">Iniciar Caja</span>
-            </button>
-          ) : null}
+          {(onOpenCash || onCloseCash) && (
+            <div className="flex items-center gap-2">
+              {onOpenCash && (
+                <button
+                  type="button"
+                  onClick={onOpenCash}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black transition-all shadow-sm active:scale-95 border border-emerald-500"
+                  title={cashIsOpen ? 'Ya hay un turno abierto. Inicia de nuevo para reemplazarlo o cierra primero.' : 'Iniciar o abrir turno de caja con fondo inicial'}
+                >
+                  <PlayCircle size={15} />
+                  <span className="hidden sm:inline">Iniciar Caja</span>
+                </button>
+              )}
+              {onCloseCash && (
+                <button
+                  type="button"
+                  onClick={onCloseCash}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-black transition-all shadow-sm active:scale-95 border border-rose-500"
+                  title={cashIsOpen ? 'Cerrar turno de caja y hacer arqueo' : 'Cerrar el inicio de caja activo'}
+                >
+                  <Lock size={15} />
+                  <span className="hidden sm:inline">Cierre de Caja</span>
+                </button>
+              )}
+            </div>
+          )}
 
           <button
             type="button"

@@ -8,7 +8,7 @@ import {
   Lock, Plus, Download, Search, Filter, Calendar, DollarSign, CreditCard, Smartphone, CheckCircle, AlertTriangle, Printer, FileSpreadsheet, Eye, User, X, PlayCircle
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { guardarCierreCaja, obtenerCierresCaja } from '@/services/cierresCaja.service';
+import { guardarCierreCaja, obtenerCajaAbierta, obtenerRegistrosCierreCaja, cierreDbARegistro } from '@/services/cierresCaja.service';
 import { obtenerHistorialVentas } from '@/services/ventas.service';
 import PosCashOpenModal from '@/pages/point-of-sale-pos/components/PosCashOpenModal';
 
@@ -48,35 +48,26 @@ export default function CashClosurePage() {
     let alive = true;
     (async () => {
       try {
-        const rows = await obtenerCierresCaja();
+        const [rows, openSession] = await Promise.all([
+          obtenerRegistrosCierreCaja(),
+          obtenerCajaAbierta().catch(() => null),
+        ]);
         if (!alive) return;
-        setClosures(
-          rows.map((c) => ({
-            id: c.id,
-            code: c.codigo,
-            userId: c.cajero_id ?? '',
-            username: '',
-            userName: '',
-            openedAt: c.abierta_en,
-            closedAt: c.cerrada_en ?? '',
-            date: (c.cerrada_en ?? c.abierta_en).slice(0, 10),
-            cashRegisterId: c.caja_id,
-            cashRegisterLabel: `Caja ${c.caja_id}`,
-            totalSales: Number(c.total_ventas),
-            totalCash: Number(c.total_efectivo),
-            totalCard: Number(c.total_tarjeta),
+        setClosures(rows);
+
+        if (!openSession) {
+          setCurrentSession((s) => ({
+            ...s,
+            totalSales: 0,
+            totalCash: 0,
+            totalCard: 0,
             cardCount: 0,
-            totalTransfer: Number(c.total_transferencia),
+            totalTransfer: 0,
             transferCount: 0,
-            totalCheque: 0,
-            chequeCount: 0,
-            totalCredit: 0,
-            creditCount: 0,
-            expectedCash: Number(c.monto_esperado),
-            countedCash: Number(c.monto_real),
-            difference: Number(c.monto_diferencia),
-          }))
-        );
+            baseCash: 0,
+          }));
+          return;
+        }
 
         const hoy = new Date().toISOString().slice(0, 10);
         const ventasHoy = await obtenerHistorialVentas({
@@ -92,7 +83,9 @@ export default function CashClosurePage() {
         let cardCount = 0;
         let totalTransfer = 0;
         let transferCount = 0;
+        const desde = openSession.abierta_en;
         for (const v of ventasHoy.datos) {
+          if (desde && v.creado_en < desde) continue;
           totalSales += Number(v.monto_total);
           totalCash += Number(v.monto_efectivo);
           totalCard += Number(v.monto_tarjeta);
@@ -100,7 +93,6 @@ export default function CashClosurePage() {
           if (Number(v.monto_tarjeta) > 0) cardCount += 1;
           if (Number(v.monto_transferencia) > 0) transferCount += 1;
         }
-        const openSession = rows.find((r) => r.estado === 'abierta');
         setCurrentSession((s) => ({
           ...s,
           totalSales,
@@ -109,8 +101,8 @@ export default function CashClosurePage() {
           cardCount,
           totalTransfer,
           transferCount,
-          baseCash: openSession ? Number(openSession.monto_apertura) : s.baseCash,
-          openedAt: openSession?.abierta_en ? openSession.abierta_en : s.openedAt,
+          baseCash: Number(openSession.monto_apertura) || 0,
+          openedAt: openSession.abierta_en || s.openedAt,
         }));
       } catch (e) {
         toast.error(e instanceof Error ? e.message : 'Error al cargar cierres');
@@ -129,8 +121,13 @@ export default function CashClosurePage() {
   const filteredClosures = useMemo(() => {
     return closures.filter((c) => {
       // Role check: non-admin can only see own closures
-      if (!isAdmin && c.username.toLowerCase() !== (user?.username ?? '').toLowerCase()) {
-        return false;
+      if (!isAdmin) {
+        const uid = user?.id ?? '';
+        const uname = (user?.username ?? '').toLowerCase();
+        const matchesUser =
+          (c.userId && uid && c.userId === uid) ||
+          (c.username && uname && c.username.toLowerCase() === uname);
+        if (!matchesUser) return false;
       }
       // User filter (admin only)
       if (searchUser && !c.userName.toLowerCase().includes(searchUser.toLowerCase()) && !c.username.toLowerCase().includes(searchUser.toLowerCase())) {
@@ -154,8 +151,6 @@ export default function CashClosurePage() {
       return;
     }
 
-    const now = new Date();
-    const closedAt = `${now.toISOString().slice(0, 10)} ${now.toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit' })}`;
     const count = closures.length + 1;
     const code = `CC-${String(count).padStart(3, '0')}`;
 
@@ -180,34 +175,24 @@ export default function CashClosurePage() {
         notes: notes || undefined,
       });
 
-      const newClosure: CashClosure = {
-      id: saved.id,
-      code: saved.codigo,
-      userId: user?.id ?? '0',
-      username: user?.username ?? 'usuario',
-      userName: user?.name ?? 'Usuario Sistema',
-      openedAt: currentSession.openedAt,
-      closedAt,
-      date: now.toISOString().slice(0, 10),
-      cashRegisterId: '1',
-      cashRegisterLabel: 'Caja #1',
-      totalSales: currentSession.totalSales,
-      totalCash: currentSession.totalCash,
-      totalCard: currentSession.totalCard,
-      cardCount: currentSession.cardCount,
-      totalTransfer: currentSession.totalTransfer,
-      transferCount: currentSession.transferCount,
-      totalCheque: currentSession.totalCheque,
-      chequeCount: currentSession.chequeCount,
-      totalCredit: 0,
-      creditCount: 0,
-      expectedCash,
-      countedCash: countedNum,
-      difference: cashDiff,
-      notes: notes || undefined,
-    };
+      const newClosure = cierreDbARegistro(saved, {
+        userName: user?.name ?? 'Usuario',
+        username: user?.username ?? '',
+        cashRegisterLabel: 'Caja #1',
+        notes: notes || undefined,
+      });
 
       setClosures((prev) => [newClosure, ...prev]);
+      setCurrentSession((s) => ({
+        ...s,
+        totalSales: 0,
+        totalCash: 0,
+        totalCard: 0,
+        cardCount: 0,
+        totalTransfer: 0,
+        transferCount: 0,
+        baseCash: 0,
+      }));
 
       logAuditEvent({
         user: user?.name ?? 'Usuario',
@@ -218,7 +203,7 @@ export default function CashClosurePage() {
         after: { code: newClosure.code, totalSales: newClosure.totalSales, difference: cashDiff },
       });
 
-      toast.success(`Cierre de caja ${newClosure.code} registrado en Supabase`);
+      toast.success(`Cierre de caja ${newClosure.code} registrado`);
       setShowCreateModal(false);
       setCountedCash('');
       setNotes('');

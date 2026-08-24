@@ -26,12 +26,7 @@ export function useCashRegisters() {
 
       setDbUsers(usuarios);
 
-      const abiertasMap = new Map<string, CierreCaja>();
-      for (const c of cierres) {
-        if (c.estado === 'abierta' && !abiertasMap.has(c.caja_id)) {
-          abiertasMap.set(c.caja_id, c);
-        }
-      }
+      const abiertas = cierres.filter((c) => String(c.estado).toLowerCase() === 'abierta');
 
       const cajerosReales = usuarios.filter(
         (u) => u.activo && (u.rol === 'cajero' || u.rol === 'vendedor' || u.rol === 'admin')
@@ -46,9 +41,13 @@ export function useCashRegisters() {
       }));
 
       const nextRegisters: CashRegisterSession[] = baseCajasList.map((caja, idx) => {
-        const cajaId = (caja.codigo || caja.id) as CashRegisterId;
-        const sessionAbierta = abiertasMap.get(cajaId) || abiertasMap.get(caja.id);
+        const dbId = String(caja.id);
+        const codigo = String(caja.codigo || caja.id);
+        const cajaId = codigo as CashRegisterId;
+        const keys = new Set([dbId, codigo, cajaId].filter(Boolean).map(String));
+        const sessionAbierta = abiertas.find((c) => keys.has(String(c.caja_id)));
         const isAdminBox = Boolean(caja.es_caja_principal);
+        const ids = { dbId, codigo };
 
         if (sessionAbierta) {
           const matchedUser = usuarios.find((u) => u.id === sessionAbierta.cajero_id);
@@ -61,6 +60,7 @@ export function useCashRegisters() {
 
           return {
             id: cajaId,
+            ...ids,
             label: caja.nombre,
             cashier: cashierName,
             role: userRole,
@@ -75,10 +75,10 @@ export function useCashRegisters() {
           };
         }
 
-        // Si es la caja del admin / principal y no hay sesión explícita en DB
         if (isAdminBox) {
           return {
             id: cajaId,
+            ...ids,
             label: caja.nombre,
             cashier: user?.name || 'Administrador General',
             role: user?.role || 'Administrador General',
@@ -93,11 +93,11 @@ export function useCashRegisters() {
           };
         }
 
-        // Para otras cajas asignamos usuarios reales de la base de datos si existen
         const assignedRealUser = cajerosReales[idx % (cajerosReales.length || 1)];
         if (assignedRealUser) {
           return {
             id: cajaId,
+            ...ids,
             label: caja.nombre,
             cashier: assignedRealUser.nombre_completo,
             role: ROL_DB_A_UI[assignedRealUser.rol] || 'Cajero',
@@ -114,6 +114,7 @@ export function useCashRegisters() {
 
         return {
           id: cajaId,
+          ...ids,
           label: caja.nombre,
           cashier: 'Disponible / Sin asignar',
           role: 'Sin asignar',
@@ -130,15 +131,25 @@ export function useCashRegisters() {
 
       setRegisters(nextRegisters);
     } catch {
-      setRegisters(CASH_REGISTERS);
+      setRegisters(CASH_REGISTERS.map((r) => ({ ...r, open: false, openedAt: '—' })));
     } finally {
       setLoading(false);
     }
   }, [user]);
 
+  const markRegisterClosed = useCallback((cajaId?: string) => {
+    setRegisters((prev) =>
+      prev.map((r) =>
+        !cajaId || r.id === cajaId || r.dbId === cajaId || r.codigo === cajaId
+          ? { ...r, open: false, openedAt: '—', salesToday: 0 }
+          : r
+      )
+    );
+  }, []);
+
   useEffect(() => {
     fetchDynamicRegisters();
   }, [fetchDynamicRegisters]);
 
-  return { registers, dbUsers, loading, refetch: fetchDynamicRegisters };
+  return { registers, dbUsers, loading, refetch: fetchDynamicRegisters, markRegisterClosed };
 }

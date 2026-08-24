@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { X, Lock, DollarSign, Monitor, CheckCircle2, AlertTriangle, Calculator, FileText, ArrowUpRight, ArrowDownRight, CreditCard, Undo2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
+import { findCashRegister } from '@/lib/cashRegisters';
 import { useCashRegisters } from '@/hooks/useCashRegisters';
 import { cerrarTurnoCaja, calcularResumenCajaAbierta, type ResumenCajaAbierta } from '@/services/cierresCaja.service';
 import type { CierreCaja } from '@/types/database';
@@ -25,11 +26,12 @@ export default function PosCashCloseModal({
     ? registers
     : registers.filter((c) => !c.isAdminBox);
 
+  const resolvedMatch = findCashRegister(availableRegisters, initialCajaId) || findCashRegister(registers, initialCajaId);
   const resolvedInitial =
-    initialCajaId &&
-    (isAdmin || availableRegisters.some((c) => c.id === initialCajaId))
-      ? initialCajaId
-      : availableRegisters[0]?.id || registers[0]?.id || '2';
+    resolvedMatch?.id ||
+    availableRegisters[0]?.id ||
+    registers[0]?.id ||
+    '2';
 
   const [selectedCajaId, setSelectedCajaId] = useState(resolvedInitial);
   const [selectedCajeroId, setSelectedCajeroId] = useState<string>(user?.id || '');
@@ -57,7 +59,7 @@ export default function PosCashCloseModal({
   const [fetchingSummary, setFetchingSummary] = useState(false);
 
   const selectedCaja =
-    availableRegisters.find((c) => c.id === selectedCajaId) || availableRegisters[0] || registers[0];
+    findCashRegister(availableRegisters, selectedCajaId) || availableRegisters[0] || registers[0];
   const selectedUser = isAdmin ? dbUsers.find((u) => u.id === selectedCajeroId) : null;
 
   useEffect(() => {
@@ -65,10 +67,16 @@ export default function PosCashCloseModal({
     (async () => {
       setFetchingSummary(true);
       try {
-        const res = await calcularResumenCajaAbierta(selectedCajaId);
+        const res = await calcularResumenCajaAbierta(
+          selectedCaja?.dbId || selectedCajaId,
+          user?.id
+        );
         if (alive) {
           setSummary(res);
           setMontoRealInput(String(res.monto_esperado));
+          if (!res.cierre_id) {
+            toast.error('No se encontró un inicio de caja activo para esta caja.');
+          }
         }
       } catch {
         if (alive) {
@@ -97,7 +105,7 @@ export default function PosCashCloseModal({
     return () => {
       alive = false;
     };
-  }, [selectedCajaId]);
+  }, [selectedCajaId, selectedCaja?.dbId, user?.id]);
 
   const countedReal = parseFloat(montoRealInput) || 0;
   const diferencia = countedReal - summary.monto_esperado;
@@ -123,7 +131,7 @@ export default function PosCashCloseModal({
 
       const result = await cerrarTurnoCaja({
         cierre_id: summary.cierre_id,
-        caja_id: selectedCajaId,
+        caja_id: selectedCaja?.dbId || selectedCajaId,
         caja_label: selectedCaja.label,
         cajero_id: cajeroId,
         cajero_nombre: cajeroNombre,
@@ -368,7 +376,7 @@ export default function PosCashCloseModal({
             </button>
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || fetchingSummary}
               className="btn-primary bg-amber-600 hover:bg-amber-700 text-white text-xs font-black px-6 py-2.5 rounded-xl shadow-xs flex items-center gap-2 disabled:opacity-50"
             >
               <Lock size={16} />

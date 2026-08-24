@@ -14,13 +14,14 @@ import RegisterDetailsModal from './RegisterDetailsModal';
 import PosCashOpenModal from './PosCashOpenModal';
 import PosCashCloseModal from './PosCashCloseModal';
 import FiscalInvoiceModal from '@/components/FiscalInvoiceModal';
-import { getCashRegister, type CashRegisterId } from '@/lib/cashRegisters';
+import { findCashRegister, getCashRegister, type CashRegisterId } from '@/lib/cashRegisters';
 import { useCashRegisters } from '@/hooks/useCashRegisters';
 import {
   DELETE_SKU,
   getHeldSales,
   removeHeldSale,
   saveHeldSale,
+  clearHeldSales,
   type HeldSale,
   type PaymentSplit,
 } from '@/lib/posStore';
@@ -73,7 +74,7 @@ export default function POSTerminal() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const isAdminUser = user?.role === 'Administrador';
-  const { registers, refetch: refetchRegisters } = useCashRegisters();
+  const { registers, refetch: refetchRegisters, markRegisterClosed } = useCashRegisters();
   const [cart, setCart] = useState<CartItem[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [globalDiscount, setGlobalDiscount] = useState(0);
@@ -103,31 +104,45 @@ export default function POSTerminal() {
   const [cashSwitchOpen, setCashSwitchOpen] = useState(false);
   const [openCashModalOpen, setOpenCashModalOpen] = useState(false);
   const [closeCashModalOpen, setCloseCashModalOpen] = useState(false);
+  const [shiftOpenedLocally, setShiftOpenedLocally] = useState(false);
+  const [shiftClosedLocally, setShiftClosedLocally] = useState(false);
   const [weightScanOpen, setWeightScanOpen] = useState(false);
 
-  const activeCashSession = registers.find((c) => c.id === activeCashId);
+  const activeCashSession = findCashRegister(registers, activeCashId);
   const activeCash = activeCashSession || getCashRegister(activeCashId);
-  const cashIsOpen = Boolean(activeCashSession?.open);
+  const cashIsOpen =
+    !shiftClosedLocally && (Boolean(activeCashSession?.open) || shiftOpenedLocally);
   const isRemoteAdmin = isAdminUser && !activeCash.isAdminBox;
+
+  const openPayment = useCallback(
+    (method?: 'cash' | 'card' | 'transfer' | 'credit' | 'split') => {
+      if (!cashIsOpen) {
+        toast.error('Inicia la caja antes de realizar ventas');
+        return;
+      }
+      if (method) setPreferredPayMethod(method);
+      setPaymentOpen(true);
+    },
+    [cashIsOpen]
+  );
 
   useEffect(() => {
     if (registers.length === 0) return;
 
-    // Admin: asegurar caja principal real (UUID/código de DB), no el fallback fijo "1"
-    if (isAdminUser) {
-      const exists = registers.some((c) => c.id === activeCashId);
-      if (!exists) {
-        const adminBox = registers.find((c) => c.isAdminBox) || registers[0];
-        if (adminBox) setActiveCashId(adminBox.id as CashRegisterId);
+    const current = findCashRegister(registers, activeCashId);
+    if (current) {
+      if (current.id !== activeCashId) setActiveCashId(current.id);
+      if (!isAdminUser && current.isAdminBox) {
+        const fallback = registers.find((c) => !c.isAdminBox);
+        if (fallback) setActiveCashId(fallback.id);
       }
       return;
     }
 
-    const current = registers.find((c) => c.id === activeCashId);
-    if (current?.isAdminBox) {
-      const fallback = registers.find((c) => !c.isAdminBox);
-      if (fallback) setActiveCashId(fallback.id as CashRegisterId);
-    }
+    const preferred = isAdminUser
+      ? registers.find((c) => c.isAdminBox) || registers[0]
+      : registers.find((c) => !c.isAdminBox) || registers[0];
+    if (preferred) setActiveCashId(preferred.id);
   }, [isAdminUser, registers, activeCashId]);
 
   const refreshHeld = () => setHeldSales(getHeldSales());
@@ -546,31 +561,28 @@ export default function POSTerminal() {
 
       if (e.key === 'F6') {
         e.preventDefault();
-        setPreferredPayMethod('cash');
-        setPaymentOpen(true);
+        openPayment('cash');
         return;
       }
       if (e.key === 'F7') {
         e.preventDefault();
-        setPreferredPayMethod('card');
-        setPaymentOpen(true);
+        openPayment('card');
         return;
       }
       if (e.key === 'F8') {
         e.preventDefault();
-        setPreferredPayMethod('transfer');
-        setPaymentOpen(true);
+        openPayment('transfer');
         return;
       }
       if (e.key === 'F5') {
         e.preventDefault();
-        setPreferredPayMethod('split');
-        setPaymentOpen(true);
+        openPayment('split');
         return;
       }
       if (e.key === 'F9') {
         e.preventDefault();
-        setPaymentOpen((prev) => !prev);
+        if (paymentOpen) setPaymentOpen(false);
+        else openPayment('cash');
         return;
       }
       if (e.key === 'F12' && orderCompleted) {
@@ -630,14 +642,14 @@ export default function POSTerminal() {
 
     window.addEventListener('keydown', onGlobalKeyDown);
     return () => window.removeEventListener('keydown', onGlobalKeyDown);
-  }, [handleSearchSubmit, orderCompleted, paymentOpen, clearCart]);
+  }, [handleSearchSubmit, orderCompleted, paymentOpen, clearCart, openPayment]);
 
   const handleQuickCashSale = () => {
     if (cart.length === 0) {
       toast.error('El carrito está vacío — agrega productos primero');
       return;
     }
-    setPaymentOpen(true);
+    openPayment('cash');
   };
 
   const paymentProps = {
@@ -649,6 +661,10 @@ export default function POSTerminal() {
     initialMethod: preferredPayMethod,
     onToggleFiscal: (val: boolean) => setFiscalEnabled(val),
     onComplete: async (_payments: PaymentSplit, fiscalInvoice?: FiscalInvoiceRecord) => {
+      if (!cashIsOpen) {
+        toast.error('Inicia la caja antes de realizar ventas');
+        return;
+      }
       const metodo: MetodoPago =
         [_payments.cash, _payments.card, _payments.transfer, _payments.credit].filter((v) => v > 0)
           .length > 1
@@ -796,7 +812,7 @@ export default function POSTerminal() {
             taxTotal={taxTotal}
             globalDiscountAmount={globalDiscountAmount}
             total={total}
-            onCheckout={() => setPaymentOpen(true)}
+            onCheckout={() => openPayment()}
             fiscalEnabled={fiscalEnabled}
             onToggleFiscal={() => setFiscalEnabled((prev) => !prev)}
             searchQuery={searchQuery}
@@ -891,7 +907,7 @@ export default function POSTerminal() {
                 return;
               }
               setPreferredPayMethod('credit');
-              setPaymentOpen(true);
+              openPayment('credit');
             }}
             className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 transition-colors"
           >
@@ -900,10 +916,7 @@ export default function POSTerminal() {
           </button>
           <button
             type="button"
-            onClick={() => {
-              setPreferredPayMethod('card');
-              setPaymentOpen(true);
-            }}
+            onClick={() => openPayment('card')}
             className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 transition-colors"
           >
             <CreditCard size={15} className="text-rose-500" />
@@ -915,7 +928,7 @@ export default function POSTerminal() {
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => setPaymentOpen(true)}
+            onClick={() => openPayment('split')}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 text-white font-black text-xs shadow-sm transition-all active:scale-95"
           >
             <ShoppingBag size={16} />
@@ -1063,8 +1076,11 @@ export default function POSTerminal() {
       )}
       {openCashModalOpen && (
         <PosCashOpenModal
-          initialCajaId={String(activeCashId)}
-          onSuccess={() => {
+          initialCajaId={String(activeCash.dbId || activeCashId)}
+          onSuccess={(cierre) => {
+            setShiftClosedLocally(false);
+            setShiftOpenedLocally(true);
+            if (cierre?.caja_id) setActiveCashId(cierre.caja_id);
             void refetchRegisters();
           }}
           onClose={() => setOpenCashModalOpen(false)}
@@ -1072,9 +1088,20 @@ export default function POSTerminal() {
       )}
       {closeCashModalOpen && (
         <PosCashCloseModal
-          initialCajaId={String(activeCashId)}
+          initialCajaId={String(activeCash.dbId || activeCashId)}
           onSuccess={() => {
+            setShiftOpenedLocally(false);
+            setShiftClosedLocally(true);
+            markRegisterClosed(String(activeCash.dbId || activeCashId));
+            clearCart();
+            setPaymentOpen(false);
+            setOrderCompleted(false);
+            setLastPayments(null);
+            setLastFiscalInvoice(null);
+            clearHeldSales();
+            refreshHeld();
             void refetchRegisters();
+            toast.success('Cierre registrado. Ya puedes iniciar caja de nuevo.');
           }}
           onClose={() => setCloseCashModalOpen(false)}
         />

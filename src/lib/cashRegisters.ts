@@ -1,7 +1,9 @@
-export type CashRegisterId = '1' | '2' | '3' | '4';
+export type CashRegisterId = string;
 
 export type CashRegisterSession = {
   id: CashRegisterId;
+  dbId?: string;
+  codigo?: string;
   label: string;
   cashier: string;
   role: string;
@@ -94,5 +96,22 @@ export const CASH_REGISTERS: CashRegisterSession[] = [
 ];
 
 export function getCashRegister(id: CashRegisterId) {
-  return CASH_REGISTERS.find((c) => c.id === id) || CASH_REGISTERS[0];
+  return findCashRegister(CASH_REGISTERS, id) || CASH_REGISTERS[0];
+}
+
+export function registerMatchesId(
+  reg: Pick<CashRegisterSession, 'id' | 'dbId' | 'codigo'>,
+  id?: string | null
+): boolean {
+  if (!id) return false;
+  const target = String(id).trim();
+  return [reg.id, reg.dbId, reg.codigo].some((v) => v != null && String(v).trim() === target);
+}
+
+export function findCashRegister(
+  registers: CashRegisterSession[],
+  id?: string | null
+): CashRegisterSession | undefined {
+  if (!id) return undefined;
+  return registers.find((r) => registerMatchesId(r, id));
 }

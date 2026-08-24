@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { X, PlayCircle, DollarSign, Monitor, Info, Check, AlertCircle, User } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
+import { findCashRegister } from '@/lib/cashRegisters';
 import { useCashRegisters } from '@/hooks/useCashRegisters';
 import { iniciarCaja } from '@/services/cierresCaja.service';
 import { ROL_DB_A_UI } from '@/services/auth.service';
@@ -26,11 +27,13 @@ export default function PosCashOpenModal({
     ? registers
     : registers.filter((c) => !c.isAdminBox);
 
+  const resolvedMatch = findCashRegister(availableRegisters, initialCajaId) || findCashRegister(registers, initialCajaId);
   const resolvedInitial =
-    initialCajaId &&
-    (isAdmin || availableRegisters.some((c) => c.id === initialCajaId))
-      ? initialCajaId
-      : availableRegisters[0]?.id || registers.find((c) => !c.isAdminBox)?.id || registers[0]?.id || '2';
+    resolvedMatch?.id ||
+    availableRegisters[0]?.id ||
+    registers.find((c) => !c.isAdminBox)?.id ||
+    registers[0]?.id ||
+    '2';
 
   const [selectedCajaId, setSelectedCajaId] = useState(resolvedInitial);
   const [selectedCajeroId, setSelectedCajeroId] = useState<string>(user?.id || '');
@@ -39,7 +42,7 @@ export default function PosCashOpenModal({
   const [loading, setLoading] = useState(false);
 
   const selectedCaja =
-    availableRegisters.find((c) => c.id === selectedCajaId) || availableRegisters[0] || registers[0];
+    findCashRegister(availableRegisters, selectedCajaId) || availableRegisters[0] || registers[0];
   const selectedUser = isAdmin ? dbUsers.find((u) => u.id === selectedCajeroId) : null;
 
   useEffect(() => {
@@ -77,7 +80,7 @@ export default function PosCashOpenModal({
         : (user?.id || null);
 
       const result = await iniciarCaja({
-        caja_id: selectedCajaId,
+        caja_id: selectedCaja.dbId || selectedCajaId,
         caja_label: selectedCaja.label,
         cajero_id: cajeroId,
         cajero_nombre: cajeroNombre,

@@ -119,6 +119,10 @@ export function removeHeldSale(id: string) {
   );
 }
 
+export function clearHeldSales() {
+  write(KEYS.held, [] as HeldSale[]);
+}
+
 export function getPosReturns(): PosReturn[] {
   return read(KEYS.returns, []);
 }
