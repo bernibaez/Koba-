@@ -5,122 +5,48 @@ import type { CashClosure } from '@/lib/cashClosureStore';
 import { exportTableToPdf, exportTableToExcel, formatMoneyPdf } from '@/lib/exportPdf';
 import { logAuditEvent } from '@/lib/auditStore';
 import {
-  Lock, Plus, Download, Search, Filter, Calendar, DollarSign, CreditCard, Smartphone, CheckCircle, AlertTriangle, Printer, FileSpreadsheet, Eye, User, X, PlayCircle
+  Lock, Plus, Download, Search, Filter, Calendar, DollarSign, CreditCard, Smartphone,
+  CheckCircle, CheckCircle2, AlertTriangle, Printer, FileSpreadsheet, Eye, User, X, PlayCircle,
+  ArrowLeft, Clock, ShieldCheck, FileText, ArrowUpRight, ArrowDownRight
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { guardarCierreCaja, obtenerCajaAbierta, obtenerRegistrosCierreCaja, cierreDbARegistro } from '@/services/cierresCaja.service';
-import { obtenerHistorialVentas } from '@/services/ventas.service';
+import { obtenerRegistrosCierreCaja } from '@/services/cierresCaja.service';
 import PosCashOpenModal from '@/pages/point-of-sale-pos/components/PosCashOpenModal';
+import PosCashCloseModal from '@/pages/point-of-sale-pos/components/PosCashCloseModal';
 
 export default function CashClosurePage() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'Administrador';
 
   const [closures, setClosures] = useState<CashClosure[]>([]);
-  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showCloseModal, setShowCloseModal] = useState(false);
   const [showOpenModal, setShowOpenModal] = useState(false);
   const [viewingClosure, setViewingClosure] = useState<CashClosure | null>(null);
-
 
   const [searchUser, setSearchUser] = useState('');
   const [singleDate, setSingleDate] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [loading, setLoading] = useState(true);
 
-  const [countedCash, setCountedCash] = useState('');
-  const [notes, setNotes] = useState('');
-  const [saving, setSaving] = useState(false);
-
-  const [currentSession, setCurrentSession] = useState({
-    totalSales: 0,
-    totalCash: 0,
-    totalCard: 0,
-    cardCount: 0,
-    totalTransfer: 0,
-    transferCount: 0,
-    totalCheque: 0,
-    chequeCount: 0,
-    baseCash: 0,
-    openedAt: `${new Date().toISOString().slice(0, 10)} 08:00`,
-  });
+  const fetchClosures = async () => {
+    setLoading(true);
+    try {
+      const rows = await obtenerRegistrosCierreCaja();
+      setClosures(rows);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Error al cargar cierres de caja');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        const [rows, openSession] = await Promise.all([
-          obtenerRegistrosCierreCaja(),
-          obtenerCajaAbierta().catch(() => null),
-        ]);
-        if (!alive) return;
-        setClosures(rows);
-
-        if (!openSession) {
-          setCurrentSession((s) => ({
-            ...s,
-            totalSales: 0,
-            totalCash: 0,
-            totalCard: 0,
-            cardCount: 0,
-            totalTransfer: 0,
-            transferCount: 0,
-            baseCash: 0,
-          }));
-          return;
-        }
-
-        const hoy = new Date().toISOString().slice(0, 10);
-        const ventasHoy = await obtenerHistorialVentas({
-          pagina: 1,
-          limite: 500,
-          fechaInicio: hoy,
-          fechaFin: hoy,
-        });
-        if (!alive) return;
-        let totalSales = 0;
-        let totalCash = 0;
-        let totalCard = 0;
-        let cardCount = 0;
-        let totalTransfer = 0;
-        let transferCount = 0;
-        const desde = openSession.abierta_en;
-        for (const v of ventasHoy.datos) {
-          if (desde && v.creado_en < desde) continue;
-          totalSales += Number(v.monto_total);
-          totalCash += Number(v.monto_efectivo);
-          totalCard += Number(v.monto_tarjeta);
-          totalTransfer += Number(v.monto_transferencia);
-          if (Number(v.monto_tarjeta) > 0) cardCount += 1;
-          if (Number(v.monto_transferencia) > 0) transferCount += 1;
-        }
-        setCurrentSession((s) => ({
-          ...s,
-          totalSales,
-          totalCash,
-          totalCard,
-          cardCount,
-          totalTransfer,
-          transferCount,
-          baseCash: Number(openSession.monto_apertura) || 0,
-          openedAt: openSession.abierta_en || s.openedAt,
-        }));
-      } catch (e) {
-        toast.error(e instanceof Error ? e.message : 'Error al cargar cierres');
-      }
-    })();
-    return () => {
-      alive = false;
-    };
+    fetchClosures();
   }, []);
 
-  const expectedCash = currentSession.baseCash + currentSession.totalCash;
-  const countedNum = parseFloat(countedCash) || 0;
-  const cashDiff = countedCash === '' ? 0 : countedNum - expectedCash;
-
-  // Filter closures by role and filters
   const filteredClosures = useMemo(() => {
     return closures.filter((c) => {
-      // Role check: non-admin can only see own closures
       if (!isAdmin) {
         const uid = user?.id ?? '';
         const uname = (user?.username ?? '').toLowerCase();
@@ -129,15 +55,12 @@ export default function CashClosurePage() {
           (c.username && uname && c.username.toLowerCase() === uname);
         if (!matchesUser) return false;
       }
-      // User filter (admin only)
       if (searchUser && !c.userName.toLowerCase().includes(searchUser.toLowerCase()) && !c.username.toLowerCase().includes(searchUser.toLowerCase())) {
         return false;
       }
-      // Single date
       if (singleDate && c.date !== singleDate) {
         return false;
       }
-      // Date range
       if (startDate && c.date < startDate) return false;
       if (endDate && c.date > endDate) return false;
 
@@ -145,95 +68,25 @@ export default function CashClosurePage() {
     });
   }, [closures, isAdmin, user, searchUser, singleDate, startDate, endDate]);
 
-  const handleSaveClosure = async () => {
-    if (countedCash === '') {
-      toast.error('Ingresa el monto de efectivo contado');
-      return;
-    }
-
-    const count = closures.length + 1;
-    const code = `CC-${String(count).padStart(3, '0')}`;
-
-    setSaving(true);
-    try {
-      const saved = await guardarCierreCaja({
-        codigo: code,
-        caja_id: '1',
-        cajero_id: user?.id ?? null,
-        cajero_nombre: user?.name ?? 'Usuario',
-        cajero_username: user?.username ?? '',
-        caja_label: 'Caja #1',
-        monto_apertura: currentSession.baseCash,
-        monto_esperado: expectedCash,
-        monto_real: countedNum,
-        monto_diferencia: cashDiff,
-        total_ventas: currentSession.totalSales,
-        total_efectivo: currentSession.totalCash,
-        total_tarjeta: currentSession.totalCard,
-        total_transferencia: currentSession.totalTransfer,
-        estado: 'cerrada',
-        notes: notes || undefined,
-      });
-
-      const newClosure = cierreDbARegistro(saved, {
-        userName: user?.name ?? 'Usuario',
-        username: user?.username ?? '',
-        cashRegisterLabel: 'Caja #1',
-        notes: notes || undefined,
-      });
-
-      setClosures((prev) => [newClosure, ...prev]);
-      setCurrentSession((s) => ({
-        ...s,
-        totalSales: 0,
-        totalCash: 0,
-        totalCard: 0,
-        cardCount: 0,
-        totalTransfer: 0,
-        transferCount: 0,
-        baseCash: 0,
-      }));
-
-      logAuditEvent({
-        user: user?.name ?? 'Usuario',
-        role: user?.role ?? 'Cajero',
-        action: 'Cierre de caja',
-        module: 'Caja',
-        details: `Cierre ${newClosure.code} realizado por RD$ ${newClosure.totalSales.toLocaleString()} (Diferencia: RD$ ${cashDiff})`,
-        after: { code: newClosure.code, totalSales: newClosure.totalSales, difference: cashDiff },
-      });
-
-      toast.success(`Cierre de caja ${newClosure.code} registrado`);
-      setShowCreateModal(false);
-      setCountedCash('');
-      setNotes('');
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Error al guardar cierre');
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const handleExportPdf = () => {
     exportTableToPdf({
       title: 'Reporte de Cierres de Caja Diarios',
       subtitle: !isAdmin ? `Usuario: ${user?.name}` : 'Todos los usuarios',
       filename: 'cierres-de-caja',
       headers: [
-        'Código', 'Fecha', 'Apertura', 'Cierre', 'Usuario', 'Vendido', 'Efectivo Esperado', 'Contado', 'Diferencia', 'Tarjetas', 'Transf.'
+        'Código', 'Fecha', 'Apertura', 'Cierre', 'Caja', 'Usuario', 'Vendido', 'Efectivo Esperado', 'Contado', 'Diferencia'
       ],
       rows: filteredClosures.map((c) => [
         c.code,
         c.date,
         c.openedAt.split(' ')[1] || c.openedAt,
         c.closedAt.split(' ')[1] || c.closedAt,
+        c.cashRegisterLabel || `Caja #${c.cashRegisterId}`,
         c.userName,
         formatMoneyPdf(c.totalSales),
         formatMoneyPdf(c.expectedCash),
         formatMoneyPdf(c.countedCash),
         formatMoneyPdf(c.difference),
-        `${formatMoneyPdf(c.totalCard)} (${c.cardCount})`,
-        `${formatMoneyPdf(c.totalTransfer)} (${c.transferCount})`,
       ]),
       landscape: true,
     });
@@ -244,497 +97,579 @@ export default function CashClosurePage() {
       title: 'Reporte de Cierres de Caja Diarios',
       filename: 'cierres-de-caja',
       headers: [
-        'Código', 'Fecha', 'Apertura', 'Cierre', 'Usuario', 'Total Vendido', 'Total Efectivo', 'Efectivo Esperado', 'Efectivo Contado', 'Diferencia', 'Total Tarjetas', 'Cant. Tarjetas', 'Total Transferencias', 'Cant. Transferencias', 'Total Cheques', 'Cant. Cheques'
+        'Código', 'Fecha', 'Apertura', 'Cierre', 'Caja', 'Usuario', 'Total Vendido', 'Fondo Inicial', 'Total Efectivo', 'Efectivo Esperado', 'Efectivo Contado', 'Diferencia', 'Total Tarjetas', 'Total Transferencias', 'Total Crédito'
       ],
       rows: filteredClosures.map((c) => [
         c.code,
         c.date,
         c.openedAt,
         c.closedAt,
+        c.cashRegisterLabel || `Caja #${c.cashRegisterId}`,
         c.userName,
         c.totalSales,
-        c.totalCash,
+        c.baseCash ?? 0,
+        c.totalCash ?? 0,
         c.expectedCash,
         c.countedCash,
         c.difference,
-        c.totalCard,
-        c.cardCount,
-        c.totalTransfer,
-        c.transferCount,
-        c.totalCheque,
-        c.chequeCount,
+        c.totalCard ?? 0,
+        c.totalTransfer ?? 0,
+        c.totalCredit ?? 0,
       ]),
+    });
+  };
+
+  const handleExportSingleClosurePdf = (closure: CashClosure) => {
+    exportTableToPdf({
+      title: `Comprobante de Cierre de Caja — ${closure.code}`,
+      subtitle: `${closure.cashRegisterLabel || `Caja #${closure.cashRegisterId}`} | ${closure.date} | Responsable: ${closure.userName}`,
+      filename: `cierre-${closure.code}`,
+      headers: ['Concepto / Rubro', 'Monto Registrado'],
+      rows: [
+        ['Código de Cierre', closure.code],
+        ['Fecha del Turno', closure.date],
+        ['Caja Registradora', closure.cashRegisterLabel || `Caja #${closure.cashRegisterId}`],
+        ['Cajero / Usuario Responsable', `${closure.userName} (@${closure.username || 'usuario'})`],
+        ['Horario de Apertura y Cierre', `${closure.openedAt} — ${closure.closedAt || '—'}`],
+        ['Fondo Inicial (Apertura)', formatMoneyPdf(closure.baseCash ?? 0)],
+        ['Ventas en Efectivo', formatMoneyPdf(closure.totalCash ?? 0)],
+        ['Ventas con Tarjetas', formatMoneyPdf(closure.totalCard ?? 0)],
+        ['Ventas por Transferencia', formatMoneyPdf(closure.totalTransfer ?? 0)],
+        ['Ventas a Crédito', formatMoneyPdf(closure.totalCredit ?? 0)],
+        ['TOTAL VENDIDO EN EL TURNO', formatMoneyPdf(closure.totalSales)],
+        ['Efectivo Físico Esperado en Caja', formatMoneyPdf(closure.expectedCash)],
+        ['Efectivo Físico Real Contado', formatMoneyPdf(closure.countedCash)],
+        ['Diferencia de Arqueo', formatMoneyPdf(closure.difference)],
+        ['Observaciones', closure.notes || 'Sin observaciones registradas'],
+      ],
     });
   };
 
   return (
     <AppLayout>
-      <div className="space-y-6 slide-up">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-              <Lock className="text-primary" size={24} />
-              Cierre de Caja Diario
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              {isAdmin ? 'Gestión y auditoría de cierres de caja de todos los usuarios' : 'Realiza y consulta tus cierres diarios de caja'}
-            </p>
-          </div>
-
-          <div className="flex gap-2 flex-wrap">
+      {viewingClosure ? (
+        /* VISTA PREVIA INLINE COMPLETA DEL CIERRE DE CAJA */
+        <div className="space-y-6 slide-up pb-12">
+          {/* Top Navigation / Actions Bar */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-4">
             <button
               type="button"
-              onClick={() => setShowOpenModal(true)}
-              className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm flex items-center gap-2 shadow-sm transition-all active:scale-95"
+              onClick={() => setViewingClosure(null)}
+              className="btn-secondary flex items-center gap-2 text-xs font-bold w-fit px-4 py-2"
             >
-              <PlayCircle size={16} />
-              Iniciar / Abrir Caja
+              <ArrowLeft size={16} />
+              <span>Volver al listado de cierres</span>
             </button>
-            <button
-              type="button"
-              onClick={() => setShowCreateModal(true)}
-              className="btn-primary flex items-center gap-2"
-            >
-              <Plus size={16} />
-              Realizar Cierre de Hoy
-            </button>
-          </div>
-        </div>
 
-        {/* Quick Stats */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="card p-4">
-            <p className="text-xs text-muted-foreground">Total cierres registrados</p>
-            <p className="text-2xl font-bold text-foreground mt-1">{filteredClosures.length}</p>
-          </div>
-          <div className="card p-4">
-            <p className="text-xs text-muted-foreground">Total ventas procesadas</p>
-            <p className="text-2xl font-bold text-success mt-1">
-              RD$ {filteredClosures.reduce((s, c) => s + c.totalSales, 0).toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-            </p>
-          </div>
-          <div className="card p-4">
-            <p className="text-xs text-muted-foreground">Efectivo total en cierres</p>
-            <p className="text-2xl font-bold text-info mt-1">
-              RD$ {filteredClosures.reduce((s, c) => s + c.totalCash, 0).toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-            </p>
-          </div>
-          <div className="card p-4">
-            <p className="text-xs text-muted-foreground">Diferencia neta acumulada</p>
-            {(() => {
-              const diff = filteredClosures.reduce((s, c) => s + c.difference, 0);
-              return (
-                <p className={`text-2xl font-bold mt-1 ${diff < 0 ? 'text-danger' : diff > 0 ? 'text-warning' : 'text-success'}`}>
-                  RD$ {diff.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                </p>
-              );
-            })()}
-          </div>
-        </div>
-
-        {/* Filter Bar */}
-        <div className="card p-4 space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {isAdmin && (
-              <div>
-                <label className="text-xs font-semibold text-muted-foreground mb-1 block">Filtrar por Usuario</label>
-                <div className="relative">
-                  <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                  <input
-                    className="input-field pl-9"
-                    placeholder="Nombre de usuario..."
-                    value={searchUser}
-                    onChange={(e) => setSearchUser(e.target.value)}
-                  />
-                </div>
-              </div>
-            )}
-            <div>
-              <label className="text-xs font-semibold text-muted-foreground mb-1 block">Fecha Específica</label>
-              <input
-                type="date"
-                className="input-field"
-                value={singleDate}
-                onChange={(e) => {
-                  setSingleDate(e.target.value);
-                  setStartDate('');
-                  setEndDate('');
-                }}
-              />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-muted-foreground mb-1 block">Desde (Rango)</label>
-              <input
-                type="date"
-                className="input-field"
-                value={startDate}
-                onChange={(e) => {
-                  setStartDate(e.target.value);
-                  setSingleDate('');
-                }}
-              />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-muted-foreground mb-1 block">Hasta (Rango)</label>
-              <input
-                type="date"
-                className="input-field"
-                value={endDate}
-                onChange={(e) => {
-                  setEndDate(e.target.value);
-                  setSingleDate('');
-                }}
-              />
-            </div>
-          </div>
-
-          <div className="flex justify-between items-center pt-2 border-t border-border">
-            <span className="text-xs text-muted-foreground">
-              Mostrando {filteredClosures.length} cierre(s)
-            </span>
-            <div className="flex gap-2">
-              <button type="button" onClick={handleExportPdf} className="btn-secondary text-xs flex items-center gap-1.5 py-1.5">
-                <Download size={14} /> Exportar PDF
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="btn-secondary flex items-center gap-1.5 text-xs font-bold py-2 px-3.5"
+              >
+                <Printer size={15} /> Imprimir Comprobante
               </button>
-              <button type="button" onClick={handleExportExcel} className="btn-secondary text-xs flex items-center gap-1.5 py-1.5">
-                <FileSpreadsheet size={14} /> Exportar Excel
+              <button
+                type="button"
+                onClick={() => handleExportSingleClosurePdf(viewingClosure)}
+                className="btn-primary flex items-center gap-1.5 text-xs font-bold py-2 px-4"
+              >
+                <Download size={15} /> Exportar PDF
               </button>
             </div>
           </div>
-        </div>
 
-        {/* Closures Table */}
-        <div className="card overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border bg-secondary/50">
-                  <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Código</th>
-                  <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Fecha</th>
-                  <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Usuario</th>
-                  <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Horario</th>
-                  <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Total Vendido</th>
-                  <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Efectivo Esp.</th>
-                  <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Contado</th>
-                  <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Diferencia</th>
-                  <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredClosures.length === 0 ? (
-                  <tr>
-                    <td colSpan={9} className="px-4 py-12 text-center text-muted-foreground">
-                      <Lock size={32} className="mx-auto mb-2 opacity-30" />
-                      No se encontraron cierres de caja con los filtros seleccionados
-                    </td>
-                  </tr>
-                ) : (
-                  filteredClosures.map((c, idx) => (
-                    <tr
-                      key={c.id}
-                      className={`border-b border-border hover:bg-secondary/30 transition-colors ${idx % 2 === 0 ? '' : 'bg-secondary/10'}`}
-                    >
-                      <td className="px-4 py-3 font-mono font-bold text-primary">{c.code}</td>
-                      <td className="px-4 py-3 text-foreground font-medium">{c.date}</td>
-                      <td className="px-4 py-3">
-                        <div>
-                          <p className="font-semibold text-foreground">{c.userName}</p>
-                          <p className="text-xs text-muted-foreground">@{c.username}</p>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-xs text-muted-foreground">
-                        <span>Apertura: {c.openedAt.split(' ')[1] || c.openedAt}</span>
-                        <br />
-                        <span>Cierre: {c.closedAt.split(' ')[1] || c.closedAt}</span>
-                      </td>
-                      <td className="px-4 py-3 text-right font-bold text-foreground">
-                        RD$ {c.totalSales.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
-                        RD$ {c.expectedCash.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="px-4 py-3 text-right tabular-nums font-semibold text-foreground">
-                        RD$ {c.countedCash.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="px-4 py-3 text-right tabular-nums font-bold">
-                        <span
-                          className={`inline-block px-2 py-0.5 rounded text-xs ${
-                            c.difference < 0
-                              ? 'bg-danger-bg text-danger'
-                              : c.difference > 0
-                              ? 'bg-warning-bg text-warning'
-                              : 'bg-success-bg text-success'
-                          }`}
-                        >
-                          RD$ {c.difference.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <button
-                          type="button"
-                          onClick={() => setViewingClosure(c)}
-                          className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
-                          title="Ver detalle del cierre"
-                        >
-                          <Eye size={16} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Modal: Realizar Cierre de Hoy */}
-        {showCreateModal && (
-          <div className="dialog-inline-host" onClick={() => setShowCreateModal(false)}>
-            <div className="card w-full max-w-2xl p-6 space-y-5 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-              <div className="flex items-center justify-between border-b border-border pb-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center text-primary font-bold">
-                    <Lock size={20} />
+          {/* Header Banner */}
+          <div className="card p-6 border-l-4 border-l-primary bg-linear-to-r from-card via-card to-primary/5">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20 text-primary flex items-center justify-center shrink-0">
+                  <ShieldCheck size={32} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    <h1 className="text-2xl font-black text-foreground tracking-tight">
+                      Cierre de Caja {viewingClosure.code}
+                    </h1>
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 uppercase">
+                      Turno Cerrado
+                    </span>
                   </div>
-                  <div>
-                    <h3 className="font-bold text-foreground text-lg">Cierre de Caja Diario</h3>
-                    <p className="text-xs text-muted-foreground">Confirma los montos y registra el arqueo final</p>
-                  </div>
-                </div>
-                <button type="button" onClick={() => setShowCreateModal(false)} className="p-1.5 text-muted-foreground hover:text-foreground">
-                  <X size={18} />
-                </button>
-              </div>
-
-              {/* User info */}
-              <div className="bg-secondary/40 rounded-xl p-3 grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
-                <div>
-                  <span className="text-muted-foreground block">Usuario Responsable</span>
-                  <span className="font-bold text-foreground text-sm">{user?.name ?? 'Usuario'}</span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground block">Hora de Apertura</span>
-                  <span className="font-semibold text-foreground">{currentSession.openedAt}</span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground block">Hora de Cierre</span>
-                  <span className="font-semibold text-foreground">{new Date().toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit' })}</span>
+                  <p className="text-sm font-semibold text-muted-foreground mt-0.5">
+                    {viewingClosure.cashRegisterLabel || `Caja #${viewingClosure.cashRegisterId}`} · Fecha {viewingClosure.date}
+                  </p>
                 </div>
               </div>
 
-              {/* Sales Summary Grid */}
-              <div className="space-y-2">
-                <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Resumen de Ventas por Método de Pago</p>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div className="bg-card border border-border rounded-xl p-3">
-                    <p className="text-xs text-muted-foreground flex items-center gap-1">
-                      <DollarSign size={14} className="text-success" /> Efectivo
-                    </p>
-                    <p className="text-base font-bold text-foreground mt-1 tabular-nums">
-                      RD$ {currentSession.totalCash.toLocaleString('es-DO')}
-                    </p>
-                  </div>
-                  <div className="bg-card border border-border rounded-xl p-3">
-                    <p className="text-xs text-muted-foreground flex items-center gap-1">
-                      <CreditCard size={14} className="text-info" /> Tarjetas ({currentSession.cardCount})
-                    </p>
-                    <p className="text-base font-bold text-foreground mt-1 tabular-nums">
-                      RD$ {currentSession.totalCard.toLocaleString('es-DO')}
-                    </p>
-                  </div>
-                  <div className="bg-card border border-border rounded-xl p-3">
-                    <p className="text-xs text-muted-foreground flex items-center gap-1">
-                      <Smartphone size={14} className="text-warning" /> Transfer. ({currentSession.transferCount})
-                    </p>
-                    <p className="text-base font-bold text-foreground mt-1 tabular-nums">
-                      RD$ {currentSession.totalTransfer.toLocaleString('es-DO')}
-                    </p>
-                  </div>
-                  <div className="bg-card border border-border rounded-xl p-3">
-                    <p className="text-xs text-muted-foreground flex items-center gap-1">
-                      <CheckCircle size={14} className="text-primary" /> Cheques ({currentSession.chequeCount})
-                    </p>
-                    <p className="text-base font-bold text-foreground mt-1 tabular-nums">
-                      RD$ {currentSession.totalCheque.toLocaleString('es-DO')}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 flex justify-between items-center">
-                  <span className="font-bold text-foreground">TOTAL VENDIDO HOY</span>
-                  <span className="text-2xl font-bold text-primary tabular-nums">
-                    RD$ {currentSession.totalSales.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+              {/* Difference Highlight */}
+              <div className={`p-4 rounded-2xl border flex items-center gap-3 ${
+                viewingClosure.difference === 0
+                  ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+                  : viewingClosure.difference > 0
+                    ? 'bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-400'
+                    : 'bg-rose-500/10 border-rose-500/20 text-rose-600 dark:text-rose-400'
+              }`}>
+                {viewingClosure.difference === 0 ? <CheckCircle2 size={24} /> : <AlertTriangle size={24} />}
+                <div>
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider block opacity-90">
+                    {viewingClosure.difference === 0
+                      ? 'Cuadre Exacto'
+                      : viewingClosure.difference > 0
+                        ? 'Sobrante en Caja'
+                        : 'Faltante en Caja'}
+                  </span>
+                  <span className="text-lg font-black tabular-nums">
+                    {viewingClosure.difference >= 0
+                      ? `+RD$ ${viewingClosure.difference.toFixed(2)}`
+                      : `-RD$ ${Math.abs(viewingClosure.difference).toFixed(2)}`}
                   </span>
                 </div>
               </div>
+            </div>
+          </div>
 
-              {/* Cash Reconciliation Form */}
-              <div className="space-y-4 pt-2 border-t border-border">
-                <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Arqueo de Efectivo en Caja</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="bg-secondary/30 rounded-xl p-3">
-                    <span className="text-xs text-muted-foreground block">Monto Esperado en Caja (Efectivo + Fondo)</span>
-                    <span className="text-xl font-bold text-foreground tabular-nums">
-                      RD$ {expectedCash.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+          {/* User & Shift Info Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="card p-4 space-y-1">
+              <span className="text-xs font-bold text-muted-foreground flex items-center gap-1.5 uppercase tracking-wider">
+                <User size={14} className="text-primary" /> Cajero Responsable
+              </span>
+              <p className="text-base font-bold text-foreground truncate">{viewingClosure.userName}</p>
+              <p className="text-xs text-muted-foreground">@{viewingClosure.username || 'usuario'}</p>
+            </div>
+
+            <div className="card p-4 space-y-1">
+              <span className="text-xs font-bold text-muted-foreground flex items-center gap-1.5 uppercase tracking-wider">
+                <Calendar size={14} className="text-primary" /> Fecha de Operación
+              </span>
+              <p className="text-base font-bold text-foreground">{viewingClosure.date}</p>
+              <p className="text-xs text-muted-foreground">Jornada completada</p>
+            </div>
+
+            <div className="card p-4 space-y-1">
+              <span className="text-xs font-bold text-muted-foreground flex items-center gap-1.5 uppercase tracking-wider">
+                <Clock size={14} className="text-emerald-500" /> Hora de Apertura
+              </span>
+              <p className="text-base font-bold text-foreground">{viewingClosure.openedAt || '—'}</p>
+              <p className="text-xs text-muted-foreground">Inicio de turno</p>
+            </div>
+
+            <div className="card p-4 space-y-1">
+              <span className="text-xs font-bold text-muted-foreground flex items-center gap-1.5 uppercase tracking-wider">
+                <Lock size={14} className="text-amber-500" /> Hora de Cierre
+              </span>
+              <p className="text-base font-bold text-foreground">{viewingClosure.closedAt || '—'}</p>
+              <p className="text-xs text-muted-foreground">Finalización de turno</p>
+            </div>
+          </div>
+
+          {/* Financial Breakdown Cards */}
+          <div className="space-y-3">
+            <h2 className="text-sm font-extrabold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+              <DollarSign size={16} className="text-primary" /> Desglose Financiero por Método de Pago
+            </h2>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Base Cash */}
+              <div className="card p-4 bg-secondary/30 border-border">
+                <span className="text-xs font-bold text-muted-foreground block uppercase tracking-wider">
+                  Fondo Inicial (Apertura)
+                </span>
+                <p className="text-xl font-black text-foreground mt-1 tabular-nums">
+                  RD$ {(viewingClosure.baseCash ?? 0).toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                </p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">Base entregada al abrir turno</p>
+              </div>
+
+              {/* Cash Sales */}
+              <div className="card p-4 bg-emerald-500/5 border-emerald-500/20">
+                <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 block uppercase tracking-wider flex items-center gap-1">
+                  <ArrowUpRight size={14} /> Ventas en Efectivo
+                </span>
+                <p className="text-xl font-black text-emerald-600 dark:text-emerald-400 mt-1 tabular-nums">
+                  +RD$ {(viewingClosure.totalCash ?? 0).toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                </p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">Ingresado en billetes/monedas</p>
+              </div>
+
+              {/* Card Sales */}
+              <div className="card p-4 bg-blue-500/5 border-blue-500/20">
+                <span className="text-xs font-bold text-blue-600 dark:text-blue-400 block uppercase tracking-wider flex items-center gap-1">
+                  <CreditCard size={14} /> Ventas con Tarjetas
+                </span>
+                <p className="text-xl font-black text-blue-600 dark:text-blue-400 mt-1 tabular-nums">
+                  RD$ {(viewingClosure.totalCard ?? 0).toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                </p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">Vía terminal POS electrónico</p>
+              </div>
+
+              {/* Transfer Sales */}
+              <div className="card p-4 bg-amber-500/5 border-amber-500/20">
+                <span className="text-xs font-bold text-amber-600 dark:text-amber-400 block uppercase tracking-wider flex items-center gap-1">
+                  <Smartphone size={14} /> Ventas por Transferencia
+                </span>
+                <p className="text-xl font-black text-amber-600 dark:text-amber-400 mt-1 tabular-nums">
+                  RD$ {(viewingClosure.totalTransfer ?? 0).toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                </p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">Pagos bancarios directos</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Arqueo y Conciliación Final */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Table Breakdown */}
+            <div className="card p-5 space-y-4">
+              <h3 className="text-sm font-extrabold uppercase tracking-wider text-foreground">
+                Resumen General de Operaciones
+              </h3>
+              <div className="space-y-2.5 text-sm divide-y divide-border/60 font-medium">
+                <div className="flex justify-between items-center pt-2">
+                  <span className="text-muted-foreground">Fondo Inicial de Apertura</span>
+                  <span className="font-bold text-foreground tabular-nums">
+                    RD$ {(viewingClosure.baseCash ?? 0).toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center pt-2">
+                  <span className="text-muted-foreground">Total Ventas en Efectivo</span>
+                  <span className="font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">
+                    +RD$ {(viewingClosure.totalCash ?? 0).toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center pt-2">
+                  <span className="text-muted-foreground">Total Ventas Tarjeta</span>
+                  <span className="font-semibold text-foreground tabular-nums">
+                    RD$ {(viewingClosure.totalCard ?? 0).toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center pt-2">
+                  <span className="text-muted-foreground">Total Ventas Transferencia</span>
+                  <span className="font-semibold text-foreground tabular-nums">
+                    RD$ {(viewingClosure.totalTransfer ?? 0).toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+                {(viewingClosure.totalCredit ?? 0) > 0 && (
+                  <div className="flex justify-between items-center pt-2">
+                    <span className="text-muted-foreground">Ventas a Crédito (CxC)</span>
+                    <span className="font-semibold text-foreground tabular-nums">
+                      RD$ {(viewingClosure.totalCredit ?? 0).toLocaleString('es-DO', { minimumFractionDigits: 2 })}
                     </span>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      (Fondo base RD$ {currentSession.baseCash.toLocaleString()} + Efectivo RD$ {currentSession.totalCash.toLocaleString()})
-                    </p>
                   </div>
+                )}
+                <div className="flex justify-between items-center pt-3 bg-primary/5 p-3 rounded-xl border border-primary/20">
+                  <span className="font-extrabold text-foreground">TOTAL VENDIDO EN TURNO</span>
+                  <span className="text-xl font-black text-primary tabular-nums">
+                    RD$ {viewingClosure.totalSales.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+              </div>
+            </div>
 
-                  <div>
-                    <label className="text-xs font-semibold text-foreground mb-1 block">
-                      Efectivo Físico Contado (RD$) <span className="text-danger">*</span>
-                    </label>
+            {/* Reconciliation Box */}
+            <div className="card p-5 space-y-4 bg-secondary/20">
+              <h3 className="text-sm font-extrabold uppercase tracking-wider text-foreground">
+                Conciliación y Arqueo de Efectivo
+              </h3>
+
+              <div className="p-4 rounded-2xl bg-card border border-border space-y-1">
+                <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">
+                  Efectivo Físico Esperado en Caja
+                </span>
+                <span className="text-2xl font-black text-foreground tabular-nums block">
+                  RD$ {viewingClosure.expectedCash.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                </span>
+                <p className="text-[11px] text-muted-foreground">
+                  (Fondo Inicial RD$ {(viewingClosure.baseCash ?? 0).toLocaleString()} + Ventas Efectivo RD$ {(viewingClosure.totalCash ?? 0).toLocaleString()})
+                </p>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-card border border-border space-y-1">
+                <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">
+                  Efectivo Físico Real Contado
+                </span>
+                <span className="text-2xl font-black text-primary tabular-nums block">
+                  RD$ {viewingClosure.countedCash.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                </span>
+                <p className="text-[11px] text-muted-foreground">Monto reportado en el conteo de billetes y monedas</p>
+              </div>
+
+              <div className={`p-4 rounded-2xl border flex items-center justify-between ${
+                viewingClosure.difference === 0
+                  ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+                  : viewingClosure.difference > 0
+                    ? 'bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-400'
+                    : 'bg-rose-500/10 border-rose-500/20 text-rose-600 dark:text-rose-400'
+              }`}>
+                <span className="text-xs font-extrabold uppercase tracking-wider">Diferencia Final:</span>
+                <span className="text-lg font-black tabular-nums">
+                  {viewingClosure.difference >= 0 ? `+RD$ ${viewingClosure.difference.toFixed(2)}` : `-RD$ ${Math.abs(viewingClosure.difference).toFixed(2)}`}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Observaciones */}
+          {viewingClosure.notes && (
+            <div className="card p-4 space-y-1">
+              <span className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground block">
+                Observaciones y Notas del Cierre
+              </span>
+              <p className="text-sm text-foreground font-medium">{viewingClosure.notes}</p>
+            </div>
+          )}
+
+          {/* Footer Back Button */}
+          <div className="flex justify-start pt-2">
+            <button
+              type="button"
+              onClick={() => setViewingClosure(null)}
+              className="btn-secondary flex items-center gap-2 text-xs font-bold px-6 py-2.5"
+            >
+              <ArrowLeft size={16} />
+              <span>Volver a la lista de cierres</span>
+            </button>
+          </div>
+        </div>
+      ) : (
+        /* VISTA PRINCIPAL / LISTADO DE CIERRES */
+        <div className="space-y-6 slide-up">
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+                <Lock className="text-primary" size={24} />
+                Cierre de Caja Diario
+              </h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                {isAdmin ? 'Gestión y auditoría de cierres de caja de todos los usuarios' : 'Realiza y consulta tus cierres diarios de caja'}
+              </p>
+            </div>
+
+            <div className="flex gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setShowOpenModal(true)}
+                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm flex items-center gap-2 shadow-sm transition-all active:scale-95"
+              >
+                <PlayCircle size={16} />
+                Iniciar / Abrir Caja
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowCloseModal(true)}
+                className="btn-primary flex items-center gap-2"
+              >
+                <Lock size={16} />
+                Realizar Cierre de Hoy
+              </button>
+            </div>
+          </div>
+
+          {/* Quick Stats */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="card p-4">
+              <p className="text-xs text-muted-foreground">Total cierres registrados</p>
+              <p className="text-2xl font-bold text-foreground mt-1">{filteredClosures.length}</p>
+            </div>
+            <div className="card p-4">
+              <p className="text-xs text-muted-foreground">Total ventas procesadas</p>
+              <p className="text-2xl font-bold text-success mt-1">
+                RD$ {filteredClosures.reduce((s, c) => s + c.totalSales, 0).toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+              </p>
+            </div>
+            <div className="card p-4">
+              <p className="text-xs text-muted-foreground">Efectivo total en cierres</p>
+              <p className="text-2xl font-bold text-info mt-1">
+                RD$ {filteredClosures.reduce((s, c) => s + (c.totalCash ?? 0), 0).toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+              </p>
+            </div>
+            <div className="card p-4">
+              <p className="text-xs text-muted-foreground">Diferencia neta acumulada</p>
+              {(() => {
+                const diff = filteredClosures.reduce((s, c) => s + c.difference, 0);
+                return (
+                  <p className={`text-2xl font-bold mt-1 ${diff < 0 ? 'text-danger' : diff > 0 ? 'text-warning' : 'text-success'}`}>
+                    RD$ {diff.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                  </p>
+                );
+              })()}
+            </div>
+          </div>
+
+          {/* Filter Bar */}
+          <div className="card p-4 space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {isAdmin && (
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground mb-1 block">Filtrar por Usuario</label>
+                  <div className="relative">
+                    <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                     <input
-                      type="number"
-                      step="0.01"
-                      placeholder="0.00"
-                      value={countedCash}
-                      onChange={(e) => setCountedCash(e.target.value)}
-                      className="input-field text-lg font-bold tabular-nums"
+                      className="input-field pl-9"
+                      placeholder="Nombre de usuario..."
+                      value={searchUser}
+                      onChange={(e) => setSearchUser(e.target.value)}
                     />
                   </div>
                 </div>
-
-                {countedCash !== '' && (
-                  <div
-                    className={`rounded-xl p-3 flex justify-between items-center ${
-                      cashDiff < 0 ? 'bg-danger-bg border border-danger/30 text-danger' : cashDiff > 0 ? 'bg-warning-bg border border-warning/30 text-warning' : 'bg-success-bg border border-success/30 text-success'
-                    }`}
-                  >
-                    <span className="text-sm font-semibold flex items-center gap-1.5">
-                      {cashDiff < 0 ? <AlertTriangle size={16} /> : <CheckCircle size={16} />}
-                      Diferencia de Efectivo:
-                    </span>
-                    <span className="text-xl font-bold tabular-nums">
-                      RD$ {cashDiff.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                    </span>
-                  </div>
-                )}
-
-                <div>
-                  <label className="text-xs font-semibold text-muted-foreground mb-1 block">Observaciones / Notas</label>
-                  <textarea
-                    rows={2}
-                    className="input-field"
-                    placeholder="Detalles opcionales sobre el cierre..."
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                  />
-                </div>
+              )}
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground mb-1 block">Fecha Específica</label>
+                <input
+                  type="date"
+                  className="input-field"
+                  value={singleDate}
+                  onChange={(e) => {
+                    setSingleDate(e.target.value);
+                    setStartDate('');
+                    setEndDate('');
+                  }}
+                />
               </div>
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground mb-1 block">Desde (Rango)</label>
+                <input
+                  type="date"
+                  className="input-field"
+                  value={startDate}
+                  onChange={(e) => {
+                    setStartDate(e.target.value);
+                    setSingleDate('');
+                  }}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground mb-1 block">Hasta (Rango)</label>
+                <input
+                  type="date"
+                  className="input-field"
+                  value={endDate}
+                  onChange={(e) => {
+                    setEndDate(e.target.value);
+                    setSingleDate('');
+                  }}
+                />
+              </div>
+            </div>
 
-              {/* Actions */}
-              <div className="flex justify-end gap-2 pt-3 border-t border-border">
-                <button type="button" onClick={() => setShowCreateModal(false)} className="btn-secondary">
-                  Cancelar
+            <div className="flex justify-between items-center pt-2 border-t border-border">
+              <span className="text-xs text-muted-foreground">
+                Mostrando {filteredClosures.length} cierre(s)
+              </span>
+              <div className="flex gap-2">
+                <button type="button" onClick={handleExportPdf} className="btn-secondary text-xs flex items-center gap-1.5 py-1.5">
+                  <Download size={14} /> Exportar PDF
                 </button>
-                <button type="button" onClick={handleSaveClosure} className="btn-primary flex items-center gap-2">
-                  <Lock size={16} />
-                  Guardar y Cerrar Caja
+                <button type="button" onClick={handleExportExcel} className="btn-secondary text-xs flex items-center gap-1.5 py-1.5">
+                  <FileSpreadsheet size={14} /> Exportar Excel
                 </button>
               </div>
             </div>
           </div>
-        )}
 
-        {/* Modal: Ver Detalle de Cierre */}
-        {viewingClosure && (
-          <div className="dialog-inline-host" onClick={() => setViewingClosure(null)}>
-            <div className="card w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-              <div className="flex items-center justify-between border-b border-border pb-3">
-                <h3 className="font-bold text-foreground text-lg">Comprobante de Cierre {viewingClosure.code}</h3>
-                <button type="button" onClick={() => setViewingClosure(null)} className="p-1 text-muted-foreground hover:text-foreground">
-                  <X size={18} />
-                </button>
-              </div>
-
-              <div className="space-y-3 text-sm">
-                <div className="flex justify-between border-b border-border/60 pb-2">
-                  <span className="text-muted-foreground">Usuario:</span>
-                  <span className="font-bold text-foreground">{viewingClosure.userName} (@{viewingClosure.username})</span>
-                </div>
-                <div className="flex justify-between border-b border-border/60 pb-2">
-                  <span className="text-muted-foreground">Fecha:</span>
-                  <span className="font-medium">{viewingClosure.date}</span>
-                </div>
-                <div className="flex justify-between border-b border-border/60 pb-2">
-                  <span className="text-muted-foreground">Apertura / Cierre:</span>
-                  <span className="font-mono text-xs">{viewingClosure.openedAt} — {viewingClosure.closedAt}</span>
-                </div>
-                <div className="flex justify-between border-b border-border/60 pb-2">
-                  <span className="text-muted-foreground">Total Vendido:</span>
-                  <span className="font-bold text-primary">RD$ {viewingClosure.totalSales.toLocaleString('es-DO', { minimumFractionDigits: 2 })}</span>
-                </div>
-                <div className="flex justify-between border-b border-border/60 pb-2">
-                  <span className="text-muted-foreground">Efectivo en Caja:</span>
-                  <span className="font-semibold">RD$ {viewingClosure.totalCash.toLocaleString('es-DO', { minimumFractionDigits: 2 })}</span>
-                </div>
-                <div className="flex justify-between border-b border-border/60 pb-2">
-                  <span className="text-muted-foreground">Tarjetas:</span>
-                  <span className="font-semibold">RD$ {viewingClosure.totalCard.toLocaleString('es-DO')} ({viewingClosure.cardCount} ops)</span>
-                </div>
-                <div className="flex justify-between border-b border-border/60 pb-2">
-                  <span className="text-muted-foreground">Transferencias:</span>
-                  <span className="font-semibold">RD$ {viewingClosure.totalTransfer.toLocaleString('es-DO')} ({viewingClosure.transferCount} ops)</span>
-                </div>
-                <div className="flex justify-between border-b border-border/60 pb-2">
-                  <span className="text-muted-foreground">Cheques:</span>
-                  <span className="font-semibold">RD$ {viewingClosure.totalCheque.toLocaleString('es-DO')} ({viewingClosure.chequeCount} ops)</span>
-                </div>
-                <div className="flex justify-between border-b border-border/60 pb-2">
-                  <span className="text-muted-foreground">Efectivo Esperado:</span>
-                  <span className="font-semibold">RD$ {viewingClosure.expectedCash.toLocaleString('es-DO', { minimumFractionDigits: 2 })}</span>
-                </div>
-                <div className="flex justify-between border-b border-border/60 pb-2">
-                  <span className="text-muted-foreground">Efectivo Contado:</span>
-                  <span className="font-bold text-foreground">RD$ {viewingClosure.countedCash.toLocaleString('es-DO', { minimumFractionDigits: 2 })}</span>
-                </div>
-                <div className="flex justify-between border-b border-border/60 pb-2">
-                  <span className="text-muted-foreground">Diferencia:</span>
-                  <span className={`font-bold ${viewingClosure.difference < 0 ? 'text-danger' : viewingClosure.difference > 0 ? 'text-warning' : 'text-success'}`}>
-                    RD$ {viewingClosure.difference.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                  </span>
-                </div>
-                {viewingClosure.notes && (
-                  <div className="bg-secondary/40 rounded-lg p-2.5 text-xs text-muted-foreground mt-2">
-                    <span className="font-semibold text-foreground block">Notas:</span>
-                    {viewingClosure.notes}
-                  </div>
-                )}
-              </div>
-
-              <div className="flex justify-end gap-2 pt-3 border-t border-border">
-                <button
-                  type="button"
-                  onClick={() => window.print()}
-                  className="btn-secondary flex items-center gap-1.5"
-                >
-                  <Printer size={16} /> Imprimir Comprobante
-                </button>
-                <button type="button" onClick={() => setViewingClosure(null)} className="btn-primary">
-                  Cerrar
-                </button>
-              </div>
+          {/* Clean, Optimized Closures Table */}
+          <div className="card overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border bg-secondary/50">
+                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Código</th>
+                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Fecha</th>
+                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Caja</th>
+                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Cajero</th>
+                    <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Total Vendido</th>
+                    <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Diferencia</th>
+                    <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Acción</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loading ? (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-12 text-center text-muted-foreground">
+                        Cargando cierres de caja...
+                      </td>
+                    </tr>
+                  ) : filteredClosures.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-12 text-center text-muted-foreground">
+                        <Lock size={32} className="mx-auto mb-2 opacity-30" />
+                        No se encontraron cierres de caja con los filtros seleccionados
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredClosures.map((c, idx) => (
+                      <tr
+                        key={c.id}
+                        className={`border-b border-border hover:bg-secondary/30 transition-colors ${idx % 2 === 0 ? '' : 'bg-secondary/10'}`}
+                      >
+                        <td className="px-4 py-3 font-mono font-bold text-primary">{c.code}</td>
+                        <td className="px-4 py-3 text-foreground font-medium whitespace-nowrap">{c.date}</td>
+                        <td className="px-4 py-3 text-xs font-semibold text-foreground whitespace-nowrap">
+                          {c.cashRegisterLabel || `Caja #${c.cashRegisterId}`}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <div>
+                            <p className="font-semibold text-foreground text-xs">{c.userName}</p>
+                            <p className="text-[11px] text-muted-foreground">@{c.username || 'usuario'}</p>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-right font-black text-foreground whitespace-nowrap">
+                          RD$ {c.totalSales.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums font-bold whitespace-nowrap">
+                          <span
+                            className={`inline-block px-2.5 py-1 rounded-lg text-xs ${
+                              c.difference < 0
+                                ? 'bg-danger-bg text-danger'
+                                : c.difference > 0
+                                ? 'bg-warning-bg text-warning'
+                                : 'bg-success-bg text-success'
+                            }`}
+                          >
+                            {c.difference >= 0 ? `+RD$ ${c.difference.toFixed(2)}` : `-RD$ ${Math.abs(c.difference).toFixed(2)}`}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right whitespace-nowrap">
+                          <button
+                            type="button"
+                            onClick={() => setViewingClosure(c)}
+                            className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary transition-colors"
+                            title="Ver vista previa completa del cierre"
+                          >
+                            <Eye size={14} />
+                            <span>Ver Detalle</span>
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
-        )}
 
-        {showOpenModal && (
-          <PosCashOpenModal
-            onSuccess={(cierre) => {
-              setCurrentSession((s) => ({
-                ...s,
-                baseCash: Number(cierre.monto_apertura),
-                openedAt: cierre.abierta_en,
-              }));
-            }}
-            onClose={() => setShowOpenModal(false)}
-          />
-        )}
-      </div>
+          {/* Modal: Realizar Cierre de Hoy */}
+          {showCloseModal && (
+            <PosCashCloseModal
+              onSuccess={() => {
+                void fetchClosures();
+                setShowCloseModal(false);
+              }}
+              onClose={() => setShowCloseModal(false)}
+            />
+          )}
+
+          {showOpenModal && (
+            <PosCashOpenModal
+              onSuccess={() => {
+                void fetchClosures();
+                setShowOpenModal(false);
+              }}
+              onClose={() => setShowOpenModal(false)}
+            />
+          )}
+        </div>
+      )}
     </AppLayout>
   );
 }

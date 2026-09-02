@@ -51,8 +51,9 @@ export default function RegisterDetailsModal({
         const desde = abierta.abierta_en;
         if (alive) setAbiertaEn(desde);
 
+        const cajaIds = Array.from(new Set([cajaId, abierta.caja_id].filter(Boolean) as string[]));
         const porCaja = await obtenerVentasTurno({
-          cajaId,
+          cajaId: cajaIds.length > 0 ? cajaIds : cajaId,
           // No-admin: solo las ventas que él/ella realizó
           cajeroId: includeUserSales ? undefined : user?.id,
           desde,
