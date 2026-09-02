@@ -45,6 +45,25 @@ import PosWeightScanModal from './PosWeightScanModal';
 const ADMIN_OWN_CASH: CashRegisterId = '1';
 const DEFAULT_CASHIER_CASH: CashRegisterId = '2';
 
+function selectPosBarcodeInput() {
+  const el = document.getElementById('pos-barcode-search-input') as HTMLInputElement | null;
+  if (!el) return;
+  el.focus();
+  const selectAll = () => {
+    const len = el.value.length;
+    if (!len) return;
+    el.select();
+    try {
+      el.setSelectionRange(0, len);
+    } catch {
+      // Algunos inputs no permiten setSelectionRange
+    }
+  };
+  selectAll();
+  requestAnimationFrame(selectAll);
+  window.setTimeout(selectAll, 50);
+}
+
 export interface CartItem {
   id: string;
   productId: string;
@@ -333,9 +352,15 @@ export default function POSTerminal() {
   }, [productosUi]);
 
   const handleSearchSubmit = useCallback(
-    async (rawQuery: string) => {
+    async (rawQuery: string): Promise<boolean> => {
       const q = rawQuery.trim();
-      if (!q) return;
+      if (!q) return false;
+
+      const keepCodeSelected = () => {
+        setSearchQuery(q);
+        selectPosBarcodeInput();
+        return false;
+      };
 
       const addWeightedFromScale = (
         product: {
@@ -369,12 +394,17 @@ export default function POSTerminal() {
           `Producto balanza agregado: ${product.name} (${weight} ${product.unit || 'lb'})`
         );
         setSearchQuery('');
+        return true;
       };
 
       const scaleParsed = parseScaleBarcode(q, realScaleCatalog);
       if (scaleParsed?.isFromEan13) {
-        addWeightedFromScale(scaleParsed.product, scaleParsed.weight);
-        return;
+        const scaleStock = productosUi.find((p) => p.id === scaleParsed.product.productId);
+        if (scaleStock && scaleStock.currentStock <= 0) {
+          toast.error(`Producto agotado: ${scaleParsed.product.name}`);
+          return keepCodeSelected();
+        }
+        return addWeightedFromScale(scaleParsed.product, scaleParsed.weight);
       }
 
       if (isVariableWeightBarcode(q)) {
@@ -382,8 +412,12 @@ export default function POSTerminal() {
           const fromDb = await buscarProductoPorCodigoEscaneado(q);
           if (fromDb) {
             const ui = productoAUi(fromDb);
+            if (ui.currentStock <= 0) {
+              toast.error(`Producto agotado: ${ui.name}`);
+              return keepCodeSelected();
+            }
             const decoded = decodeVariableWeightBarcode(q);
-            addWeightedFromScale(
+            return addWeightedFromScale(
               {
                 productId: ui.id,
                 name: ui.name,
@@ -396,7 +430,6 @@ export default function POSTerminal() {
               },
               decoded.weight
             );
-            return;
           }
         } catch {
           // Continúa con la búsqueda local
@@ -470,9 +503,12 @@ export default function POSTerminal() {
       }
 
       if (matchedProd) {
-        if (matchedProd.outOfStock && matchedProd.sku !== DELETE_SKU) {
+        if (
+          matchedProd.sku !== DELETE_SKU &&
+          (matchedProd.outOfStock || Number(matchedProd.stock) <= 0)
+        ) {
           toast.error(`Producto agotado: ${matchedProd.name}`);
-          return;
+          return keepCodeSelected();
         }
 
         if (
@@ -483,7 +519,7 @@ export default function POSTerminal() {
         ) {
           handleOpenScale(matchedProd.id, 1.000);
           setSearchQuery('');
-          return;
+          return true;
         }
 
         addToCart({
@@ -500,7 +536,7 @@ export default function POSTerminal() {
         });
         toast.success(`Agregado: ${matchedProd.name} (${matchedProd.sku || matchedProd.barcode})`);
         setSearchQuery('');
-        return;
+        return true;
       }
 
       // 3. Search combos
@@ -522,7 +558,7 @@ export default function POSTerminal() {
         const stockCheck = checkComboStockAvailability(matchedCombo, 1, productosUi as any);
         if (!stockCheck.available) {
           toast.error(`Stock insuficiente para combo ${matchedCombo.name}`);
-          return;
+          return keepCodeSelected();
         }
 
         addToCart({
@@ -541,10 +577,11 @@ export default function POSTerminal() {
         });
         toast.success(`Combo agregado: ${matchedCombo.name}`);
         setSearchQuery('');
-        return;
+        return true;
       }
 
       toast.error(`No se encontró producto ni combo con SKU o código: "${q}"`);
+      return keepCodeSelected();
     },
     [addToCart, handleOpenScale, productosUi, combos, realScaleCatalog]
   );
@@ -614,6 +651,9 @@ export default function POSTerminal() {
       // Ignore scans if user is editing inside another text field/modal
       if (isModalOrOtherInput) return;
 
+      // El input de escaneo maneja Enter y reemplazo de texto seleccionado
+      if (target.id === 'pos-barcode-search-input') return;
+
       const now = Date.now();
       if (now - lastKeyTime > 80) {
         scanBuffer = '';
@@ -623,13 +663,9 @@ export default function POSTerminal() {
       if (e.key === 'Enter') {
         if (scanBuffer.trim().length >= 2) {
           e.preventDefault();
-          handleSearchSubmit(scanBuffer);
-          scanBuffer = '';
-          const searchInput = document.getElementById('pos-barcode-search-input') as HTMLInputElement;
-          if (searchInput) {
-            searchInput.focus();
-            searchInput.value = '';
-          }
+          void handleSearchSubmit(scanBuffer).then((added) => {
+            if (added) setSearchQuery('');
+          });
         }
         scanBuffer = '';
         return;

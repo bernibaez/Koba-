@@ -24,7 +24,7 @@ interface CartPanelProps {
   onToggleFiscal?: () => void;
   searchQuery?: string;
   onSearchChange?: (q: string) => void;
-  onSearchSubmit?: (q: string) => void;
+  onSearchSubmit?: (q: string) => void | Promise<boolean | void>;
 }
 
 export default function CartPanel({
@@ -66,8 +66,9 @@ export default function CartPanel({
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault();
+      e.stopPropagation();
       if (onSearchSubmit && searchQuery.trim()) {
-        onSearchSubmit(searchQuery);
+        void onSearchSubmit(searchQuery);
       }
     }
   };
