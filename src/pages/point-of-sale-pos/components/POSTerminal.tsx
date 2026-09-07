@@ -45,23 +45,33 @@ import PosWeightScanModal from './PosWeightScanModal';
 const ADMIN_OWN_CASH: CashRegisterId = '1';
 const DEFAULT_CASHIER_CASH: CashRegisterId = '2';
 
+/**
+ * Enfoca el input de código de barras y selecciona todo el texto.
+ * Usado cuando el código no se encontró, para que el próximo escaneo
+ * reemplace el código anterior sin concatenarlo.
+ */
 function selectPosBarcodeInput() {
   const el = document.getElementById('pos-barcode-search-input') as HTMLInputElement | null;
   if (!el) return;
   el.focus();
-  const selectAll = () => {
-    const len = el.value.length;
-    if (!len) return;
+  if (el.value.length > 0) {
     el.select();
     try {
-      el.setSelectionRange(0, len);
+      el.setSelectionRange(0, el.value.length);
     } catch {
       // Algunos inputs no permiten setSelectionRange
     }
-  };
-  selectAll();
-  requestAnimationFrame(selectAll);
-  window.setTimeout(selectAll, 50);
+  }
+}
+
+/**
+ * Enfoca el input de código de barras con el campo vacío.
+ * Usado después de un escaneo exitoso para recibir el siguiente código.
+ */
+function focusPosBarcodeInput() {
+  const el = document.getElementById('pos-barcode-search-input') as HTMLInputElement | null;
+  if (!el) return;
+  el.focus();
 }
 
 export interface CartItem {
@@ -357,8 +367,11 @@ export default function POSTerminal() {
       if (!q) return false;
 
       const keepCodeSelected = () => {
+        // Restaura el código en el estado y luego selecciona todo el texto
+        // después del render de React, para que el próximo escaneo reemplace
+        // el código anterior en lugar de concatenarse.
         setSearchQuery(q);
-        selectPosBarcodeInput();
+        requestAnimationFrame(() => selectPosBarcodeInput());
         return false;
       };
 
@@ -394,6 +407,7 @@ export default function POSTerminal() {
           `Producto balanza agregado: ${product.name} (${weight} ${product.unit || 'lb'})`
         );
         setSearchQuery('');
+        focusPosBarcodeInput();
         return true;
       };
 
@@ -519,6 +533,7 @@ export default function POSTerminal() {
         ) {
           handleOpenScale(matchedProd.id, 1.000);
           setSearchQuery('');
+          focusPosBarcodeInput();
           return true;
         }
 
@@ -536,6 +551,7 @@ export default function POSTerminal() {
         });
         toast.success(`Agregado: ${matchedProd.name} (${matchedProd.sku || matchedProd.barcode})`);
         setSearchQuery('');
+        focusPosBarcodeInput();
         return true;
       }
 
@@ -577,6 +593,7 @@ export default function POSTerminal() {
         });
         toast.success(`Combo agregado: ${matchedCombo.name}`);
         setSearchQuery('');
+        focusPosBarcodeInput();
         return true;
       }
 
@@ -651,7 +668,9 @@ export default function POSTerminal() {
       // Ignore scans if user is editing inside another text field/modal
       if (isModalOrOtherInput) return;
 
-      // El input de escaneo maneja Enter y reemplazo de texto seleccionado
+      // Si el foco ya está en el input de código de barras, el input maneja
+      // los caracteres directamente a través de onChange. Solo redirigimos
+      // el buffer global cuando el foco está en otro lugar.
       if (target.id === 'pos-barcode-search-input') return;
 
       const now = Date.now();

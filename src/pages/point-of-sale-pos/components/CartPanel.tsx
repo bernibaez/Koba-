@@ -67,8 +67,14 @@ export default function CartPanel({
     if (e.key === 'Enter') {
       e.preventDefault();
       e.stopPropagation();
-      if (onSearchSubmit && searchQuery.trim()) {
-        void onSearchSubmit(searchQuery);
+      const valueToSubmit = searchQuery.trim();
+      if (!valueToSubmit) return;
+      // Limpia el campo inmediatamente (síncrono en el DOM) para que el
+      // próximo escaneo no se concatene con el código anterior.
+      // onSearchChange limpia el estado de React; el lector ya puede escribir.
+      if (onSearchChange) onSearchChange('');
+      if (onSearchSubmit) {
+        void onSearchSubmit(valueToSubmit);
       }
     }
   };
