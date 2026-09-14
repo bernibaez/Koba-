@@ -8,7 +8,7 @@ import ProductImportModal from './ProductImportModal';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 import ModalShell from '@/components/ui/ModalShell';
 import { X, Package, Scale, ShoppingCart, Plus, FileSpreadsheet } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { exportTableToPdf, formatMoneyPdf } from '@/lib/exportPdf';
 import { useProductos } from '@/hooks/useProductos';
 import {

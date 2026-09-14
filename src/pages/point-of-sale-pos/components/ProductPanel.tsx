@@ -1,19 +1,14 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Search, Scale, Boxes, Image as ImageIcon, ChevronLeft, ChevronRight } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Search, Image as ImageIcon, Scale, Boxes } from 'lucide-react';
 import type { CartItem } from './POSTerminal';
 import { DELETE_SKU } from '@/lib/posStore';
 import { checkComboStockAvailability, type Combo } from '@/lib/comboStore';
 import ComboStockAlertModal from '@/pages/combos/components/ComboStockAlertModal';
-import { toast } from 'sonner';
-import { scaleProducts } from '../utils/scaleUtils';
+import { toast } from '@/lib/toast';
 import { useProductos } from '@/hooks/useProductos';
 import { useCombos } from '@/hooks/useCombos';
 import { initialProducts } from '@/pages/product-management/components/ProductManagementScreen';
 import { extractPluFromCode, isVariableWeightBarcode, productMatchesScanCode } from '@/lib/scaleBarcode';
-
-import CategoryIcon from '@/components/ui/CategoryIcon';
-import WeightBadge from '@/components/weight/WeightBadge';
-import MixedSaleTypeModal from '@/components/weight/MixedSaleTypeModal';
 import type { SaleType, WeightUnit } from '@/types/database';
 
 interface Product {
@@ -34,24 +29,7 @@ interface Product {
   isWeighted?: boolean;
   saleType?: SaleType;
   weightUnit?: WeightUnit;
-  pricePerWeight?: number;
-  minWeight?: number;
-  maxWeight?: number;
-  allowDecimal?: boolean;
 }
-
-const categories = [
-  { id: 'cat-all', label: 'Todos' },
-  { id: 'cat-combos', label: 'Combos & Ofertas' },
-  { id: 'cat-lacteos', label: 'Lácteos' },
-  { id: 'cat-carnes', label: 'Carnes' },
-  { id: 'cat-granos', label: 'Granos' },
-  { id: 'cat-bebidas', label: 'Bebidas' },
-  { id: 'cat-limpieza', label: 'Limpieza' },
-  { id: 'cat-panaderia', label: 'Panadería' },
-  { id: 'cat-frutas', label: 'Frutas' },
-  { id: 'cat-snacks', label: 'Snacks' },
-];
 
 interface ProductPanelProps {
   onAddToCart: (product: Omit<CartItem, 'qty' | 'discount'>, qty?: number) => void;
@@ -61,64 +39,59 @@ interface ProductPanelProps {
   onSearchChange?: (q: string) => void;
 }
 
-export default function ProductPanel({ onAddToCart, onOpenScale, searchQuery }: ProductPanelProps) {
-  const [search, setSearch] = useState('');
-  const activeSearch = searchQuery !== undefined ? searchQuery : search;
-  const [activeCategory, setActiveCategory] = useState('cat-all');
-  const [currentPage, setCurrentPage] = useState(1);
-  const ITEMS_PER_PAGE = 6;
-
+export default function ProductPanel({ onAddToCart, onOpenScale, searchQuery = '' }: ProductPanelProps) {
   const [alertOpen, setAlertOpen] = useState(false);
   const [alertComboName, setAlertComboName] = useState('');
   const [missingItems, setMissingItems] = useState<{ productId: string; sku: string; name: string; required: number; available: number }[]>([]);
 
-  // State for Mixed Sale Type Modal
-  const [mixedProduct, setMixedProduct] = useState<Product | null>(null);
-
   const catalogSearch = useMemo(() => {
-    const term = activeSearch.trim();
+    const term = searchQuery.trim();
     if (isVariableWeightBarcode(term)) return extractPluFromCode(term);
     return term;
-  }, [activeSearch]);
+  }, [searchQuery]);
 
   const { productosUi } = useProductos({ pagina: 1, limite: 500, busqueda: catalogSearch, estado: 'todos' });
   const { combos } = useCombos(true);
 
   const products: Product[] = useMemo(() => {
-    const fromStore = productosUi.map(
-      (p): Product => {
-        const isWeight = p.isWeightProduct || p.saleType === 'weight' || p.saleType === 'both' || p.unit.toLowerCase().includes('lb') || p.unit.toLowerCase().includes('kg');
-        return {
-          id: p.id,
-          sku: p.sku,
-          barcode: p.barcode,
-          plu: p.plu,
-          name: p.name,
-          category: p.category,
-          price: p.salePrice,
-          cost: p.costPrice,
-          stock: p.currentStock,
-          unit: p.unit,
-          tax: p.tax,
-          image: p.image,
-          lowStock: p.stockStatus === 'low',
-          outOfStock: p.stockStatus === 'out',
-          isWeighted: isWeight,
-          saleType: p.saleType ?? (isWeight ? 'weight' : 'unit'),
-          weightUnit: p.weightUnit ?? 'lb',
-          pricePerWeight: p.pricePerWeight ?? p.salePrice,
-          minWeight: p.minWeight ?? 0.01,
-          maxWeight: p.maxWeight ?? 999.99,
-          allowDecimal: p.allowDecimal ?? true,
-        };
-      }
-    );
+    const fromStore = productosUi.map((p): Product => {
+      const isWeight =
+        p.isWeightProduct ||
+        p.saleType === 'weight' ||
+        p.saleType === 'both' ||
+        p.unit.toLowerCase().includes('lb') ||
+        p.unit.toLowerCase().includes('kg');
+      return {
+        id: p.id,
+        sku: p.sku,
+        barcode: p.barcode,
+        plu: p.plu,
+        name: p.name,
+        category: p.category,
+        price: p.salePrice,
+        cost: p.costPrice,
+        stock: p.currentStock,
+        unit: p.unit,
+        tax: p.tax,
+        image: p.image,
+        lowStock: p.stockStatus === 'low',
+        outOfStock: p.stockStatus === 'out',
+        isWeighted: isWeight,
+        saleType: p.saleType ?? (isWeight ? 'weight' : 'unit'),
+        weightUnit: p.weightUnit ?? 'lb',
+      };
+    });
 
     const storeSkus = new Set(fromStore.map((p) => p.sku.toLowerCase()));
     const demoExtras: Product[] = initialProducts
       .filter((ip) => !storeSkus.has(ip.sku.toLowerCase()))
       .map((ip) => {
-        const isWeight = ip.isWeightProduct || ip.saleType === 'weight' || ip.saleType === 'both' || ip.unit.toLowerCase().includes('lb') || ip.unit.toLowerCase().includes('kg');
+        const isWeight =
+          ip.isWeightProduct ||
+          ip.saleType === 'weight' ||
+          ip.saleType === 'both' ||
+          ip.unit.toLowerCase().includes('lb') ||
+          ip.unit.toLowerCase().includes('kg');
         return {
           id: ip.id,
           sku: ip.sku,
@@ -137,71 +110,44 @@ export default function ProductPanel({ onAddToCart, onOpenScale, searchQuery }: 
           isWeighted: isWeight,
           saleType: ip.saleType ?? (isWeight ? 'weight' : 'unit'),
           weightUnit: ip.weightUnit ?? 'lb',
-          pricePerWeight: ip.pricePerWeight ?? ip.salePrice,
-          minWeight: ip.minWeight ?? 0.01,
-          maxWeight: ip.maxWeight ?? 999.99,
-          allowDecimal: ip.allowDecimal ?? true,
         };
       });
 
     return [...fromStore, ...demoExtras];
   }, [productosUi]);
 
-  // Reset pagination on category/search change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [activeCategory, activeSearch]);
-
   const allCombos = combos.filter((c) => c.active && c.visibleInPos);
 
-  const filteredProducts = activeCategory === 'cat-combos' ? [] : products.filter((p) => {
-    if (p.sku === DELETE_SKU) return false;
-    const matchCat = activeCategory === 'cat-all' || categories.find((c) => c.id === activeCategory)?.label === p.category;
-    const term = activeSearch.trim().toLowerCase();
-    const matchSearch =
-      term === '' ||
-      p.name.toLowerCase().includes(term) ||
-      p.barcode.toLowerCase().includes(term) ||
-      p.sku.toLowerCase().includes(term) ||
-      (p.plu && p.plu.toLowerCase().includes(term)) ||
-      productMatchesScanCode(p, activeSearch.trim());
-    return matchCat && matchSearch;
-  });
-
-  const filteredCombos = (activeCategory === 'cat-all' || activeCategory === 'cat-combos')
-    ? allCombos.filter((c) => {
-        const term = activeSearch.trim().toLowerCase();
-        const matchSearch =
-          term === '' ||
-          c.name.toLowerCase().includes(term) ||
-          c.code.toLowerCase().includes(term) ||
-          c.barcode.toLowerCase().includes(term) ||
-          c.category.toLowerCase().includes(term);
-        return matchSearch;
-      })
-    : [];
-
-  // Combine items for pagination of 6
-  const allDisplayItems = [
-    ...filteredCombos.map((c) => ({ type: 'combo' as const, data: c })),
-    ...filteredProducts.map((p) => ({ type: 'product' as const, data: p })),
-  ];
-
-  const totalItems = allDisplayItems.length;
-  const totalPages = Math.max(1, Math.ceil(totalItems / ITEMS_PER_PAGE));
-  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-  const currentDisplayItems = allDisplayItems.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  const filteredProducts = useMemo(() => {
+    const term = searchQuery.trim().toLowerCase();
+    return products.filter((p) => {
+      if (p.sku === DELETE_SKU) return false;
+      if (!term) return true;
+      return (
+        p.name.toLowerCase().includes(term) ||
+        p.barcode.toLowerCase().includes(term) ||
+        p.sku.toLowerCase().includes(term) ||
+        (p.plu && p.plu.toLowerCase().includes(term)) ||
+        productMatchesScanCode(p, searchQuery.trim())
+      );
+    });
+  }, [products, searchQuery]);
 
   const handleProductClick = (p: Product) => {
-    if (p.outOfStock && p.sku !== DELETE_SKU) return;
-
-    if (p.saleType === 'both') {
-      setMixedProduct(p);
+    if (p.outOfStock) {
+      toast.error(`Producto agotado: ${p.name}`);
       return;
     }
 
-    if ((p.saleType === 'weight' || p.isWeighted || p.unit.toLowerCase() === 'libra' || p.unit.toLowerCase() === 'lb' || p.unit.toLowerCase() === 'kg') && onOpenScale) {
-      onOpenScale(p.id, 1.000);
+    if (
+      (p.saleType === 'weight' ||
+        p.isWeighted ||
+        p.unit.toLowerCase() === 'libra' ||
+        p.unit.toLowerCase() === 'lb' ||
+        p.unit.toLowerCase() === 'kg') &&
+      onOpenScale
+    ) {
+      onOpenScale(p.id, 1.0);
       return;
     }
 
@@ -246,132 +192,106 @@ export default function ProductPanel({ onAddToCart, onOpenScale, searchQuery }: 
   };
 
   return (
-    <div className="flex flex-col h-full bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-3 overflow-hidden">
-      {/* Category Pills Bar */}
-      <div className="flex items-center gap-1 overflow-x-auto pb-2 mb-2 scrollbar-thin border-b border-slate-100 dark:border-slate-800 flex-shrink-0">
-        {categories.map((cat) => (
-          <button
-            key={cat.id}
-            type="button"
-            onClick={() => setActiveCategory(cat.id)}
-            className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-              activeCategory === cat.id
-                ? 'bg-indigo-600 text-white shadow-2xs font-bold'
-                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
-            }`}
-          >
-            {cat.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Product Grid: 6 Items per page */}
-      <div className="flex-1 overflow-y-auto scrollbar-thin pr-1 flex flex-col justify-between">
-        {totalItems === 0 ? (
-          <div className="flex flex-col items-center justify-center h-48 gap-2">
-            <Search size={30} className="text-slate-300" />
-            <p className="text-xs font-medium text-slate-500">No se encontraron productos</p>
+    <div className="flex flex-col h-full bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-sm p-2.5 overflow-hidden">
+      {/* 4-Column Product Grid with vertical scrollbar matching reference UI */}
+      <div className="flex-1 overflow-y-auto pr-1 scrollbar-thin">
+        {filteredProducts.length === 0 && allCombos.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-56 gap-2 text-slate-400">
+            <Search size={32} className="text-slate-300 dark:text-slate-600" />
+            <p className="text-xs font-semibold">No se encontraron productos</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-            {currentDisplayItems.map((item) => {
-              if (item.type === 'combo') {
-                const c = item.data;
-                return (
-                  <button
-                    key={`combo-${c.id}`}
-                    type="button"
-                    onClick={() => handleComboClick(c)}
-                    className="group relative flex flex-col items-center text-center bg-purple-50/40 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800/40 rounded-xl p-2.5 transition-all hover:shadow-md hover:border-purple-500 cursor-pointer"
-                  >
-                    <span className="absolute top-1 right-1 bg-purple-600 text-white text-[8px] font-bold px-1.5 py-0.5 rounded shadow-2xs">
-                      COMBO
-                    </span>
-                    <div className="w-full h-16 rounded-lg bg-purple-100 dark:bg-purple-900/40 border border-purple-200 dark:border-purple-800 flex items-center justify-center mb-1.5">
-                      <Boxes size={22} className="text-purple-600 dark:text-purple-400" />
-                    </div>
-                    <p className="text-xs font-bold text-slate-800 dark:text-slate-100 leading-tight line-clamp-2 min-h-[2rem]">
-                      {c.name} ({c.code})
-                    </p>
-                    <p className="text-xs font-extrabold text-purple-600 dark:text-purple-400 mt-1">
-                      RD$ {c.price.toLocaleString('es-DO')}
-                    </p>
-                  </button>
-                );
-              }
+          <div className="grid grid-cols-4 gap-2">
+            {/* Products list rendered as 4-column cards */}
+            {filteredProducts.map((p) => {
+              const displayCode = p.barcode || p.sku || '';
+              const stockText =
+                p.stock !== undefined && p.stock !== null
+                  ? `${Number(p.stock).toFixed(2)} ${p.unit || 'Und'} en stock`
+                  : '--';
 
-              const p = item.data;
               return (
                 <button
                   key={p.id}
                   type="button"
                   onClick={() => handleProductClick(p)}
                   disabled={p.outOfStock}
-                  className={`group relative flex flex-col items-center text-center bg-white dark:bg-slate-800/90 border rounded-xl p-2.5 transition-all hover:shadow-md
-                    ${p.outOfStock ? 'opacity-40 border-slate-200 cursor-not-allowed' : 'border-slate-200 dark:border-slate-700/80 hover:border-indigo-500 cursor-pointer'}
+                  className={`group flex flex-col items-center justify-between text-center bg-white dark:bg-slate-850 border rounded-xl p-2 transition-all hover:shadow-md cursor-pointer min-h-[110px]
+                    ${
+                      p.outOfStock
+                        ? 'opacity-45 border-slate-200 cursor-not-allowed'
+                        : 'border-slate-200/80 dark:border-slate-700/70 hover:border-blue-400 dark:hover:border-blue-500'
+                    }
                   `}
                 >
-                  {/* Icon Box */}
-                  <div className="w-full h-16 rounded-lg flex items-center justify-center mb-1.5 relative overflow-hidden">
-                    <CategoryIcon category={p.category} name={p.name} size="lg" className="w-full h-full rounded-lg" />
-                    {(p.isWeighted || p.saleType === 'weight' || p.saleType === 'both') && (
-                      <div className="absolute bottom-1 right-1 z-10 shadow-xs">
-                        <WeightBadge saleType={p.saleType} weightUnit={p.weightUnit} isWeighted={p.isWeighted} size="sm" />
+                  {/* Top Image Placeholder Box with ImageIcon */}
+                  <div className="w-full h-12 rounded-lg bg-slate-50 dark:bg-slate-800/80 border border-slate-100 dark:border-slate-700/60 flex items-center justify-center overflow-hidden mb-1 relative">
+                    {p.image ? (
+                      <img
+                        src={p.image}
+                        alt={p.name}
+                        className="w-full h-full object-contain p-0.5"
+                        onError={(e) => {
+                          (e.target as HTMLElement).style.display = 'none';
+                        }}
+                      />
+                    ) : (
+                      <ImageIcon size={20} className="text-slate-300 dark:text-slate-600" />
+                    )}
+
+                    {p.isWeighted && (
+                      <div className="absolute top-0.5 right-0.5 w-4 h-4 bg-emerald-500 text-white rounded-full flex items-center justify-center">
+                        <Scale size={9} />
                       </div>
                     )}
                   </div>
 
-                  {/* Title */}
-                  <p className="text-xs font-bold text-slate-800 dark:text-slate-100 leading-tight line-clamp-2 min-h-[2rem]">
-                    {p.name} {p.sku ? `(${p.sku})` : ''}
+                  {/* Product Title (truncated) */}
+                  <p
+                    className="text-[11px] font-bold text-slate-800 dark:text-slate-200 leading-tight w-full truncate"
+                    title={p.name}
+                  >
+                    {p.name}
                   </p>
 
-                  {/* Price & Stock */}
-                  <div className="mt-1 flex flex-col items-center">
-                    <p className="text-xs font-black text-slate-900 dark:text-white tabular-nums">
-                      RD$ {p.price.toLocaleString('es-DO')} {(p.saleType === 'weight' || p.saleType === 'both') ? `/${p.weightUnit || 'lb'}` : ''}
-                    </p>
-                    <p className="text-[10px] font-semibold text-slate-400 dark:text-slate-400 tabular-nums">
-                      {p.outOfStock ? 'Agotado' : `${p.stock} ${p.unit || 'Und'} en stock`}
-                    </p>
-                  </div>
+                  {/* SKU/Barcode in parenthesis */}
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate w-full mt-0.5">
+                    {displayCode ? `(${displayCode})` : '--'}
+                  </p>
+
+                  {/* Stock label */}
+                  <p className="text-[9.5px] font-medium text-slate-400 dark:text-slate-500 truncate w-full mt-0.5">
+                    {p.outOfStock ? 'Agotado' : stockText}
+                  </p>
                 </button>
               );
             })}
+
+            {/* Combos list rendered seamlessly */}
+            {allCombos.map((c) => (
+              <button
+                key={`combo-${c.id}`}
+                type="button"
+                onClick={() => handleComboClick(c)}
+                className="group flex flex-col items-center justify-between text-center bg-purple-50/50 dark:bg-purple-950/20 border border-purple-200/80 dark:border-purple-800/50 rounded-xl p-2 transition-all hover:shadow-md hover:border-purple-400 cursor-pointer min-h-[110px]"
+              >
+                <div className="w-full h-12 rounded-lg bg-purple-100/70 dark:bg-purple-900/40 border border-purple-200/60 dark:border-purple-800 flex items-center justify-center mb-1">
+                  <Boxes size={20} className="text-purple-600 dark:text-purple-400" />
+                </div>
+                <p className="text-[11px] font-bold text-slate-800 dark:text-slate-200 leading-tight w-full truncate">
+                  {c.name}
+                </p>
+                <p className="text-[10px] text-purple-600 dark:text-purple-400 font-bold truncate w-full mt-0.5">
+                  ({c.code})
+                </p>
+                <p className="text-[9.5px] font-bold text-slate-600 dark:text-slate-300 truncate w-full mt-0.5">
+                  RD$ {c.price.toLocaleString('es-DO')}
+                </p>
+              </button>
+            ))}
           </div>
         )}
       </div>
-
-      {/* Pagination Controls Bar (6 per page) */}
-      {totalPages >= 1 && (
-        <div className="flex items-center justify-between pt-2 mt-2 border-t border-slate-100 dark:border-slate-800 flex-shrink-0">
-          <button
-            type="button"
-            disabled={currentPage === 1}
-            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-            className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-xs font-bold text-slate-700 dark:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-2xs flex items-center gap-1"
-          >
-            <ChevronLeft size={15} />
-            <span>Anterior</span>
-          </button>
-
-          <div className="flex items-center gap-1 text-xs font-bold text-slate-600 dark:text-slate-300">
-            <span>Pág.</span>
-            <span className="bg-indigo-600 text-white px-2 py-0.5 rounded-lg text-xs font-black tabular-nums">{currentPage}</span>
-            <span>de {totalPages}</span>
-          </div>
-
-          <button
-            type="button"
-            disabled={currentPage === totalPages}
-            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-            className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-xs font-bold text-slate-700 dark:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-2xs flex items-center gap-1"
-          >
-            <span>Siguiente</span>
-            <ChevronRight size={15} />
-          </button>
-        </div>
-      )}
 
       <ComboStockAlertModal
         isOpen={alertOpen}
@@ -379,39 +299,6 @@ export default function ProductPanel({ onAddToCart, onOpenScale, searchQuery }: 
         comboName={alertComboName}
         missingItems={missingItems}
       />
-
-      {mixedProduct && (
-        <MixedSaleTypeModal
-          productName={mixedProduct.name}
-          productSku={mixedProduct.sku}
-          price={mixedProduct.price}
-          weightUnit={mixedProduct.weightUnit}
-          onClose={() => setMixedProduct(null)}
-          onSelectUnit={() => {
-            const p = mixedProduct;
-            setMixedProduct(null);
-            onAddToCart({
-              id: `cart-${p.id}-${Date.now()}`,
-              productId: p.id,
-              name: p.name,
-              sku: p.sku,
-              price: p.price,
-              cost: p.cost,
-              tax: p.tax,
-              image: p.image,
-              unit: p.unit || 'Unidad',
-              isWeighted: false,
-            });
-          }}
-          onSelectWeight={() => {
-            const p = mixedProduct;
-            setMixedProduct(null);
-            if (onOpenScale) {
-              onOpenScale(p.id, 1.000);
-            }
-          }}
-        />
-      )}
     </div>
   );
 }

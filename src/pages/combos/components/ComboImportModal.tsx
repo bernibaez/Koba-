@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X, Upload, FileText, CheckCircle2, AlertCircle } from 'lucide-react';
 import { Combo, DEFAULT_COMBOS, saveCombos, getCombos } from '@/lib/comboStore';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 
 interface ComboImportModalProps {
   isOpen: boolean;

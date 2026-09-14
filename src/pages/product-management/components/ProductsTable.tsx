@@ -24,7 +24,7 @@ import type { Product } from './ProductManagementScreen';
 import CategoryIcon from '@/components/ui/CategoryIcon';
 import WeightBadge from '@/components/weight/WeightBadge';
 import { generateUniqueBarcode } from '@/lib/barcodeUtils';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 
 interface ProductsTableProps {
   products: Product[];

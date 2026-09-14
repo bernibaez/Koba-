@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X, ArrowDownRight, ArrowUpRight, DollarSign, Tag, FileText, CheckCircle2 } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { useAuth } from '@/context/AuthContext';
 import { registrarMovimientoCaja } from '@/services/movimientosCaja.service';
 import type { TipoMovimientoCaja } from '@/types/database';

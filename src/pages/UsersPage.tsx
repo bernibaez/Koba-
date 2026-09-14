@@ -27,7 +27,7 @@ import { useRoles } from '@/hooks/useRoles';
 import { ROL_DB_A_UI, ROL_UI_A_DB } from '@/services/auth.service';
 import type { AgenteComercial, Perfil, Rol, RolDb } from '@/types/database';
 import type { UserRole } from '@/lib/auth';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { isSupabaseConfigured } from '@/services/clienteSupabase';
 import { isMissingRolesTableError } from '@/services/roles.service';
 import { InlineLoader, TableRowSkeleton } from '@/components/ui/LoadingSkeleton';

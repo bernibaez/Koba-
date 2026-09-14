@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { Plus, Search, Download, Eye } from 'lucide-react';
 import { exportTableToPdf } from '@/lib/exportPdf';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import {
   crearTransferencia,
   obtenerSucursales,

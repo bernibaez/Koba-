@@ -4,7 +4,7 @@ import {
   Store, RotateCcw, Lock, ShoppingCart, Package, ArrowLeftRight, Sliders, Scale, DollarSign, BarChart2, ShieldCheck, UserCheck, ShoppingBag, HandCoins, Wallet, Briefcase
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { useAuth } from '@/context/AuthContext';
 
 interface TopbarProps {

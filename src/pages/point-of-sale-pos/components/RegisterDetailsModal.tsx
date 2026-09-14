@@ -4,7 +4,7 @@ import { exportTableToPdf, formatMoneyPdf } from '@/lib/exportPdf';
 import { useAuth } from '@/context/AuthContext';
 import { obtenerVentasTurno, type VentaConDetalle } from '@/services/ventas.service';
 import { obtenerCajaAbierta } from '@/services/cierresCaja.service';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 
 interface RegisterDetailsModalProps {
   onClose: () => void;

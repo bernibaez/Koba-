@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { X, PlayCircle, DollarSign, Monitor, Info, Check, AlertCircle, User } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { useAuth } from '@/context/AuthContext';
 import { findCashRegister } from '@/lib/cashRegisters';
 import { useCashRegisters } from '@/hooks/useCashRegisters';

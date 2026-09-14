@@ -24,6 +24,7 @@
     "react-hook-form": "^7.82.0",
     "react-router-dom": "^7.6.3",
     "recharts": "^2.15.2",
+    "sileo": "^0.1.5",
     "sonner": "^1.7.4",
     "xlsx": "^0.18.5"
   },

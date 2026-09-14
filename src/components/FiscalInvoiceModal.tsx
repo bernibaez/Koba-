@@ -3,7 +3,7 @@ import {
   X, Printer, Download, FileText, CheckCircle2, Building2, Copy, Check,
   Receipt, ShieldCheck, Calendar, User, ArrowRight, Sparkles
 } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { exportTableToPdf, formatMoneyPdf } from '@/lib/exportPdf';
 import type { FiscalInvoiceRecord } from '@/lib/ncfStore';
 import { NCF_TYPES } from '@/lib/ncfStore';

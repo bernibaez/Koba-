@@ -8,7 +8,7 @@ import { useProductos } from '@/hooks/useProductos';
 import { useProveedores } from '@/hooks/useProveedores';
 import { crearProducto, uiAProductoInsert } from '@/services/productos.service';
 import { crearCompra, obtenerCompras, obtenerDetalleCompra, anularCompra, type CompraDetalle } from '@/services/compras.service';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import ModalShell from '@/components/ui/ModalShell';
 
 interface Purchase {

@@ -3,14 +3,12 @@ import { Link, useNavigate } from 'react-router-dom';
 import {
   Home,
   RotateCcw,
-  XCircle,
+  X,
   Briefcase,
-  Scale,
+  Calculator,
   Undo2,
   Pause,
-  PlusCircle,
-  Calendar,
-  Monitor,
+  MinusCircle,
   PlayCircle,
   Lock,
   User,
@@ -18,9 +16,12 @@ import {
   LogOut,
   ChevronDown,
   Users,
+  Monitor,
+  CheckCircle2,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { canAccessRoute } from '@/lib/auth';
+import PosCalculatorModal from './PosCalculatorModal';
 
 interface POSHeaderProps {
   cartCount: number;
@@ -67,6 +68,7 @@ export default function POSHeader({
   const navigate = useNavigate();
   const [timeStr, setTimeStr] = useState('');
   const [profileOpen, setProfileOpen] = useState(false);
+  const [calcOpen, setCalcOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
 
   const canSettings = canAccessRoute(user?.role ?? 'Cajero', '/settings');
@@ -76,9 +78,16 @@ export default function POSHeader({
   useEffect(() => {
     const updateTime = () => {
       const d = new Date();
-      const datePart = d.toLocaleDateString('es-DO', { day: '2-digit', month: '2-digit', year: 'numeric' });
-      const timePart = d.toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit', hour12: true });
-      setTimeStr(`${datePart} ${timePart}`);
+      const dd = String(d.getDate()).padStart(2, '0');
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const yyyy = d.getFullYear();
+      let hours = d.getHours();
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      hours = hours % 12;
+      hours = hours ? hours : 12;
+      const hh = String(hours).padStart(2, '0');
+      setTimeStr(`${dd}-${mm}-${yyyy} ${hh}:${minutes} ${ampm}`);
     };
     updateTime();
     const interval = setInterval(updateTime, 10000);
@@ -103,153 +112,165 @@ export default function POSHeader({
   };
 
   return (
-    <div className="flex flex-col flex-shrink-0 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-3 mb-2">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          {(canHome || canSales) && (
-            <Link
-              to={canHome ? '/' : '/sales'}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs transition-all shadow-sm active:scale-95"
-              title={canHome ? 'Ir al menú principal del sistema' : 'Ir a mis ventas'}
-            >
-              <Home size={16} />
-              <span>{canHome ? 'Menú Principal' : 'Mis Ventas'}</span>
-            </Link>
-          )}
-
-          <div className="w-px h-5 bg-slate-200 dark:bg-slate-700 hidden sm:block" />
-
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider hidden md:inline">
+    <>
+      <header className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-sm px-4 py-2.5 mb-2.5 flex-shrink-0">
+        {/* Left Section: Ubicación + Purple Date Badge */}
+        <div className="flex items-center gap-3">
+          <div className="flex items-baseline gap-1.5 text-xs">
+            <span className="font-extrabold text-slate-900 dark:text-white tracking-tight">
               Ubicación:
             </span>
-            <span className="text-xs font-black text-slate-800 dark:text-slate-100 uppercase tracking-tight">
-              SUPERMERCADO {cashLabel}
+            <span className="font-bold text-slate-700 dark:text-slate-300 uppercase tracking-tight text-[11px] sm:text-xs">
+              SUPERMERCADO {cashLabel || 'REMANENTE'}
             </span>
           </div>
 
-          <div className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 text-white text-xs font-bold shadow-xs">
-            <Calendar size={14} />
-            <span>{timeStr || '—'}</span>
+          {/* Purple Pill Button with Date & Keyboard Icon */}
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#5c55e6] hover:bg-[#5048db] text-white text-xs font-bold shadow-xs transition-colors cursor-default select-none">
+            <span>{timeStr || '14-09-2026 09:18 AM'}</span>
+            <span className="text-[13px] leading-none">⌨️</span>
           </div>
         </div>
 
+        {/* Center / Actions: 7 Square Cards + Agregar Gasto */}
         <div className="flex items-center gap-2 overflow-x-auto py-0.5">
+          {/* 1. Fast Rewind / Venta Previa (Blue/Cyan) */}
           <button
             type="button"
             onClick={onClear}
-            className="p-2.5 rounded-xl bg-slate-700 hover:bg-slate-800 text-white transition-all shadow-xs active:scale-95 border border-slate-600"
+            className="w-10 h-10 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 flex items-center justify-center shadow-xs transition-all active:scale-95 text-sky-500 hover:text-sky-600 cursor-pointer"
             title="Venta Previa / Reajustar"
           >
-            <RotateCcw size={18} strokeWidth={2.3} />
+            <RotateCcw size={18} strokeWidth={2.5} />
           </button>
 
+          {/* 2. Red X / Limpiar Carrito */}
           <button
             type="button"
             onClick={onClear}
-            className="p-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white transition-all shadow-xs active:scale-95 border border-red-500"
-            title="Cancelar / Limpiar"
+            className="w-10 h-10 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 flex items-center justify-center shadow-xs transition-all active:scale-95 text-red-500 hover:text-red-600 cursor-pointer"
+            title="Limpiar Carrito / Cancelar"
           >
-            <XCircle size={18} strokeWidth={2.3} />
+            <X size={20} strokeWidth={2.6} />
           </button>
 
+          {/* 3. Teal Briefcase / Registrar Detalles de Caja */}
           <button
             type="button"
             onClick={onOpenRegisterDetails}
-            className="p-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white transition-all shadow-xs active:scale-95 border border-emerald-500"
-            title="Registrar detalles (Maleta)"
+            className="w-10 h-10 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 flex items-center justify-center shadow-xs transition-all active:scale-95 text-teal-600 hover:text-teal-700 cursor-pointer"
+            title="Registrar detalles de caja"
           >
-            <Briefcase size={18} strokeWidth={2.3} />
+            <Briefcase size={18} strokeWidth={2.4} />
           </button>
 
+          {/* 4. Green Calculator / Calculadora Rápida */}
+          <button
+            type="button"
+            onClick={() => setCalcOpen(true)}
+            className="w-10 h-10 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 flex items-center justify-center shadow-xs transition-all active:scale-95 text-emerald-600 hover:text-emerald-700 cursor-pointer"
+            title="Abrir Calculadora"
+          >
+            <Calculator size={18} strokeWidth={2.4} />
+          </button>
+
+          {/* 5. Red Undo / Devolución */}
           <button
             type="button"
             onClick={onReturn}
-            className="p-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white transition-all shadow-xs active:scale-95 border border-rose-500"
-            title="Devolución"
+            className="w-10 h-10 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 flex items-center justify-center shadow-xs transition-all active:scale-95 text-rose-500 hover:text-rose-600 cursor-pointer"
+            title="Devolución de Producto"
           >
-            <Undo2 size={18} strokeWidth={2.3} />
+            <Undo2 size={18} strokeWidth={2.5} />
           </button>
 
+          {/* 6. Purple Drawer / Cambiar Caja */}
           <button
             type="button"
             onClick={onSwitchCash}
-            className="p-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white transition-all shadow-xs active:scale-95 border border-indigo-500"
-            title="Acceso Remoto / Entrar a una caja"
+            className="w-10 h-10 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 flex items-center justify-center shadow-xs transition-all active:scale-95 text-indigo-600 hover:text-indigo-700 cursor-pointer"
+            title="Cambiar de Caja / Terminal"
           >
-            <Monitor size={18} strokeWidth={2.3} />
+            <Monitor size={18} strokeWidth={2.4} />
           </button>
 
+          {/* 7. Grey/Blue Pause / Ventas en Espera */}
           <button
             type="button"
             onClick={onHold}
-            className="relative p-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white transition-all shadow-xs active:scale-95 border border-purple-500"
-            title="Suspender / Pausar Venta"
+            className="relative w-10 h-10 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 flex items-center justify-center shadow-xs transition-all active:scale-95 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 cursor-pointer"
+            title="Ventas Suspendidas"
           >
-            <Pause size={18} strokeWidth={2.3} />
+            <Pause size={18} strokeWidth={2.4} />
             {heldCount > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-amber-400 text-slate-950 text-[11px] rounded-full flex items-center justify-center font-black border-2 border-white dark:border-slate-900 shadow-xs">
+              <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] bg-amber-500 text-white text-[10px] rounded-full flex items-center justify-center font-black px-1 shadow-xs">
                 {heldCount}
               </span>
             )}
           </button>
+
+          {/* 8. Agregar Gasto Button (Pill with border) */}
+          <button
+            type="button"
+            onClick={onExpense}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-700 transition-all shadow-2xs active:scale-95 cursor-pointer ml-1"
+          >
+            <MinusCircle size={15} className="text-slate-800 dark:text-slate-200" strokeWidth={2.3} />
+            <span>Agregar gasto</span>
+          </button>
         </div>
 
-        <div className="flex items-center gap-2">
-          {(onOpenCash || onCloseCash) && (
+        {/* Right Section: Inicio/Cierre de Caja & User Profile */}
+        <div className="flex items-center gap-2.5">
+          {/* Shift State: Iniciar Caja o Cierre de Caja */}
+          {cashIsOpen ? (
             <div className="flex items-center gap-2">
-              {onOpenCash && (
-                <button
-                  type="button"
-                  onClick={onOpenCash}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black transition-all shadow-sm active:scale-95 border border-emerald-500"
-                  title={cashIsOpen ? 'Ya hay un turno abierto. Inicia de nuevo para reemplazarlo o cierra primero.' : 'Iniciar o abrir turno de caja con fondo inicial'}
-                >
-                  <PlayCircle size={15} />
-                  <span className="hidden sm:inline">Iniciar Caja</span>
-                </button>
-              )}
+              <div className="hidden xl:flex items-center gap-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                <CheckCircle2 size={13} />
+                <span>Caja Abierta</span>
+              </div>
               {onCloseCash && (
                 <button
                   type="button"
                   onClick={onCloseCash}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-black transition-all shadow-sm active:scale-95 border border-rose-500"
-                  title={cashIsOpen ? 'Cerrar turno de caja y hacer arqueo' : 'Cerrar el inicio de caja activo'}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold transition-all shadow-xs active:scale-95 cursor-pointer"
+                  title="Cerrar turno de caja y realizar arqueo"
                 >
-                  <Lock size={15} />
-                  <span className="hidden sm:inline">Cierre de Caja</span>
+                  <Lock size={14} />
+                  <span>Cierre de caja</span>
                 </button>
               )}
             </div>
+          ) : (
+            onOpenCash && (
+              <button
+                type="button"
+                onClick={onOpenCash}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-xs active:scale-95 cursor-pointer"
+                title="Abrir turno de caja con fondo inicial"
+              >
+                <PlayCircle size={15} />
+                <span>Iniciar Caja</span>
+              </button>
+            )
           )}
 
-          <button
-            type="button"
-            onClick={onExpense}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 text-xs font-black hover:bg-slate-50 transition-all shadow-2xs"
-          >
-            <PlusCircle size={15} className="text-slate-900 dark:text-white" />
-            <span className="hidden sm:inline">Agregar gasto</span>
-          </button>
-
+          {/* User Account / Navigation Menu */}
           <div className="relative" ref={profileRef}>
             <button
               type="button"
               onClick={() => setProfileOpen((p) => !p)}
-              className="flex items-center gap-2 px-2 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all"
-              title="Cuenta y sesión"
+              className="flex items-center gap-1.5 px-2 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all cursor-pointer"
+              title="Menú y usuario"
             >
-              <div className="w-8 h-8 rounded-xl bg-emerald-100 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 flex items-center justify-center text-emerald-700 dark:text-emerald-400 font-bold text-xs">
+              <div className="w-7 h-7 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 flex items-center justify-center text-indigo-700 dark:text-indigo-300 font-bold text-xs">
                 {(user?.initials || user?.name || cashierName || 'U').charAt(0).toUpperCase()}
               </div>
-              <span className="hidden md:block text-xs font-bold text-slate-800 dark:text-slate-100 max-w-[100px] truncate">
-                {user?.name?.split(' ')[0] || cashierName || 'Usuario'}
-              </span>
-              <ChevronDown size={14} className="text-slate-400" />
+              <ChevronDown size={13} className="text-slate-400" />
             </button>
 
             {profileOpen && (
-              <div className="absolute right-0 top-full mt-2 w-64 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl z-50 overflow-hidden">
+              <div className="absolute right-0 top-full mt-2 w-60 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl z-50 overflow-hidden">
                 <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60">
                   <p className="text-sm font-bold text-slate-900 dark:text-white">
                     {user?.name || cashierName || 'Usuario'}
@@ -257,47 +278,51 @@ export default function POSHeader({
                   <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">
                     {user?.email || '—'}
                   </p>
-                  <span className="inline-block mt-2 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800">
+                  <span className="inline-block mt-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-400 dark:border-indigo-800">
                     {user?.role || 'Cajero'}
                   </span>
                 </div>
 
-                {canSettings && (
-                  <>
+                <div className="py-1">
+                  {canHome && (
                     <Link
-                      to="/settings"
+                      to="/"
                       onClick={() => setProfileOpen(false)}
-                      className="flex items-center gap-3 px-4 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                      className="flex items-center gap-2.5 px-4 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                     >
-                      <User size={16} className="text-emerald-600" />
-                      Mi Perfil
+                      <Home size={15} className="text-indigo-600" />
+                      Menú Principal
                     </Link>
+                  )}
+                  {canSales && (
+                    <Link
+                      to="/sales"
+                      onClick={() => setProfileOpen(false)}
+                      className="flex items-center gap-2.5 px-4 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                    >
+                      <Briefcase size={15} className="text-indigo-600" />
+                      Mis Ventas
+                    </Link>
+                  )}
+                  {canSettings && (
                     <Link
                       to="/settings"
                       onClick={() => setProfileOpen(false)}
-                      className="flex items-center gap-3 px-4 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                      className="flex items-center gap-2.5 px-4 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                     >
-                      <Settings size={16} className="text-emerald-600" />
+                      <Settings size={15} className="text-indigo-600" />
                       Configuración
                     </Link>
-                  </>
-                )}
+                  )}
+                </div>
 
-                <div className="border-t border-slate-200 dark:border-slate-700">
+                <div className="border-t border-slate-200 dark:border-slate-700 py-1">
                   <button
                     type="button"
                     onClick={() => void handleLogout()}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                    className="w-full flex items-center gap-2.5 px-4 py-2 text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
                   >
-                    <Users size={16} className="text-indigo-600" />
-                    Cambiar usuario
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void handleLogout()}
-                    className="w-full flex items-center gap-3 px-4 py-3 text-sm font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
-                  >
-                    <LogOut size={16} />
+                    <LogOut size={15} />
                     Cerrar Sesión
                   </button>
                 </div>
@@ -305,7 +330,9 @@ export default function POSHeader({
             )}
           </div>
         </div>
-      </div>
-    </div>
+      </header>
+
+      <PosCalculatorModal isOpen={calcOpen} onClose={() => setCalcOpen(false)} />
+    </>
   );
 }

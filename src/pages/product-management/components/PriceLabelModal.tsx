@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { X, Printer, Barcode } from 'lucide-react';
 import type { Product } from './ProductManagementScreen';
 import { generateBarcodeBars } from '@/lib/barcodeUtils';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 
 interface PriceLabelModalProps {
   products: Product[];

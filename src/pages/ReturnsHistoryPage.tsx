@@ -4,7 +4,7 @@ import { Search, Download, RotateCcw, FileSpreadsheet, Eye, Printer, X, Check, X
 import type { PosReturn, PosReturnStatus } from '@/lib/posStore';
 import { exportTableToPdf, exportTableToExcel, formatMoneyPdf } from '@/lib/exportPdf';
 import { logAuditEvent } from '@/lib/auditStore';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { useDevoluciones } from '@/hooks/useDevoluciones';
 import type { DevolucionConDetalle } from '@/services/devoluciones.service';
 import { useAuth } from '@/context/AuthContext';

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { X, Barcode, Scale, CheckCircle2, AlertCircle } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import type { CartItem } from './POSTerminal';
 import { parseScaleBarcode, type ScaleProduct } from '../utils/scaleUtils';
 import { useProductos } from '@/hooks/useProductos';

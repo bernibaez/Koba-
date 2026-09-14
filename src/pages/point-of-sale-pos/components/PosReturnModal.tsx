@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X, Printer, Search, RotateCcw, Clock, Shield, AlertCircle } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { logAuditEvent } from '@/lib/auditStore';
 import { obtenerVentaPorNumeroFactura } from '@/services/ventas.service';
 import { crearDevolucion } from '@/services/devoluciones.service';

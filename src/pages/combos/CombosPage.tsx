@@ -10,7 +10,7 @@ import ConfirmModal from '@/components/ui/ConfirmModal';
 import { Combo, duplicateCombo } from '@/lib/comboStore';
 import { useCombos } from '@/hooks/useCombos';
 import { exportTableToPdf, exportTableToExcel, formatMoneyPdf } from '@/lib/exportPdf';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 
 export default function CombosPage() {
   const { combos, loading, refetch, guardar, eliminar } = useCombos();

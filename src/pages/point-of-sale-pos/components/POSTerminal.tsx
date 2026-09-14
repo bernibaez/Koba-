@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { RefreshCw, Banknote, CreditCard, XCircle, Pause, CheckCircle, FileText, ShoppingBag } from 'lucide-react';
 import POSHeader from './POSHeader';
 import ProductPanel from './ProductPanel';
@@ -873,6 +873,7 @@ export default function POSTerminal() {
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
             onSearchSubmit={handleSearchSubmit}
+            onAddToCart={addToCart}
           />
         </div>
 
@@ -888,10 +889,10 @@ export default function POSTerminal() {
         </div>
       </div>
 
-      {/* Bottom Bar: Supermarket Sticky Payment Bar */}
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-lg p-3 mt-3 flex-shrink-0 flex flex-wrap items-center justify-between gap-3">
+      {/* Bottom Bar: Supermarket Sticky Payment Bar (Matches Reference Image) */}
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-md px-4 py-2.5 mt-2.5 flex-shrink-0 flex flex-wrap items-center justify-between gap-3">
         {/* Left Action Shortcuts */}
-        <div className="flex items-center gap-2 overflow-x-auto py-0.5">
+        <div className="flex items-center gap-1.5 overflow-x-auto py-0.5">
           <button
             type="button"
             onClick={() => {
@@ -902,11 +903,12 @@ export default function POSTerminal() {
               setHoldOpen(true);
               toast.info('Guarda la preventa como venta suspendida');
             }}
-            className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 transition-colors"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
           >
-            <FileText size={15} className="text-sky-500" />
+            <FileText size={15} className="text-sky-500" strokeWidth={2.3} />
             <span>Preventa</span>
           </button>
+
           <button
             type="button"
             onClick={() => {
@@ -937,19 +939,21 @@ export default function POSTerminal() {
                 }
               })();
             }}
-            className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 transition-colors"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
           >
-            <FileText size={15} className="text-amber-500" />
+            <FileText size={15} className="text-amber-500" strokeWidth={2.3} />
             <span>Cotización</span>
           </button>
+
           <button
             type="button"
             onClick={() => setHoldOpen(true)}
-            className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 transition-colors"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
           >
-            <Pause size={15} className="text-purple-500" />
+            <Pause size={15} className="text-red-500" strokeWidth={2.5} />
             <span>Suspender</span>
           </button>
+
           <button
             type="button"
             onClick={() => {
@@ -964,86 +968,89 @@ export default function POSTerminal() {
               setPreferredPayMethod('credit');
               openPayment('credit');
             }}
-            className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 transition-colors"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
           >
-            <CheckCircle size={15} className="text-indigo-500" />
+            <CheckCircle size={15} className="text-indigo-600" strokeWidth={2.3} />
             <span>Venta a crédito</span>
           </button>
+
           <button
             type="button"
             onClick={() => openPayment('card')}
-            className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 transition-colors"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
           >
-            <CreditCard size={15} className="text-rose-500" />
+            <CreditCard size={15} className="text-pink-500" strokeWidth={2.3} />
             <span>Tarjeta</span>
           </button>
         </div>
 
         {/* Center Main Payment Buttons */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5">
+          {/* Pago múltiple (Dark Navy) */}
           <button
             type="button"
             onClick={() => openPayment('split')}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 text-white font-black text-xs shadow-sm transition-all active:scale-95"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#0e2942] hover:bg-[#081d30] text-white font-extrabold text-xs shadow-sm transition-all active:scale-95 cursor-pointer"
           >
-            <ShoppingBag size={16} />
+            <ShoppingBag size={16} strokeWidth={2.3} />
             <span>Pago múltiple</span>
           </button>
 
+          {/* Efectivo (Green) */}
           <button
             type="button"
             onClick={handleQuickCashSale}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs shadow-md transition-all active:scale-95"
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#10b981] hover:bg-[#059669] text-white font-extrabold text-xs shadow-md transition-all active:scale-95 cursor-pointer"
           >
-            <Banknote size={18} />
-            <span>Efectivo (F9)</span>
+            <Banknote size={17} strokeWidth={2.3} />
+            <span>Efectivo</span>
           </button>
 
-          {/* Factura Fiscal Button - Located strictly between Efectivo and Cancelar */}
+          {/* Factura Fiscal Button */}
           <button
             type="button"
             onClick={() => {
               const next = !fiscalEnabled;
               setFiscalEnabled(next);
               if (next) {
-                toast.info('Factura Fiscal (NCF) activada para esta venta', {
-                  description: 'Se solicitarán los datos del comprobante fiscal al cobrar.',
-                });
+                toast.info('Factura Fiscal (NCF) activada para esta venta');
               } else {
                 toast.info('Factura Fiscal desactivada');
               }
             }}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-xs shadow-sm transition-all active:scale-95 border ${
+            className={`flex items-center gap-1.5 px-3 py-2.5 rounded-xl font-bold text-xs transition-all active:scale-95 border cursor-pointer ${
               fiscalEnabled
-                ? 'bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-500 shadow-indigo-500/20 shadow-md ring-2 ring-indigo-400/50'
-                : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700'
+                ? 'bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-500 shadow-sm'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-200'
             }`}
-            title={fiscalEnabled ? 'Factura Fiscal NCF Activada — Clic para desactivar' : 'Factura Fiscal NCF Desactivada — Clic para activar'}
+            title={fiscalEnabled ? 'NCF Activado' : 'NCF Desactivado'}
           >
-            <FileText size={16} className={fiscalEnabled ? 'text-white animate-bounce' : 'text-indigo-600 dark:text-indigo-400'} />
-            <span>Factura Fiscal</span>
-            <span className={`px-1.5 py-0.5 text-[9px] rounded font-black uppercase tracking-wider ${
-              fiscalEnabled ? 'bg-white/20 text-white shadow-2xs' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
-            }`}>
+            <FileText size={15} className={fiscalEnabled ? 'text-white' : 'text-indigo-600 dark:text-indigo-400'} />
+            <span className="hidden sm:inline">NCF</span>
+            <span className={`px-1 py-0.2 text-[9px] rounded font-black ${fiscalEnabled ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}`}>
               {fiscalEnabled ? 'ON' : 'OFF'}
             </span>
           </button>
 
+          {/* Cancelar (Red) */}
           <button
             type="button"
             onClick={clearCart}
-            className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-black text-xs shadow-sm transition-all active:scale-95"
+            className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#dc2626] hover:bg-[#b91c1c] text-white font-extrabold text-xs shadow-sm transition-all active:scale-95 cursor-pointer"
           >
-            <XCircle size={16} />
+            <XCircle size={16} strokeWidth={2.3} />
             <span>Cancelar</span>
           </button>
         </div>
 
-        {/* Rightmost Total Payable */}
-        <div className="flex items-center gap-2 pl-2 border-l border-slate-200 dark:border-slate-800">
-          <span className="text-xs font-black uppercase text-slate-900 dark:text-white">Total Payable:</span>
-          <span className="text-2xl sm:text-3xl font-black tabular-nums text-slate-900 dark:text-white">
-            RD$ {total.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+        {/* Right Total Payable (Matches Reference UI) */}
+        <div className="flex items-center gap-3 pl-3">
+          <div className="flex flex-col text-right leading-tight">
+            <span className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-tight">Total</span>
+            <span className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-tight">Payable:</span>
+          </div>
+          <span className="text-2xl sm:text-3xl font-black tabular-nums text-slate-900 dark:text-white tracking-tight">
+            {total.toFixed(2)}
           </span>
         </div>
       </div>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Scale, AlertCircle, CheckCircle2 } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import type { WeightUnit } from '@/types/database';
 import {
   calculateWeightSubtotal,

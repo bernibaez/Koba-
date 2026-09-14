@@ -1,6 +1,6 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 
 export type PdfCell = string | number;
 

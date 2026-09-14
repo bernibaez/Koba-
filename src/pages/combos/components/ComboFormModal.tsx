@@ -20,7 +20,7 @@ import { Combo, ComboItem, PricingMode } from '@/lib/comboStore';
 import type { ProductItem } from '@/lib/productStore';
 import { useProductos } from '@/hooks/useProductos';
 import CategoryIcon from '@/components/ui/CategoryIcon';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 
 interface ComboFormModalProps {
   isOpen: boolean;

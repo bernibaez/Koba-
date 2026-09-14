@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { exportTableToPdf, exportTableToExcel, formatMoneyPdf } from '@/lib/exportPdf';
 import { logAuditEvent } from '@/lib/auditStore';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { useCxc } from '@/hooks/useCxc';
 import { obtenerClientes } from '@/services/clientes.service';
 import type { CuentaCobrarUi, CxStatusUi } from '@/services/cxc.service';

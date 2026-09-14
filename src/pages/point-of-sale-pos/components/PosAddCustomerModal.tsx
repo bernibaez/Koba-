@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X, UserPlus } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { crearCliente } from '@/services/clientes.service';
 import type { Customer } from './POSTerminal';
 

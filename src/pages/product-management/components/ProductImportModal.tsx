@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import ModalShell from '@/components/ui/ModalShell';
 import { FileSpreadsheet, Upload, Download, CheckCircle2, AlertTriangle, X, Scale, Package, Sparkles, RefreshCw } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import type { Product } from './ProductManagementScreen';
 import {
   annotateImportMatches,

@@ -4,7 +4,7 @@ import AppLayout from '@/components/AppLayout';
 import {
   Building2, MapPin, FileText, Printer, Tag, DollarSign, Globe, Bell, Shield, Mail, Upload, Save, ChevronRight, Trash2, ImageIcon, ShieldCheck
 } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import {
   clearCompanyLogo,
   getCompanyLogo,

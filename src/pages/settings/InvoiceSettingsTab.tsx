@@ -20,7 +20,7 @@ import {
   Sliders,
   RotateCcw,
 } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 
 const ACCENT_PRESETS = [
   { name: 'Índigo Corporativo', hex: '#1e40af' },

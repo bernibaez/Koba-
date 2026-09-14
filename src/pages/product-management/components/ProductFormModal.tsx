@@ -5,7 +5,7 @@ import { Package, Printer, Sparkles } from 'lucide-react';
 import { generateUniqueBarcode } from '@/lib/barcodeUtils';
 import { normalizePlu } from '@/lib/scaleBarcode';
 import { logAuditEvent } from '@/lib/auditStore';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import WeightProductForm, { type WeightFormState } from '@/components/weight/WeightProductForm';
 import type { SaleType, WeightUnit } from '@/types/database';
 

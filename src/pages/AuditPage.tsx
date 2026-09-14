@@ -4,7 +4,7 @@ import type { AuditLog, AuditActionType } from '@/lib/auditStore';
 import { obtenerAuditoria } from '@/services/auditoria.service';
 import { exportTableToPdf, exportTableToExcel } from '@/lib/exportPdf';
 import { ShieldCheck, Search, Download, FileSpreadsheet, Eye, X, Filter, User, Clock } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 
 const actionBadgeMap: Record<AuditActionType, string> = {
   Venta: 'badge-success',

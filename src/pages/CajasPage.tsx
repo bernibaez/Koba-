@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { Plus, Download, Edit2, Monitor, Trash2, Power, Star, Search, ShieldCheck, X, CheckCircle } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { useCajas } from '@/hooks/useCajas';
 import { sugerirSiguienteCodigoCaja } from '@/services/cajas.service';
 import { exportTableToPdf } from '@/lib/exportPdf';

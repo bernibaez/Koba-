@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ShieldCheck, Plus, Calendar, FileText, X, CheckCircle } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { NCF_TYPES, type NCFRange, type NCFType } from '@/lib/ncfStore';
 import { obtenerRangosNcf, guardarRangosNcf } from '@/services/ncf.service';
 

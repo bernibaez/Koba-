@@ -32,7 +32,7 @@ import {
   ChevronLeft,
 } from 'lucide-react';
 import { exportTableToPdf, exportTableToExcel, formatMoneyPdf } from '@/lib/exportPdf';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { useVentas } from '@/hooks/useVentas';
 import { useCotizaciones } from '@/hooks/useCotizaciones';
 import { useDevoluciones } from '@/hooks/useDevoluciones';

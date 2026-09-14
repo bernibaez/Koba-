@@ -1,7 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
-import { Toaster } from 'sonner';
+import { Toaster } from 'sileo';
 import { AuthProvider } from './context/AuthContext';
 import App from './App';
 import './styles/tailwind.css';
@@ -11,14 +11,7 @@ createRoot(document.getElementById('root')!).render(
     <BrowserRouter>
       <AuthProvider>
         <App />
-        <Toaster
-          position="bottom-right"
-          richColors
-          toastOptions={{
-            duration: 3000,
-            style: { fontFamily: 'var(--font-dm-sans)' },
-          }}
-        />
+        <Toaster position="top-right" theme="light" />
       </AuthProvider>
     </BrowserRouter>
   </StrictMode>

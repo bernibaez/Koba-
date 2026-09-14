@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { Briefcase, Download, Eye, Plus, Printer } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { getCashExpenses, nextCode, type MaletaCut } from '@/lib/posStore';
 import { exportTableToPdf, formatMoneyPdf } from '@/lib/exportPdf';
 import RegisterDetailsModal from './point-of-sale-pos/components/RegisterDetailsModal';

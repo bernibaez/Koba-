@@ -17,7 +17,7 @@ import {
   Lightbulb,
   Layers,
 } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import type { CartItem, Customer } from './POSTerminal';
 import type { PaymentSplit } from '@/lib/posStore';
 import { logAuditEvent } from '@/lib/auditStore';

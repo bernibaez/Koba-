@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { X, Scale, Barcode, AlertCircle, RefreshCw } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { parseScaleBarcode, type ScaleProduct } from '../utils/scaleUtils';
 import { decodeVariableWeightBarcode } from '@/lib/scaleBarcode';
 import { buscarProductoPorCodigoEscaneado, productoAUi } from '@/services/productos.service';

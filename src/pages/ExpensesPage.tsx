@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { DollarSign, Tag, Plus, Search, Download, Check, X, Trash2, Edit2, Eye } from 'lucide-react';
 import { exportTableToPdf, formatMoneyPdf } from '@/lib/exportPdf';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { useGastos } from '@/hooks/useGastos';
 import type { GastoStatusUi, GastoUi } from '@/services/gastos.service';
 import {

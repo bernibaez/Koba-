@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { addCashExpense, getCashExpenses, nextCode } from '@/lib/posStore';
 import {
   crearGasto,

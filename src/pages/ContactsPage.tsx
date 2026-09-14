@@ -5,7 +5,7 @@ import { exportTableToPdf, formatMoneyPdf } from '@/lib/exportPdf';
 import { useClientes } from '@/hooks/useClientes';
 import { useProveedores } from '@/hooks/useProveedores';
 import { useGrupos } from '@/hooks/useGrupos';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 import type { TipoCliente } from '@/types/database';
 

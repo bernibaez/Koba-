@@ -9,7 +9,7 @@ import {
   CheckCircle, CheckCircle2, AlertTriangle, Printer, FileSpreadsheet, Eye, User, X, PlayCircle,
   ArrowLeft, Clock, ShieldCheck, FileText, ArrowUpRight, ArrowDownRight
 } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { obtenerRegistrosCierreCaja } from '@/services/cierresCaja.service';
 import PosCashOpenModal from '@/pages/point-of-sale-pos/components/PosCashOpenModal';
 import PosCashCloseModal from '@/pages/point-of-sale-pos/components/PosCashCloseModal';

@@ -14,7 +14,7 @@ import {
   AlertTriangle,
   Lightbulb,
 } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import type { UserRole } from '@/types/roles';
 import {
   PERMISSION_ACTIONS,

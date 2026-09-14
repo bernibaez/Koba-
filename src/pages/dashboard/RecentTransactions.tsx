@@ -4,7 +4,7 @@ import StatusBadge from '@/components/ui/StatusBadge';
 import { Link, useNavigate } from 'react-router-dom';
 import { useVentas } from '@/hooks/useVentas';
 import { InlineLoader, TableRowSkeleton } from '@/components/ui/LoadingSkeleton';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 
 export default function RecentTransactions() {
   const navigate = useNavigate();

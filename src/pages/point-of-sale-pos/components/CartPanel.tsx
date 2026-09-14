@@ -1,7 +1,21 @@
-import React, { useEffect, useState } from 'react';
-import { Minus, Plus, Trash2, User, Search, PlusCircle, CreditCard, Info, X, Pencil, Scale } from 'lucide-react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
+import {
+  User,
+  Search,
+  Plus,
+  CreditCard,
+  Info,
+  X,
+  Pencil,
+  Minus,
+  Trash2,
+  Banknote,
+  FileText,
+} from 'lucide-react';
 import type { CartItem, Customer } from './POSTerminal';
 import { useClientes } from '@/hooks/useClientes';
+import { useProductos } from '@/hooks/useProductos';
+import { initialProducts } from '@/pages/product-management/components/ProductManagementScreen';
 import PosAddCustomerModal from './PosAddCustomerModal';
 
 interface CartPanelProps {
@@ -25,6 +39,7 @@ interface CartPanelProps {
   searchQuery?: string;
   onSearchChange?: (q: string) => void;
   onSearchSubmit?: (q: string) => void | Promise<boolean | void>;
+  onAddToCart?: (product: any, qty?: number) => void;
 }
 
 export default function CartPanel({
@@ -42,10 +57,40 @@ export default function CartPanel({
   searchQuery = '',
   onSearchChange,
   onSearchSubmit,
+  onAddToCart,
 }: CartPanelProps) {
   const { clientes, refetch } = useClientes('');
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [addCustomerOpen, setAddCustomerOpen] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [docType, setDocType] = useState<'Factura' | 'Ticket'>('Factura');
+  const searchContainerRef = useRef<HTMLDivElement>(null);
+
+  const { productosUi } = useProductos({ pagina: 1, limite: 200, estado: 'todos' });
+
+  // Merge store products and initialProducts for comprehensive local search matching
+  const allProducts = useMemo(() => {
+    const list = [...productosUi];
+    const skus = new Set(list.map((p) => p.sku.toLowerCase()));
+    for (const p of initialProducts) {
+      if (!skus.has(p.sku.toLowerCase())) {
+        list.push(p as any);
+      }
+    }
+    return list;
+  }, [productosUi]);
+
+  // Filtered search results for the floating autocomplete dropdown
+  const searchResults = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q || q.length < 1) return [];
+    return allProducts.filter((p) => {
+      const name = (p.name || '').toLowerCase();
+      const sku = (p.sku || '').toLowerCase();
+      const barcode = (p.barcode || '').toLowerCase();
+      return name.includes(q) || sku.includes(q) || barcode.includes(q);
+    }).slice(0, 15);
+  }, [searchQuery, allProducts]);
 
   useEffect(() => {
     setCustomers(
@@ -58,35 +103,71 @@ export default function CartPanel({
     );
   }, [clientes]);
 
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const fmt = (v: number) =>
     `RD$ ${v.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   const totalItemsCount = cart.reduce((s, i) => s + i.qty, 0);
 
+  const handleSelectProduct = (p: any) => {
+    if (onAddToCart) {
+      onAddToCart({
+        id: `cart-${p.id}-${Date.now()}`,
+        productId: p.id,
+        name: p.name,
+        sku: p.sku,
+        price: p.salePrice ?? p.price,
+        cost: p.costPrice ?? p.cost ?? 0,
+        tax: p.tax ?? 18,
+        image: p.image || '',
+        unit: p.unit || 'Und',
+        isWeighted: p.isWeightProduct || p.saleType === 'weight' || p.unit?.toLowerCase().includes('lb'),
+      });
+    }
+    if (onSearchChange) onSearchChange('');
+    setDropdownOpen(false);
+    const input = document.getElementById('pos-barcode-search-input');
+    if (input) input.focus();
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault();
       e.stopPropagation();
+      if (searchResults.length > 0) {
+        handleSelectProduct(searchResults[0]);
+        return;
+      }
       const valueToSubmit = searchQuery.trim();
       if (!valueToSubmit) return;
-      // Limpia el campo inmediatamente (síncrono en el DOM) para que el
-      // próximo escaneo no se concatene con el código anterior.
-      // onSearchChange limpia el estado de React; el lector ya puede escribir.
       if (onSearchChange) onSearchChange('');
+      setDropdownOpen(false);
       if (onSearchSubmit) {
         void onSearchSubmit(valueToSubmit);
       }
+    } else if (e.key === 'Escape') {
+      setDropdownOpen(false);
     }
   };
 
   return (
-    <div className="flex flex-col h-full bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-4 overflow-hidden">
-      {/* Row 1: Customer selector + Barcode/Search input */}
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-2 mb-2 flex-shrink-0">
+    <div className="flex flex-col h-full bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-sm p-3.5 overflow-hidden">
+      {/* Row 1: Customer Selector (Left) & Search Input with Floating Dropdown (Right) */}
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-2 mb-2.5 flex-shrink-0">
         {/* Customer Select (Cols 5) */}
-        <div className="md:col-span-5 flex items-center gap-1">
+        <div className="md:col-span-5 flex items-center gap-1.5">
           <div className="relative flex-1">
-            <User size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            <User size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
             <select
               value={customer?.id || ''}
               onChange={(e) => {
@@ -98,102 +179,156 @@ export default function CartPanel({
                 const found = customers.find((c) => c.id === val);
                 if (found) onSetCustomer(found);
               }}
-              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl pl-8 pr-3 h-10 text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 truncate"
+              className="w-full bg-slate-50/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl pl-8 pr-7 h-9 text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500 appearance-none cursor-pointer truncate"
             >
-              <option value="">Seleccionar cliente...</option>
+              <option value="">Cliente Contado</option>
               {customers.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.name} ({c.phone})
+                  {c.name} {c.phone ? `(${c.phone})` : ''}
                 </option>
               ))}
             </select>
+            <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-[10px]">
+              ▼
+            </span>
           </div>
+
+          {/* Plus Blue Button */}
           <button
             type="button"
             onClick={() => setAddCustomerOpen(true)}
-            className="w-10 h-10 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center font-bold flex-shrink-0 transition-colors shadow-2xs"
+            className="w-9 h-9 rounded-xl bg-[#0284c7] hover:bg-[#0369a1] text-white flex items-center justify-center flex-shrink-0 transition-colors shadow-2xs cursor-pointer active:scale-95"
             title="Agregar nuevo cliente"
           >
-            <PlusCircle size={18} />
+            <Plus size={16} strokeWidth={2.6} />
           </button>
         </div>
 
-        {/* Product Search Input (Cols 7) */}
-        <div className="md:col-span-7">
-          <div className="relative w-full">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-indigo-600 pointer-events-none" />
+        {/* Search Input with Autocomplete (Cols 7) */}
+        <div className="md:col-span-7 relative flex items-center gap-1.5" ref={searchContainerRef}>
+          <div className="relative flex-1">
+            <Search size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
             <input
               id="pos-barcode-search-input"
               type="text"
-              placeholder="Escanear código, PLU o etiqueta de balanza / SKU / Nombre [Enter]..."
+              placeholder="Buscar producto o escanear código..."
               value={searchQuery}
-              onChange={(e) => onSearchChange && onSearchChange(e.target.value)}
+              onChange={(e) => {
+                if (onSearchChange) onSearchChange(e.target.value);
+                setDropdownOpen(true);
+              }}
+              onFocus={() => setDropdownOpen(true)}
               onKeyDown={handleKeyDown}
               autoFocus
-              className="w-full bg-slate-50 dark:bg-slate-800 border border-indigo-500 rounded-xl pl-9 pr-3 h-10 text-xs font-semibold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder:text-slate-400 truncate"
+              className="w-full bg-slate-50/80 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-600 rounded-xl pl-8 pr-8 h-9 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 placeholder:text-slate-400"
             />
+            {/* Card / Barcode reader icon inside right */}
+            <CreditCard size={15} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-blue-600 dark:text-blue-400 pointer-events-none" />
           </div>
+
+          {/* Plus Blue Button next to search */}
+          <button
+            type="button"
+            onClick={() => onOpenWeightScan && onOpenWeightScan()}
+            className="w-9 h-9 rounded-xl bg-[#0284c7] hover:bg-[#0369a1] text-white flex items-center justify-center flex-shrink-0 transition-colors shadow-2xs cursor-pointer active:scale-95"
+            title="Pesaje / Escaneo Avanzado"
+          >
+            <Plus size={16} strokeWidth={2.6} />
+          </button>
+
+          {/* Floating Search Dropdown (Matches Reference Image) */}
+          {dropdownOpen && searchResults.length > 0 && (
+            <div className="absolute left-0 top-full mt-1 w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl z-50 max-h-72 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
+              {searchResults.map((item) => {
+                const stockVal = item.currentStock ?? 0;
+                const unitStr = item.unit || 'Und';
+                const codeStr = item.barcode || item.sku || '';
+
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => handleSelectProduct(item)}
+                    className="w-full text-left px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800/70 transition-colors flex items-start gap-2.5 cursor-pointer group"
+                  >
+                    <div className="w-6 h-6 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center flex-shrink-0 mt-0.5 text-slate-500 group-hover:text-blue-600">
+                      <Banknote size={13} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-extrabold text-slate-900 dark:text-slate-100 leading-snug truncate">
+                        {item.name} {codeStr ? `(${codeStr})` : ''}
+                      </p>
+                      <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mt-0.5">
+                        Price: {Number(item.salePrice || 0).toFixed(2)} - {stockVal.toFixed(2)}{unitStr}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Row 2: Selectors bar (Factura, Precio, Consumidor Final) */}
-      <div className="grid grid-cols-3 gap-2 mb-3 flex-shrink-0">
-        <select defaultValue="factura" className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 h-9 text-xs font-semibold text-slate-700 dark:text-slate-200">
-          <option value="factura">Factura</option>
-          <option value="ticket">Ticket de caja</option>
-        </select>
-
-        <div className="flex items-center gap-1">
-          <select defaultValue="predeterminado" className="flex-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-2 h-9 text-xs font-semibold text-slate-700 dark:text-slate-200 truncate">
-            <option value="predeterminado">Precio de venta predeterminado</option>
-            <option value="mayoreo">Precio de mayoreo</option>
+      {/* Row 2: Factura Selector */}
+      <div className="flex items-center gap-2 mb-2 flex-shrink-0">
+        <div className="relative w-48">
+          <select
+            value={docType}
+            onChange={(e) => setDocType(e.target.value as any)}
+            className="w-full bg-slate-50/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl px-3 pr-7 h-8 text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500 appearance-none cursor-pointer"
+          >
+            <option value="Factura">Factura</option>
+            <option value="Ticket">Ticket de caja</option>
           </select>
-          <Info size={14} className="text-sky-500 flex-shrink-0 hidden sm:inline" />
+          <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-[10px]">
+            ▼
+          </span>
         </div>
-
-        <select defaultValue="B02" className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 h-9 text-xs font-semibold text-slate-700 dark:text-slate-200 truncate">
-          <option value="B02">Consumidor Final (B02)</option>
-          <option value="B01">Crédito Fiscal (B01)</option>
-          <option value="B15">Gubernamental (B15)</option>
-          <option value="B14">Regimen Especial (B14)</option>
-        </select>
       </div>
 
       {/* Row 3: Product Table Header */}
-      <div className="bg-slate-100 dark:bg-slate-800/80 rounded-t-xl px-4 py-2.5 border-b border-slate-200 dark:border-slate-700 grid grid-cols-12 gap-2 text-xs font-black text-slate-800 dark:text-slate-200 flex-shrink-0">
-        <div className="col-span-5 flex items-center gap-1">
+      <div className="bg-slate-50 dark:bg-slate-800/60 rounded-t-xl px-3 py-2 border-b border-slate-200 dark:border-slate-700 grid grid-cols-12 gap-2 text-xs font-black text-slate-800 dark:text-slate-200 flex-shrink-0">
+        <div className="col-span-6 flex items-center gap-1">
           <span>Producto</span>
           <Info size={13} className="text-sky-500" />
         </div>
         <div className="col-span-3 text-center">Cantidad / Peso</div>
-        <div className="col-span-3 text-right">Subtotal</div>
-        <div className="col-span-1 flex items-center justify-center text-red-500">
-          <X size={14} />
+        <div className="col-span-2 text-right">Subtotal</div>
+        <div className="col-span-1 text-center text-slate-400">
+          <X size={14} className="mx-auto" />
         </div>
       </div>
 
       {/* Table Body: Cart Items List */}
-      <div className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800 border-x border-b border-slate-200 dark:border-slate-700 rounded-b-xl mb-3">
+      <div className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800 border-x border-b border-slate-200/90 dark:border-slate-700/80 rounded-b-xl mb-2.5 min-h-[160px]">
         {cart.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-48 gap-2 text-slate-400">
-            <p className="text-sm font-semibold">El carrito está vacío</p>
-            <p className="text-xs">Selecciona productos a la derecha o escanea un código</p>
+          <div className="flex flex-col items-center justify-center h-48 gap-1.5 text-slate-400">
+            <p className="text-xs font-bold">Carrito vacío</p>
+            <p className="text-[11px]">Busca o escanea productos para comenzar la venta</p>
           </div>
         ) : (
           cart.map((item) => {
-            const isWeightItem = item.isWeighted || ['lb', 'kg', 'g', 'oz', 'libra'].some((u) => item.unit.toLowerCase().includes(u));
+            const isWeightItem =
+              item.isWeighted ||
+              ['lb', 'kg', 'g', 'oz', 'libra'].some((u) => (item.unit || '').toLowerCase().includes(u));
             const unitLabel = item.unit || 'lb';
 
             return (
-              <div key={item.id} className="grid grid-cols-12 gap-2 px-4 py-3 items-center hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                <div className="col-span-5 min-w-0">
-                  <p className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 truncate">{item.name}</p>
+              <div
+                key={item.id}
+                className="grid grid-cols-12 gap-2 px-3 py-2.5 items-center hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+              >
+                <div className="col-span-6 min-w-0">
+                  <p className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
+                    {item.name}
+                  </p>
                   {isWeightItem ? (
                     <p className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 truncate">
                       {item.qty} {unitLabel} × RD$ {item.price}
                     </p>
                   ) : (
-                    <p className="text-[11px] font-mono text-slate-400 truncate">{item.sku}</p>
+                    <p className="text-[10px] font-mono text-slate-400 truncate">{item.sku}</p>
                   )}
                 </div>
 
@@ -202,45 +337,42 @@ export default function CartPanel({
                     <button
                       type="button"
                       onClick={() => onEditWeight && onEditWeight(item)}
-                      className="px-2 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 rounded-lg text-xs font-black tabular-nums transition-colors cursor-pointer flex items-center gap-1"
-                      title="Haz clic para editar el peso"
+                      className="px-2 py-0.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 rounded-lg text-xs font-bold tabular-nums transition-colors cursor-pointer flex items-center gap-1"
+                      title="Editar peso"
                     >
                       <span>{item.qty} {unitLabel}</span>
-                      <Pencil size={11} />
+                      <Pencil size={10} />
                     </button>
                   ) : (
                     <>
                       <button
                         type="button"
                         onClick={() => onUpdateQty(item.id, item.qty - 1)}
-                        className="w-6 h-6 rounded bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 font-black text-xs flex items-center justify-center"
+                        className="w-5 h-5 rounded bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 font-bold text-xs flex items-center justify-center cursor-pointer"
                       >
-                        <Minus size={12} />
+                        <Minus size={11} />
                       </button>
                       <input
                         type="number"
                         min={0}
                         value={item.qty}
                         onChange={(e) => onUpdateQty(item.id, Number(e.target.value))}
-                        className="w-10 h-7 text-center text-xs font-bold border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-800 tabular-nums focus:outline-none"
+                        className="w-9 h-6 text-center text-xs font-bold border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-800 tabular-nums focus:outline-none"
                       />
                       <button
                         type="button"
                         onClick={() => onUpdateQty(item.id, item.qty + 1)}
-                        className="w-6 h-6 rounded bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 font-black text-xs flex items-center justify-center"
+                        className="w-5 h-5 rounded bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 font-bold text-xs flex items-center justify-center cursor-pointer"
                       >
-                        <Plus size={12} />
+                        <Plus size={11} />
                       </button>
                     </>
                   )}
                 </div>
 
-                <div className="col-span-3 text-right">
-                  <p className="text-xs sm:text-sm font-black tabular-nums text-slate-900 dark:text-white">
+                <div className="col-span-2 text-right">
+                  <p className="text-xs font-extrabold tabular-nums text-slate-900 dark:text-white">
                     {fmt(item.price * item.qty * (1 - item.discount / 100))}
-                  </p>
-                  <p className="text-[10px] text-slate-400 font-medium">
-                    {isWeightItem ? `RD$ ${item.price}/${unitLabel}` : `${fmt(item.price)} c/u`}
                   </p>
                 </div>
 
@@ -248,10 +380,10 @@ export default function CartPanel({
                   <button
                     type="button"
                     onClick={() => onRemove(item.id)}
-                    className="text-slate-400 hover:text-red-500 p-1 transition-colors"
-                    title="Eliminar producto"
+                    className="text-slate-400 hover:text-red-500 p-1 transition-colors cursor-pointer"
+                    title="Eliminar ítem"
                   >
-                    <Trash2 size={15} />
+                    <Trash2 size={14} />
                   </button>
                 </div>
               </div>
@@ -260,46 +392,50 @@ export default function CartPanel({
         )}
       </div>
 
-      {/* Cart Summary Footer */}
-      <div className="bg-slate-50 dark:bg-slate-800/60 rounded-xl p-3 border border-slate-200 dark:border-slate-700 flex-shrink-0 space-y-2">
-        <div className="flex flex-wrap items-center justify-between gap-4 text-xs font-black text-slate-800 dark:text-slate-100">
-          <div className="flex items-center gap-3">
-            <div>
-              <span>Artículos: </span>
-              <span className="text-indigo-600 font-black tabular-nums">{totalItemsCount.toFixed(2)}</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => onToggleFiscal && onToggleFiscal()}
-              className={`inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-md border transition-all cursor-pointer shadow-2xs ${
-                fiscalEnabled
-                  ? 'bg-indigo-100 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border-indigo-300 dark:border-indigo-800 hover:bg-rose-100 hover:text-rose-700 hover:border-rose-300'
-                  : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-700 hover:bg-indigo-100 hover:text-indigo-700'
-              }`}
-              title={fiscalEnabled ? 'Comprobante Fiscal Activado — Clic para desactivar' : 'Comprobante Fiscal Desactivado — Clic para activar'}
-            >
-              <span className={`w-1.5 h-1.5 rounded-full ${fiscalEnabled ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
-              <span>{fiscalEnabled ? 'NCF Activado (DGII)' : 'Sin Comprobante Fiscal'}</span>
-            </button>
+      {/* Cart Summary Footer (Matches Reference UI) */}
+      <div className="bg-slate-50/90 dark:bg-slate-800/60 rounded-xl p-3 border border-slate-200 dark:border-slate-700 flex-shrink-0 space-y-2 text-xs">
+        {/* Row 1: Artículos & Total */}
+        <div className="flex items-center justify-between font-black text-slate-900 dark:text-white">
+          <div className="flex items-center gap-1.5">
+            <span className="font-extrabold">Artículos:</span>
+            <span className="tabular-nums font-bold text-slate-700 dark:text-slate-300">
+              {totalItemsCount.toFixed(2)}
+            </span>
           </div>
 
-          <div>
-            <span>Total: </span>
-            <span className="text-emerald-600 dark:text-emerald-400 font-black tabular-nums text-sm">{fmt(total)}</span>
+          <div className="flex items-center gap-2">
+            <span className="font-extrabold">Total:</span>
+            <span className="tabular-nums font-extrabold text-slate-900 dark:text-white">
+              {total.toFixed(2)}
+            </span>
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-2 text-[11px] font-semibold text-slate-500 dark:text-slate-400 pt-2 border-t border-slate-200 dark:border-slate-700">
+        {/* Row 2: Descuento PUNTOS (-), Impuesto del pedido(+), Transporte(+) */}
+        <div className="flex flex-wrap items-center justify-between gap-3 text-[11px] font-semibold text-slate-800 dark:text-slate-200 pt-2 border-t border-slate-200 dark:border-slate-700">
+          {/* Descuento PUNTOS (-) */}
           <div className="flex items-center gap-1">
-            <span>Descuento (i) PUNTOS (-):</span>
-            <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-0.5"><Pencil size={10} className="text-muted-foreground inline" /> 0.00</span>
+            <span className="font-bold">Descuento</span>
+            <Info size={12} className="text-sky-500 inline" />
+            <span>PUNTOS (-):</span>
+            <Pencil size={11} className="text-slate-700 dark:text-slate-300 cursor-pointer ml-0.5" />
+            <span className="font-extrabold">0.00</span>
           </div>
-          <div>
-            ITBIS (18%) desglosado: <span className="font-bold text-slate-800 dark:text-slate-200">RD$ {taxTotal.toFixed(2)}</span>
-          </div>
+
+          {/* Impuesto del pedido(+) */}
           <div className="flex items-center gap-1">
-            <span>Transporte(+): (i)</span>
-            <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-0.5"><Pencil size={10} className="text-muted-foreground inline" /> 0.00</span>
+            <span className="font-bold">Impuesto del pedido(+):</span>
+            <Info size={12} className="text-sky-500 inline" />
+            <Pencil size={11} className="text-slate-700 dark:text-slate-300 cursor-pointer ml-0.5" />
+            <span className="font-extrabold">{taxTotal.toFixed(2)}</span>
+          </div>
+
+          {/* Transporte(+) */}
+          <div className="flex items-center gap-1">
+            <span className="font-bold">Transporte(+):</span>
+            <Info size={12} className="text-sky-500 inline" />
+            <Pencil size={11} className="text-slate-700 dark:text-slate-300 cursor-pointer ml-0.5" />
+            <span className="font-extrabold">0.00</span>
           </div>
         </div>
       </div>
