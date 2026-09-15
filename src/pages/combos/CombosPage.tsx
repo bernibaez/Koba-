@@ -122,6 +122,10 @@ export default function CombosPage() {
     }
   };
 
+  const handleDeleteRequest = (combo: Combo) => {
+    setDeleteTargetCombo(combo);
+  };
+
   const exportHeaders = [
     'Código',
     'Nombre del Combo',
@@ -236,7 +240,7 @@ export default function CombosPage() {
           onEdit={handleEdit}
           onDuplicate={handleDuplicate}
           onToggleStatus={handleToggleStatus}
-          onDeleteRequest={(combo) => setDeleteTargetCombo(combo)}
+          onDeleteRequest={handleDeleteRequest}
           onViewDetail={(combo) => setDetailCombo(combo)}
         />
 

@@ -48,11 +48,24 @@ export default function Modal({
   if (!open) return null;
 
   return (
-    <div className="dialog-inline-host" role="dialog" aria-modal="true" aria-label={title} aria-busy={busy}>
+    <div
+      className="fixed inset-0 !z-[90] flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+      aria-busy={busy}
+    >
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200 z-0"
+        onClick={onClose}
+      />
+
+      {/* Modal */}
       <div
         className={`
           relative w-full ${sizeClasses[size]} bg-card border border-border/80 rounded-2xl
-          max-h-[90vh] flex flex-col modal-panel
+          max-h-[90vh] flex flex-col modal-panel shadow-2xl z-10
         `}
       >
         <div className="flex items-start justify-between px-6 py-5 border-b border-border/80 flex-shrink-0 bg-secondary/20">
