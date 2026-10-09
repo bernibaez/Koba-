@@ -8,6 +8,7 @@ import { toast } from '@/lib/toast';
 import { useDevoluciones } from '@/hooks/useDevoluciones';
 import type { DevolucionConDetalle } from '@/services/devoluciones.service';
 import { useAuth } from '@/context/AuthContext';
+import PrintableReturnReceipt from '@/components/printing/PrintableReturnReceipt';
 
 const methodLabel: Record<PosReturn['method'], string> = {
   cash: 'Efectivo',
@@ -48,6 +49,14 @@ function mapDevolucionToPosReturn(d: DevolucionConDetalle): PosReturn {
       name: i.nombre_item,
       qty: i.cantidad,
       price: i.precio_unitario,
+      subtotal: i.cantidad * i.precio_unitario,
+    })),
+    items: (d.items ?? []).map((i) => ({
+      sku: i.sku ?? '',
+      name: i.nombre_item,
+      qty: i.cantidad,
+      price: i.precio_unitario,
+      subtotal: i.cantidad * i.precio_unitario,
     })),
     total: Number(d.monto_total),
     reason: d.motivo,
@@ -102,7 +111,7 @@ export default function ReturnsHistoryPage() {
       if (cashier && !r.cashier.toLowerCase().includes(cashier.toLowerCase())) return false;
       if (q) {
         const matchProduct = r.products.some(
-          (p) => p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q)
+          (p) => p.name.toLowerCase().includes(q) || (p.sku?.toLowerCase().includes(q) ?? false)
         );
         if (!matchProduct) return false;
       }
@@ -475,13 +484,35 @@ export default function ReturnsHistoryPage() {
         {/* Modal: Viewing Detail / Receipt & Admin Approval Dialog */}
         {selectedReturn && (
           <div
-            className="dialog-inline-host"
+            className="dialog-inline-host print:p-0 print:bg-white print:static"
             onClick={() => {
               setSelectedReturn(null);
               setAutoModalDismissed(true);
             }}
           >
-            <div className="card w-full max-w-lg p-6 space-y-4 shadow-2xl border-amber-500/30" onClick={(e) => e.stopPropagation()}>
+            {/* COMPROBANTE OFICIAL PARA IMPRESIÓN (SOLO VISIBLE EN PRINT) */}
+            <div className="hidden print:block printable-document">
+              <PrintableReturnReceipt
+                data={{
+                  code: selectedReturn.code,
+                  originalInvoiceCode: selectedReturn.saleCode,
+                  date: selectedReturn.date,
+                  customerName: selectedReturn.customer,
+                  cashierName: selectedReturn.cashier,
+                  reason: selectedReturn.reason,
+                  items: (selectedReturn.items ?? selectedReturn.products ?? []).map((p) => ({
+                    name: p.name,
+                    qty: p.qty,
+                    price: p.price,
+                    subtotal: p.subtotal ?? p.qty * p.price,
+                  })),
+                  totalAmount: selectedReturn.total,
+                }}
+              />
+            </div>
+
+            {/* VISTA INTERACTIVA WEB (OCULTA EN PRINT) */}
+            <div className="print:hidden card w-full max-w-lg p-6 space-y-4 shadow-2xl border-amber-500/30" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between border-b border-border pb-3">
                 <div className="flex items-center gap-2">
                   {selectedReturn.status === 'pending' ? (

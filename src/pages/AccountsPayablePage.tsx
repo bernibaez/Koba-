@@ -9,6 +9,7 @@ import { toast } from '@/lib/toast';
 import { useCxp } from '@/hooks/useCxp';
 import type { CuentaPagarUi, CxStatusUi } from '@/services/cxp.service';
 import { ButtonSpinner, InlineLoader, PageContentSkeleton } from '@/components/ui/LoadingSkeleton';
+import PrintableAccountStatement from '@/components/printing/PrintableAccountStatement';
 
 const statusMap: Record<CxStatusUi, { label: string; cls: string }> = {
   pending: { label: 'Pendiente', cls: 'badge-warning' },
@@ -256,7 +257,28 @@ export default function AccountsPayablePage() {
   if (selected) {
     return (
       <AppLayout>
-        <div className="space-y-6 slide-up">
+        {/* COMPROBANTE OFICIAL PARA IMPRESIÓN (SOLO VISIBLE EN PRINT) */}
+        <div className="hidden print:block printable-document">
+          <PrintableAccountStatement
+            type="payable"
+            code={selected.id}
+            name={selected.supplier}
+            invoiceCode={selected.purchase}
+            totalAmount={selected.total}
+            paidAmount={selected.paid}
+            pendingBalance={selected.balance}
+            dueDate={selected.dueDate}
+            payments={selected.payments.map((p) => ({
+              date: p.date,
+              amount: p.amount,
+              method: p.method,
+              note: p.note,
+            }))}
+          />
+        </div>
+
+        {/* VISTA INTERACTIVA WEB (OCULTA EN PRINT) */}
+        <div className="print:hidden space-y-6 slide-up">
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div>
               <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">

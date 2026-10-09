@@ -13,6 +13,7 @@ import { toast } from '@/lib/toast';
 import { obtenerRegistrosCierreCaja } from '@/services/cierresCaja.service';
 import PosCashOpenModal from '@/pages/point-of-sale-pos/components/PosCashOpenModal';
 import PosCashCloseModal from '@/pages/point-of-sale-pos/components/PosCashCloseModal';
+import PrintableCashClosure from '@/components/printing/PrintableCashClosure';
 
 export default function CashClosurePage() {
   const { user } = useAuth();
@@ -148,8 +149,14 @@ export default function CashClosurePage() {
   return (
     <AppLayout>
       {viewingClosure ? (
-        /* VISTA PREVIA INLINE COMPLETA DEL CIERRE DE CAJA */
-        <div className="space-y-6 slide-up pb-12">
+        <>
+          {/* COMPROBANTE OFICIAL PARA IMPRESIÓN (SOLO VISIBLE EN PRINT) */}
+          <div className="hidden print:block printable-document">
+            <PrintableCashClosure closure={viewingClosure} />
+          </div>
+
+          {/* VISTA PREVIA INLINE COMPLETA DEL CIERRE DE CAJA (OCULTA EN PRINT) */}
+          <div className="print:hidden space-y-6 slide-up pb-12">
           {/* Top Navigation / Actions Bar */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-4">
             <button
@@ -430,6 +437,7 @@ export default function CashClosurePage() {
             </button>
           </div>
         </div>
+        </>
       ) : (
         /* VISTA PRINCIPAL / LISTADO DE CIERRES */
         <div className="space-y-6 slide-up">

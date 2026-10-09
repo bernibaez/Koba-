@@ -18,6 +18,14 @@ export type HeldSale = {
 
 export type PosReturnStatus = 'pending' | 'approved' | 'rejected';
 
+export type ReturnReceiptItem = {
+  sku: string;
+  name: string;
+  qty: number;
+  price: number;
+  subtotal?: number;
+};
+
 export type PosReturn = {
   id: string;
   code: string;
@@ -27,7 +35,8 @@ export type PosReturn = {
   time: string;
   user: string;
   cashier: string;
-  products: { sku: string; name: string; qty: number; price: number }[];
+  products: ReturnReceiptItem[];
+  items?: ReturnReceiptItem[];
   total: number;
   reason: string;
   method: 'cash' | 'card' | 'credit_note' | 'exchange';

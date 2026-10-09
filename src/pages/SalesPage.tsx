@@ -1778,7 +1778,11 @@ export default function SalesPage() {
               <div className="flex justify-end gap-2 pt-3 border-t border-border">
                 <button
                   type="button"
-                  onClick={() => window.print()}
+                  onClick={() => {
+                    const s = viewingSale;
+                    setViewingSale(null);
+                    setPrintingSale(s);
+                  }}
                   className="btn-secondary flex items-center gap-1.5 text-xs py-2"
                 >
                   <Printer size={14} /> Imprimir Factura

@@ -5,6 +5,7 @@ import { logAuditEvent } from '@/lib/auditStore';
 import { obtenerVentaPorNumeroFactura } from '@/services/ventas.service';
 import { crearDevolucion } from '@/services/devoluciones.service';
 import { useAuth } from '@/context/AuthContext';
+import PrintableReturnReceipt from '@/components/printing/PrintableReturnReceipt';
 
 interface SaleItem {
   producto_id: string | null;
@@ -154,8 +155,30 @@ export default function PosReturnModal({ onClose }: { onClose: () => void }) {
 
   if (registeredReturnCode) {
     return (
-      <div className="dialog-inline-host" onClick={onClose}>
-        <div className="card w-full max-w-md p-6 space-y-4 text-center shadow-2xl border-amber-500/30" onClick={(e) => e.stopPropagation()}>
+      <div className="dialog-inline-host print:p-0 print:bg-white print:static" onClick={onClose}>
+        {/* COMPROBANTE OFICIAL PARA IMPRESIÓN (SOLO VISIBLE EN PRINT) */}
+        <div className="hidden print:block printable-document">
+          <PrintableReturnReceipt
+            data={{
+              code: registeredReturnCode,
+              originalInvoiceCode: loadedSale?.code || '',
+              date: new Date().toLocaleDateString('es-DO'),
+              customerName: customer || 'Consumidor Final',
+              cashierName: user?.name || 'Cajero',
+              reason,
+              items: selectedItems.map((it) => ({
+                name: it.name,
+                qty: it.qty,
+                price: it.price,
+                subtotal: it.qty * it.price,
+              })),
+              totalAmount: totalReturnAmount,
+            }}
+          />
+        </div>
+
+        {/* VISTA INTERACTIVA WEB (OCULTA EN PRINT) */}
+        <div className="print:hidden card w-full max-w-md p-6 space-y-4 text-center shadow-2xl border-amber-500/30" onClick={(e) => e.stopPropagation()}>
           <div className="w-16 h-16 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mx-auto text-amber-600 dark:text-amber-400">
             <Clock size={36} />
           </div>

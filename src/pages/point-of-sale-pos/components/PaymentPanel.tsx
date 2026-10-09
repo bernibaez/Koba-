@@ -289,8 +289,18 @@ export default function PaymentPanel({
 
     return (
       <div className="flex flex-col h-full bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 overflow-y-auto">
-        {/* Top Banner */}
-        <div className="bg-emerald-500/10 border-b border-emerald-500/20 p-6 text-center flex flex-col items-center justify-center">
+        {/* DOCUMENTO OFICIAL PARA IMPRESIÓN TÉRMICA (SOLO VISIBLE EN PRINT) */}
+        <div className="hidden print:block printable-document">
+          <PrintableInvoice
+            invoiceData={completedInvoiceData}
+            formatOverride="ticket_80mm"
+          />
+        </div>
+
+        {/* CONTENIDO INTERACTIVO EN PANTALLA (OCULTO EN PRINT) */}
+        <div className="print:hidden flex flex-col flex-1">
+          {/* Top Banner */}
+          <div className="bg-emerald-500/10 border-b border-emerald-500/20 p-6 text-center flex flex-col items-center justify-center">
           <div className="w-12 h-12 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow-md mb-2">
             <Check size={26} strokeWidth={3} />
           </div>
@@ -502,7 +512,8 @@ export default function PaymentPanel({
           </span>
         </div>
       </div>
-    );
+    </div>
+  );
   }
 
   // ----------------------------------------------------

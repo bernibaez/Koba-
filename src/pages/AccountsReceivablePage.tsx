@@ -11,6 +11,7 @@ import { obtenerClientes } from '@/services/clientes.service';
 import type { CuentaCobrarUi, CxStatusUi } from '@/services/cxc.service';
 import type { Cliente } from '@/types/database';
 import { ButtonSpinner, InlineLoader, PageContentSkeleton } from '@/components/ui/LoadingSkeleton';
+import PrintableAccountStatement from '@/components/printing/PrintableAccountStatement';
 
 const statusMap: Record<CxStatusUi, { label: string; cls: string }> = {
   pending: { label: 'Pendiente', cls: 'badge-warning' },
@@ -277,7 +278,29 @@ export default function AccountsReceivablePage() {
   if (selected) {
     return (
       <AppLayout>
-        <div className="space-y-6 slide-up">
+        {/* COMPROBANTE OFICIAL PARA IMPRESIÓN (SOLO VISIBLE EN PRINT) */}
+        <div className="hidden print:block printable-document">
+          <PrintableAccountStatement
+            type="receivable"
+            code={selected.id}
+            name={selected.customer}
+            phone={clientes.find((c) => c.id === selected.customerId)?.telefono || undefined}
+            invoiceCode={selected.invoice}
+            totalAmount={selected.total}
+            paidAmount={selected.paid}
+            pendingBalance={selected.balance}
+            dueDate={selected.dueDate}
+            payments={selected.payments.map((p) => ({
+              date: p.date,
+              amount: p.amount,
+              method: p.method,
+              note: p.note,
+            }))}
+          />
+        </div>
+
+        {/* VISTA INTERACTIVA WEB (OCULTA EN PRINT) */}
+        <div className="print:hidden space-y-6 slide-up">
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div>
               <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">

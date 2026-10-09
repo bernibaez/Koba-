@@ -154,8 +154,8 @@ export default function ReportsPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          <div className="card p-3 space-y-1 h-fit">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 print:block">
+          <div className="card p-3 space-y-1 h-fit print:hidden">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1">
               Tipo de Informe
             </p>
@@ -179,8 +179,17 @@ export default function ReportsPage() {
             ))}
           </div>
 
-          <div className="lg:col-span-3 space-y-4">
-            <div className="card p-4 flex flex-wrap gap-3 items-end">
+          <div className="lg:col-span-3 space-y-4 print:w-full print:p-0">
+            {/* Cabecera formal de reporte para impresión */}
+            <div className="hidden print:block pb-4 mb-4 border-b border-black text-center">
+              <h2 className="text-base font-black uppercase text-black">MERCATO SUPERMERCADO S.R.L.</h2>
+              <h3 className="text-sm font-bold uppercase text-black">{activeLabel}</h3>
+              <p className="text-xs text-black/70">
+                Período: {dateFrom || 'Inicio'} al {dateTo || 'Actualidad'} · Generado el {new Date().toLocaleDateString('es-DO')}
+              </p>
+            </div>
+
+            <div className="card p-4 flex flex-wrap gap-3 items-end print:hidden">
               <div>
                 <label className="text-xs font-medium text-muted-foreground mb-1 block">Desde</label>
                 <input

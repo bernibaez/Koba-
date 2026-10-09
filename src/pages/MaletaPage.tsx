@@ -239,15 +239,48 @@ export default function MaletaPage() {
                 <p className="text-xs text-muted-foreground">Maletas hoy: {formatMoneyPdf(previousBags)}</p>
               </div>
               {selected && (
-                <div className="card p-5 space-y-3">
-                  <h3 className="font-semibold text-foreground">Último corte {selected.cutNumber}</h3>
-                  <p className="text-sm">Maleta: {formatMoneyPdf(selected.bagAmount)}</p>
-                  <p className="text-sm">Restante: {formatMoneyPdf(selected.remainingCash)}</p>
-                  <div className="flex gap-2">
-                    <button type="button" className="btn-secondary text-xs flex-1" onClick={() => window.print()}><Printer size={14} /> Imprimir</button>
-                    <button type="button" className="btn-primary text-xs flex-1" onClick={() => exportCut(selected)}><Download size={14} /> PDF</button>
+                <>
+                  <div className="hidden print:block printable-document bg-white text-black p-8 font-sans max-w-lg mx-auto text-xs">
+                    <div className="text-center pb-3 border-b border-black space-y-1">
+                      <h2 className="text-base font-black uppercase text-black">MERCATO SUPERMERCADO S.R.L.</h2>
+                      <p className="text-xs font-bold text-black uppercase tracking-wider">COMPROBANTE DE CORTE / MALETA</p>
+                      <p className="text-xs font-mono font-bold text-black">{selected.cutNumber} · {selected.date} {selected.time}</p>
+                    </div>
+                    <div className="py-3 border-b border-black/40 space-y-1 text-xs">
+                      <div className="flex justify-between"><span>Cajero / Responsable:</span><span className="font-bold">{selected.user}</span></div>
+                      <div className="flex justify-between"><span>Caja / Terminal:</span><span className="font-bold">{selected.cashier}</span></div>
+                      <div className="flex justify-between"><span>Sucursal:</span><span>{selected.branch}</span></div>
+                    </div>
+                    <div className="py-3 border-b border-black/40 space-y-1.5 text-xs">
+                      <div className="flex justify-between"><span>Efectivo Esperado en Caja:</span><span className="font-mono">{formatMoneyPdf(selected.expectedCash)}</span></div>
+                      <div className="flex justify-between font-black text-sm"><span>MONTO ENVIADO A MALETA:</span><span className="font-mono">{formatMoneyPdf(selected.bagAmount)}</span></div>
+                      <div className="flex justify-between"><span>Efectivo Restante en Caja:</span><span className="font-mono">{formatMoneyPdf(selected.remainingCash)}</span></div>
+                    </div>
+                    <div className="pt-10 pb-4 grid grid-cols-2 gap-8 text-center text-[10px]">
+                      <div>
+                        <div className="border-t border-black w-36 mx-auto mb-1" />
+                        <p className="font-bold">Firma Cajero(a)</p>
+                      </div>
+                      <div>
+                        <div className="border-t border-black w-36 mx-auto mb-1" />
+                        <p className="font-bold">Firma Receptor / Bóveda</p>
+                      </div>
+                    </div>
+                    <div className="text-center pt-2 text-[9px] text-black/60">
+                      <p>Generado por Sistema ERP Mercato</p>
+                    </div>
                   </div>
-                </div>
+
+                  <div className="card p-5 space-y-3 print:hidden">
+                    <h3 className="font-semibold text-foreground">Último corte {selected.cutNumber}</h3>
+                    <p className="text-sm">Maleta: {formatMoneyPdf(selected.bagAmount)}</p>
+                    <p className="text-sm">Restante: {formatMoneyPdf(selected.remainingCash)}</p>
+                    <div className="flex gap-2">
+                      <button type="button" className="btn-secondary text-xs flex-1" onClick={() => window.print()}><Printer size={14} /> Imprimir</button>
+                      <button type="button" className="btn-primary text-xs flex-1" onClick={() => exportCut(selected)}><Download size={14} /> PDF</button>
+                    </div>
+                  </div>
+                </>
               )}
             </div>
           </div>
