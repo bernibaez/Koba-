@@ -22,6 +22,7 @@ export interface ScaleProduct {
   sku: string;
   plu?: string;
   price: number;
+  wholesalePrice?: number;
   cost: number;
   tax: number;
   unit: string;

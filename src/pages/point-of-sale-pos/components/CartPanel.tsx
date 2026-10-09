@@ -12,6 +12,7 @@ import {
   Banknote,
   FileText,
   Barcode,
+  Tag,
 } from 'lucide-react';
 import type { CartItem, Customer } from './POSTerminal';
 import { useClientes } from '@/hooks/useClientes';
@@ -45,6 +46,8 @@ interface CartPanelProps {
   awaitingDelete?: boolean;
   onToggleDeleteMode?: () => void;
   onCancelDelete?: () => void;
+  onToggleWholesale?: (id: string) => void;
+  onToggleAllWholesale?: () => void;
 }
 
 export default function CartPanel({
@@ -66,6 +69,8 @@ export default function CartPanel({
   awaitingDelete = false,
   onToggleDeleteMode,
   onCancelDelete,
+  onToggleWholesale,
+  onToggleAllWholesale,
 }: CartPanelProps) {
   const { clientes, refetch } = useClientes('');
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -136,6 +141,9 @@ export default function CartPanel({
         sku: p.sku,
         barcode: p.barcode || '',
         price: p.salePrice ?? p.price,
+        regularPrice: p.salePrice ?? p.price,
+        wholesalePrice: p.wholesalePrice ? Number(p.wholesalePrice) : undefined,
+        isWholesale: false,
         cost: p.costPrice ?? p.cost ?? 0,
         tax: p.tax ?? 18,
         image: p.image || '',
@@ -358,6 +366,8 @@ export default function CartPanel({
               ['lb', 'kg', 'g', 'oz', 'libra'].some((u) => (item.unit || '').toLowerCase().includes(u));
             const unitLabel = item.unit || 'lb';
             const codeToDisplay = item.barcode || item.sku || '';
+            const hasWholesale = Boolean(item.wholesalePrice && item.wholesalePrice > 0);
+            const isWholesaleActive = Boolean(item.isWholesale);
 
             return (
               <div
@@ -365,9 +375,31 @@ export default function CartPanel({
                 className="grid grid-cols-12 gap-2 px-4 py-3.5 sm:py-4 items-center hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
               >
                 <div className="col-span-6 min-w-0 pr-1">
-                  <p className="text-[16px] sm:text-[17px] font-black text-slate-900 dark:text-slate-100 truncate leading-snug">
-                    {item.name}
-                  </p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-[16px] sm:text-[17px] font-black text-slate-900 dark:text-slate-100 truncate leading-snug">
+                      {item.name}
+                    </p>
+                    {hasWholesale && (
+                      <button
+                        type="button"
+                        onClick={() => onToggleWholesale && onToggleWholesale(item.id)}
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-bold transition-all cursor-pointer active:scale-95 border ${
+                          isWholesaleActive
+                            ? 'bg-amber-500 text-white border-amber-600 shadow-2xs'
+                            : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 hover:text-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                        }`}
+                        title={
+                          isWholesaleActive
+                            ? 'Precio al por mayor aplicado. Clic para volver a normal'
+                            : 'Cambiar a precio al por mayor'
+                        }
+                      >
+                        <Tag size={12} className={isWholesaleActive ? 'text-white' : 'text-slate-400'} />
+                        <span>{isWholesaleActive ? 'Al por mayor' : 'Por mayor'}</span>
+                      </button>
+                    )}
+                  </div>
+
                   {isWeightItem ? (
                     <p className="text-xs sm:text-[13px] font-bold text-emerald-600 dark:text-emerald-400 truncate mt-0.5">
                       {item.qty} {unitLabel} × RD$ {item.price}

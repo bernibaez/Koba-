@@ -19,6 +19,7 @@ interface Product {
   name: string;
   category: string;
   price: number;
+  wholesalePrice?: number;
   cost: number;
   stock: number;
   unit: string;
@@ -74,6 +75,7 @@ export default function ProductPanel({
         name: p.name,
         category: p.category,
         price: p.salePrice,
+        wholesalePrice: p.wholesalePrice ? Number(p.wholesalePrice) : undefined,
         cost: p.costPrice,
         stock: p.currentStock,
         unit: p.unit,
@@ -105,6 +107,7 @@ export default function ProductPanel({
           name: ip.name,
           category: ip.category,
           price: ip.salePrice,
+          wholesalePrice: ip.wholesalePrice ? Number(ip.wholesalePrice) : undefined,
           cost: ip.costPrice,
           stock: ip.currentStock,
           unit: ip.unit,
@@ -180,6 +183,9 @@ export default function ProductPanel({
       sku: p.sku,
       barcode: p.barcode || '',
       price: p.price,
+      regularPrice: p.price,
+      wholesalePrice: p.wholesalePrice,
+      isWholesale: false,
       cost: p.cost,
       tax: p.tax,
       image: p.image,

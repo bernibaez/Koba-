@@ -81,6 +81,9 @@ export interface CartItem {
   sku: string;
   barcode?: string;
   price: number;
+  regularPrice?: number;
+  wholesalePrice?: number;
+  isWholesale?: boolean;
   cost: number;
   qty: number;
   discount: number;
@@ -278,11 +281,90 @@ export default function POSTerminal() {
               : item
           );
         }
-        return [...prev, { ...product, qty, discount: 0 }];
+        const regularPrice = product.regularPrice ?? product.price;
+        const wholesalePrice =
+          product.wholesalePrice && product.wholesalePrice > 0
+            ? Number(product.wholesalePrice)
+            : undefined;
+        return [
+          ...prev,
+          {
+            ...product,
+            regularPrice,
+            wholesalePrice,
+            isWholesale: product.isWholesale ?? false,
+            qty,
+            discount: 0,
+          },
+        ];
       });
     },
     [awaitingDeleteScan, deductOrRemoveFromCart, toggleDeleteMode]
   );
+
+  const toggleWholesalePrice = useCallback((cartId: string) => {
+    setCart((prev) =>
+      prev.map((item) => {
+        if (item.id !== cartId) return item;
+        const wholesale = item.wholesalePrice;
+        if (!wholesale || wholesale <= 0) {
+          toast.error(`"${item.name}" no tiene precio al por mayor configurado`);
+          return item;
+        }
+
+        const willBeWholesale = !item.isWholesale;
+        const regular = item.regularPrice ?? item.price;
+        const newPrice = willBeWholesale ? wholesale : regular;
+
+        if (willBeWholesale) {
+          toast.success(`"${item.name}" cambiado a precio al por mayor (RD$ ${wholesale.toFixed(2)})`);
+        } else {
+          toast.info(`"${item.name}" restaurado a precio normal (RD$ ${regular.toFixed(2)})`);
+        }
+
+        return {
+          ...item,
+          regularPrice: regular,
+          wholesalePrice: wholesale,
+          isWholesale: willBeWholesale,
+          price: newPrice,
+        };
+      })
+    );
+  }, []);
+
+  const toggleAllWholesale = useCallback(() => {
+    setCart((prev) => {
+      const eligible = prev.filter((i) => i.wholesalePrice && i.wholesalePrice > 0);
+      if (eligible.length === 0) {
+        toast.info('Ningún producto en el carrito tiene precio al por mayor configurado');
+        return prev;
+      }
+
+      const allAlreadyWholesale = eligible.every((i) => i.isWholesale);
+      const targetState = !allAlreadyWholesale;
+
+      const updated = prev.map((item) => {
+        if (!item.wholesalePrice || item.wholesalePrice <= 0) return item;
+        const regular = item.regularPrice ?? item.price;
+        const newPrice = targetState ? item.wholesalePrice : regular;
+        return {
+          ...item,
+          regularPrice: regular,
+          isWholesale: targetState,
+          price: newPrice,
+        };
+      });
+
+      if (targetState) {
+        toast.success(`Precio al por mayor aplicado a ${eligible.length} producto(s)`);
+      } else {
+        toast.info('Precio normal restaurado en todos los productos');
+      }
+
+      return updated;
+    });
+  }, []);
 
   const updateQty = useCallback((cartId: string, qty: number) => {
     if (qty <= 0) {
@@ -376,6 +458,7 @@ export default function POSTerminal() {
       plu: p.plu || '',
       name: p.name,
       price: p.salePrice,
+      wholesalePrice: p.wholesalePrice ? Number(p.wholesalePrice) : undefined,
       cost: p.costPrice,
       stock: p.currentStock,
       unit: p.unit,
@@ -401,6 +484,7 @@ export default function POSTerminal() {
         plu: ip.plu || '',
         name: ip.name,
         price: ip.salePrice,
+        wholesalePrice: ip.wholesalePrice ? Number(ip.wholesalePrice) : undefined,
         cost: ip.costPrice,
         stock: ip.currentStock,
         unit: ip.unit,
@@ -424,6 +508,7 @@ export default function POSTerminal() {
       sku: p.sku,
       plu: p.plu || '',
       price: p.price,
+      wholesalePrice: p.wholesalePrice,
       cost: p.cost,
       tax: p.tax,
       unit: p.unit || 'lb',
@@ -656,6 +741,7 @@ export default function POSTerminal() {
           name: string;
           sku: string;
           price: number;
+          wholesalePrice?: number;
           cost: number;
           tax: number;
           image?: string;
@@ -670,6 +756,9 @@ export default function POSTerminal() {
             name: product.name,
             sku: product.sku,
             price: product.price,
+            regularPrice: product.price,
+            wholesalePrice: product.wholesalePrice,
+            isWholesale: false,
             cost: product.cost,
             tax: product.tax,
             image: product.image || '',
@@ -712,6 +801,7 @@ export default function POSTerminal() {
                 name: ui.name,
                 sku: ui.sku,
                 price: ui.salePrice,
+                wholesalePrice: ui.wholesalePrice ? Number(ui.wholesalePrice) : undefined,
                 cost: ui.costPrice,
                 tax: ui.tax,
                 image: ui.image,
@@ -731,6 +821,7 @@ export default function POSTerminal() {
         barcode: p.barcode || '',
         name: p.name,
         price: p.salePrice,
+        wholesalePrice: p.wholesalePrice ? Number(p.wholesalePrice) : undefined,
         cost: p.costPrice,
         stock: p.currentStock,
         unit: p.unit,
@@ -757,6 +848,7 @@ export default function POSTerminal() {
           plu: ip.plu || '',
           name: ip.name,
           price: ip.salePrice,
+          wholesalePrice: ip.wholesalePrice ? Number(ip.wholesalePrice) : undefined,
           cost: ip.costPrice,
           stock: ip.currentStock,
           unit: ip.unit,
@@ -817,7 +909,11 @@ export default function POSTerminal() {
           productId: matchedProd.id,
           name: matchedProd.name,
           sku: matchedProd.sku,
+          barcode: matchedProd.barcode,
           price: matchedProd.price,
+          regularPrice: matchedProd.price,
+          wholesalePrice: matchedProd.wholesalePrice,
+          isWholesale: false,
           cost: matchedProd.cost,
           tax: matchedProd.tax,
           image: matchedProd.image,
@@ -1184,6 +1280,8 @@ export default function POSTerminal() {
             awaitingDelete={awaitingDeleteScan}
             onToggleDeleteMode={toggleDeleteMode}
             onCancelDelete={handleCancelDeleteMode}
+            onToggleWholesale={toggleWholesalePrice}
+            onToggleAllWholesale={toggleAllWholesale}
           />
         </div>
 
@@ -1489,6 +1587,9 @@ export default function POSTerminal() {
                 name: matchedProduct.name,
                 sku: matchedProduct.sku,
                 price: matchedProduct.price,
+                regularPrice: matchedProduct.price,
+                wholesalePrice: matchedProduct.wholesalePrice,
+                isWholesale: false,
                 cost: matchedProduct.cost,
                 tax: matchedProduct.tax,
                 image: matchedProduct.image || '',
