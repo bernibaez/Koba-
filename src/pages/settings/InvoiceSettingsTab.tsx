@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   getInvoiceSettings,
   saveInvoiceSettings,
+  DEFAULT_INVOICE_SETTINGS,
   type InvoiceSettings,
   type PrintFormat,
   type TemplateStyle,
@@ -44,15 +45,43 @@ export default function InvoiceSettingsTab() {
   const [previewFormat, setPreviewFormat] = useState<PrintFormat>(settings.printFormat);
   const [saving, setSaving] = useState(false);
 
+  useEffect(() => {
+    void import('@/services/empresa.service')
+      .then(({ obtenerConfiguracionEmpresa }) => obtenerConfiguracionEmpresa())
+      .then((cfg) => {
+        if (!cfg) return;
+        setSettings((prev) => ({
+          ...prev,
+          companyName: cfg.nombre_comercial?.trim() || prev.companyName,
+          companyRnc: cfg.rnc?.trim() || prev.companyRnc,
+          companyPhone: cfg.telefono?.trim() || prev.companyPhone,
+          companyEmail: cfg.correo?.trim() || prev.companyEmail,
+          companyAddress: cfg.direccion?.trim() || prev.companyAddress,
+        }));
+      })
+      .catch(() => {});
+  }, []);
+
   const handleFieldChange = <K extends keyof InvoiceSettings>(key: K, value: InvoiceSettings[K]) => {
     setSettings((prev) => ({ ...prev, [key]: value }));
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setSaving(true);
     try {
       saveInvoiceSettings(settings);
-      toast.success('Configuración de factura guardada correctamente');
+      const { isSupabaseConfigured } = await import('@/services/clienteSupabase');
+      if (isSupabaseConfigured()) {
+        const { guardarConfiguracionEmpresa } = await import('@/services/empresa.service');
+        await guardarConfiguracionEmpresa({
+          nombre_comercial: settings.companyName,
+          rnc: settings.companyRnc,
+          telefono: settings.companyPhone,
+          correo: settings.companyEmail,
+          direccion: settings.companyAddress,
+        });
+      }
+      toast.success('Configuración de factura guardada y sincronizada correctamente');
     } catch {
       toast.error('Error al guardar la configuración');
     } finally {
@@ -61,8 +90,8 @@ export default function InvoiceSettingsTab() {
   };
 
   const handleResetDefaults = () => {
-    const defaults = getInvoiceSettings();
-    setSettings(defaults);
+    setSettings(DEFAULT_INVOICE_SETTINGS);
+    saveInvoiceSettings(DEFAULT_INVOICE_SETTINGS);
     toast.info('Valores restablecidos');
   };
 

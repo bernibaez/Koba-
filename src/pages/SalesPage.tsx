@@ -40,6 +40,8 @@ import { obtenerClientes } from '@/services/clientes.service';
 import { obtenerProductos } from '@/services/productos.service';
 import type { Cliente, Producto, MetodoPago } from '@/types/database';
 import type { VentaConDetalle } from '@/services/ventas.service';
+import PrintableInvoice from '@/components/PrintableInvoice';
+import { getInvoiceSettings } from '@/lib/invoiceSettingsStore';
 import {
   obtenerDetalleCotizacion,
   type CotizacionConDetalle,
@@ -135,7 +137,9 @@ export default function SalesPage() {
   // Print Sale modal state
   const [printingSale, setPrintingSale] = useState<VentaConDetalle | null>(null);
   const [loadingPrintDetail, setLoadingPrintDetail] = useState(false);
-  const [printFormat, setPrintFormat] = useState<'ticket' | 'a4'>('a4');
+  const [printFormat, setPrintFormat] = useState<'ticket' | 'a4'>(() => {
+    return getInvoiceSettings().printFormat === 'full_page' ? 'a4' : 'ticket';
+  });
 
   // Pagination State
   const [page, setPage] = useState(1);
@@ -2234,163 +2238,37 @@ export default function SalesPage() {
                 <div className="py-8 text-center text-sm text-muted-foreground">
                   Cargando información de impresión...
                 </div>
-              ) : printFormat === 'ticket' ? (
-                /* Ticket Format (Thermal printer 80mm) */
-                <div className="printable-invoice-container max-w-xs mx-auto bg-card p-5 rounded-2xl border border-border font-mono text-xs space-y-4 print:bg-white print:border-none print:shadow-none print:w-full">
-                  <div className="text-center space-y-1 pb-3 border-b border-dashed border-border">
-                    <h3 className="font-black text-sm uppercase text-foreground">MERCATO SUPERMERCADO</h3>
-                    <p className="text-[11px] text-muted-foreground">RNC: 131-45678-9</p>
-                    <p className="text-[10px] text-muted-foreground">Santo Domingo, Rep. Dom.</p>
-                  </div>
-
-                  <div className="space-y-1 text-[11px] pb-3 border-b border-dashed border-border">
-                    <p className="font-bold text-foreground">Factura: {printingSale.numero_factura}</p>
-                    {printingSale.ncf && (
-                      <p className="font-black text-primary text-xs">NCF: {printingSale.ncf}</p>
-                    )}
-                    <p className="text-muted-foreground">
-                      Fecha: {new Date(printingSale.creado_en).toLocaleString('es-DO')}
-                    </p>
-                    <p className="text-muted-foreground">
-                      Cliente: {printingSale.cliente_nombre || 'Consumidor Final'}
-                    </p>
-                    <p className="text-muted-foreground">
-                      Cajero: {printingSale.cajero_nombre || 'Cajero'}
-                    </p>
-                  </div>
-
-                  <div className="space-y-2 pb-3 border-b border-dashed border-border">
-                    {(printingSale.detalle_ventas || []).map((item, idx) => (
-                      <div key={idx} className="flex justify-between items-start text-[11px]">
-                        <div>
-                          <span className="font-bold text-foreground block">{item.nombre_item}</span>
-                          <span className="text-[10px] text-muted-foreground">
-                            {item.cantidad} x RD$ {item.precio_unitario.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                          </span>
-                        </div>
-                        <span className="font-bold tabular-nums font-mono">
-                          RD$ {item.subtotal.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="space-y-1 text-[11px] pt-1 font-bold text-right">
-                    <div className="flex justify-between text-muted-foreground">
-                      <span>Subtotal:</span>
-                      <span>RD$ {printingSale.subtotal.toLocaleString('es-DO', { minimumFractionDigits: 2 })}</span>
-                    </div>
-                    {printingSale.monto_descuento > 0 && (
-                      <div className="flex justify-between text-emerald-600">
-                        <span>Descuento:</span>
-                        <span>- RD$ {printingSale.monto_descuento.toLocaleString('es-DO', { minimumFractionDigits: 2 })}</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between text-amber-600 dark:text-amber-400">
-                      <span>ITBIS (18%):</span>
-                      <span>RD$ {printingSale.monto_impuesto.toLocaleString('es-DO', { minimumFractionDigits: 2 })}</span>
-                    </div>
-                    <div className="flex justify-between text-foreground font-black text-sm pt-1 border-t border-border">
-                      <span>TOTAL FACTURA:</span>
-                      <span className="text-primary">
-                        RD$ {printingSale.monto_total.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="text-center pt-2 text-[10px] text-muted-foreground space-y-0.5">
-                    <p>Comprobante Emitido según Normas DGII</p>
-                    <p>¡Gracias por su preferencia!</p>
-                  </div>
-                </div>
               ) : (
-                /* Documento A4 Format */
-                <div className="printable-invoice-container space-y-5 bg-card p-4 rounded-2xl border border-border print:border-none print:p-0">
-                  <div className="flex justify-between items-start border-b border-border pb-4">
-                    <div>
-                      <h2 className="text-xl font-black text-foreground">MERCATO SUPERMERCADO S.R.L.</h2>
-                      <p className="text-xs text-muted-foreground">RNC: 131-45678-9 | Tel: (809) 555-0199</p>
-                      <p className="text-xs text-muted-foreground">Santo Domingo, República Dominicana</p>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-xs font-bold text-primary bg-primary/10 border border-primary/20 px-3 py-1 rounded-full inline-block">
-                        FACTURA {printingSale.numero_factura}
-                      </span>
-                      {printingSale.ncf && (
-                        <p className="text-xs font-mono font-bold text-foreground mt-1">NCF: {printingSale.ncf}</p>
-                      )}
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        Fecha: {new Date(printingSale.creado_en).toLocaleString('es-DO')}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4 bg-secondary/30 p-3 rounded-xl text-xs">
-                    <div>
-                      <span className="text-muted-foreground block font-semibold">CLIENTE:</span>
-                      <span className="font-bold text-foreground">{printingSale.cliente_nombre || 'Consumidor Final'}</span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground block font-semibold">MÉTODO DE PAGO:</span>
-                      <span className="font-bold text-foreground uppercase">{metodoLabel[printingSale.metodo_pago] || printingSale.metodo_pago}</span>
-                    </div>
-                  </div>
-
-                  <table className="w-full text-xs">
-                    <thead className="bg-secondary/50 border-b border-border">
-                      <tr>
-                        <th className="text-left py-2 px-3">Ítem / Producto</th>
-                        <th className="text-center py-2 px-3">Cant.</th>
-                        <th className="text-right py-2 px-3">Precio Unit.</th>
-                        <th className="text-right py-2 px-3">Subtotal</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {(printingSale.detalle_ventas || []).map((item, idx) => (
-                        <tr key={idx}>
-                          <td className="py-2.5 px-3 font-medium">{item.nombre_item}</td>
-                          <td className="py-2.5 px-3 text-center font-mono">{item.cantidad}</td>
-                          <td className="py-2.5 px-3 text-right font-mono">
-                            RD$ {item.precio_unitario.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                          </td>
-                          <td className="py-2.5 px-3 text-right font-bold font-mono">
-                            RD$ {item.subtotal.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-
-                  <div className="flex justify-end pt-3 border-t border-border">
-                    <div className="w-64 space-y-1.5 text-xs">
-                      <div className="flex justify-between text-muted-foreground">
-                        <span>Subtotal Neto:</span>
-                        <span className="font-mono font-medium">
-                          RD$ {printingSale.subtotal.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                        </span>
-                      </div>
-                      {printingSale.monto_descuento > 0 && (
-                        <div className="flex justify-between text-emerald-600">
-                          <span>Descuento:</span>
-                          <span className="font-mono">
-                            - RD$ {printingSale.monto_descuento.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                          </span>
-                        </div>
-                      )}
-                      <div className="flex justify-between text-amber-600 dark:text-amber-400 font-semibold">
-                        <span>ITBIS (18% Transparentado):</span>
-                        <span className="font-mono">
-                          RD$ {printingSale.monto_impuesto.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                        </span>
-                      </div>
-                      <div className="flex justify-between font-black text-foreground text-sm pt-2 border-t border-border">
-                        <span>Total Factura:</span>
-                        <span className="text-primary font-mono text-base">
-                          RD$ {printingSale.monto_total.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
+                <div className="printable-document">
+                  <PrintableInvoice
+                    invoiceData={{
+                      invoiceNumber: printingSale.numero_factura,
+                      isFiscal: Boolean(printingSale.ncf),
+                      ncf: printingSale.ncf || undefined,
+                      ncfType: printingSale.ncf ? printingSale.ncf.slice(0, 3) : undefined,
+                      issueDate: new Date(printingSale.creado_en).toLocaleDateString('es-DO'),
+                      issueTime: new Date(printingSale.creado_en).toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit' }),
+                      cashier: printingSale.cajero_nombre || 'Cajero',
+                      customerName: printingSale.cliente_nombre || dbClientes.find((c) => c.id === printingSale.cliente_id)?.nombre || 'Consumidor Final',
+                      customerRnc: dbClientes.find((c) => c.id === printingSale.cliente_id)?.rnc_cedula || undefined,
+                      customerPhone: dbClientes.find((c) => c.id === printingSale.cliente_id)?.telefono || undefined,
+                      customerAddress: dbClientes.find((c) => c.id === printingSale.cliente_id)?.direccion || undefined,
+                      items: (printingSale.detalle_ventas || []).map((it) => ({
+                        sku: it.producto_id || undefined,
+                        name: it.nombre_item,
+                        qty: it.cantidad,
+                        price: it.precio_unitario,
+                        subtotal: it.subtotal,
+                        itbis: (it.precio_unitario - it.precio_unitario / 1.18) * it.cantidad,
+                      })),
+                      subtotal: printingSale.subtotal,
+                      discount: printingSale.monto_descuento || undefined,
+                      itbis: printingSale.monto_impuesto,
+                      total: printingSale.monto_total,
+                      paymentMethod: printingSale.metodo_pago,
+                    }}
+                    formatOverride={printFormat === 'ticket' ? 'ticket_80mm' : 'full_page'}
+                  />
                 </div>
               )}
 

@@ -128,6 +128,7 @@ export default function SettingsPage() {
     setSavingEmpresa(true);
     try {
       const { guardarConfiguracionEmpresa } = await import('@/services/empresa.service');
+      const { saveInvoiceSettings } = await import('@/lib/invoiceSettingsStore');
       await guardarConfiguracionEmpresa({
         nombre_comercial: empresaNombre,
         rnc: empresaRnc,
@@ -137,7 +138,14 @@ export default function SettingsPage() {
         moneda: empresaMoneda,
         itbis_porcentaje: parseFloat(empresaItbis) || 18,
       });
-      toast.success('Datos de empresa guardados');
+      saveInvoiceSettings({
+        companyName: empresaNombre,
+        companyRnc: empresaRnc,
+        companyPhone: empresaTelefono,
+        companyEmail: empresaCorreo,
+        companyAddress: empresaDireccion,
+      });
+      toast.success('Datos de empresa guardados y sincronizados');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'No se pudo guardar');
     } finally {

@@ -25,6 +25,7 @@ import { validateRNC, NCF_TYPES, type NCFType, type FiscalInvoiceRecord } from '
 import { generarSiguienteNcf } from '@/services/ncf.service';
 import { isSupabaseConfigured } from '@/services/clienteSupabase';
 import PrintableInvoice from '@/components/PrintableInvoice';
+import { useAuth } from '@/context/AuthContext';
 
 type PaymentMethod = 'cash' | 'card' | 'transfer' | 'credit' | 'split';
 
@@ -63,6 +64,7 @@ export default function PaymentPanel({
   onNewSale,
   initialMethod,
 }: PaymentPanelProps) {
+  const { user } = useAuth();
   const [method, setMethod] = useState<PaymentMethod>(initialMethod ?? 'cash');
   const [cashReceived, setCashReceived] = useState('');
   const [processing, setProcessing] = useState(false);
@@ -268,7 +270,7 @@ export default function PaymentPanel({
       expirationDate: '31/12/2027',
       issueDate: now.toLocaleDateString('es-DO'),
       issueTime: now.toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit' }),
-      cashier: 'Caja #1 (Admin)',
+      cashier: user?.name || user?.username || 'Caja POS',
       customerName: customer?.name || (companyName.trim() || undefined),
       customerRnc: rncClient.trim() || customer?.phone || undefined,
       items: cart.map((item) => ({
@@ -289,11 +291,10 @@ export default function PaymentPanel({
 
     return (
       <div className="flex flex-col h-full bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 overflow-y-auto">
-        {/* DOCUMENTO OFICIAL PARA IMPRESIÓN TÉRMICA (SOLO VISIBLE EN PRINT) */}
+        {/* DOCUMENTO OFICIAL PARA IMPRESIÓN (SOLO VISIBLE EN PRINT) */}
         <div className="hidden print:block printable-document">
           <PrintableInvoice
             invoiceData={completedInvoiceData}
-            formatOverride="ticket_80mm"
           />
         </div>
 
@@ -433,73 +434,10 @@ export default function PaymentPanel({
               VISTA PREVIA DEL COMPROBANTE
             </p>
 
-            <div className="printable-invoice-container border border-slate-200 dark:border-slate-800 rounded-2xl p-4 bg-white text-slate-900 font-mono shadow-sm space-y-3 text-[11px]">
-              {/* Receipt Header */}
-              <div className="text-center space-y-0.5 border-b border-slate-200 pb-3">
-                <div className="flex items-center justify-center gap-1.5 font-sans font-black text-sm text-slate-900">
-                  <Store size={18} className="text-slate-800" />
-                  <span>SUPERMERCADO MERCATO S.R.L.</span>
-                </div>
-                <p className="text-[10px] text-slate-500">RNC: 131-45678-9</p>
-                <p className="text-[10px] text-slate-500">Av. 27 de Febrero #450, Santo Domingo, R.D.</p>
-                <p className="text-[10px] text-slate-500">Tel: (809) 555-0199</p>
-              </div>
-
-              <div className="text-center font-bold">
-                COMPROBANTE DE VENTA<br />
-                No. {completedInvoiceData.invoiceNumber}
-              </div>
-
-              {/* Items */}
-              <div className="border-t border-b border-dashed border-slate-300 py-1.5 my-1 space-y-1">
-                <div className="flex justify-between font-bold text-[10px] text-slate-500 uppercase">
-                  <span>Descripción</span>
-                  <span>Cant.</span>
-                  <span>Importe</span>
-                </div>
-                {completedInvoiceData.items.map((item, idx) => (
-                  <div key={idx} className="flex justify-between text-slate-800">
-                    <span className="truncate max-w-[120px]">{item.name}</span>
-                    <span>{item.qty} x {fmt(item.price)}</span>
-                    <span>{fmt(item.subtotal)}</span>
-                  </div>
-                ))}
-              </div>
-
-              <div className="space-y-1 text-slate-700">
-                <div className="flex justify-between">
-                  <span>Subtotal Neto:</span>
-                  <span>{fmt(completedInvoiceData.subtotal)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>ITBIS (18%):</span>
-                  <span>{fmt(completedInvoiceData.itbis)}</span>
-                </div>
-              </div>
-
-              <div className="border-t border-dashed border-slate-300 pt-2 flex justify-between font-black text-xs text-slate-900">
-                <span>TOTAL:</span>
-                <span>{fmt(completedInvoiceData.total)}</span>
-              </div>
-
-              <div className="text-[10px] text-slate-600 space-y-0.5 pt-1">
-                <div className="flex justify-between">
-                  <span>Método Pago:</span>
-                  <span className="capitalize">{method === 'cash' ? 'Efectivo' : method}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Recibido:</span>
-                  <span>{fmt(cashAmount || total)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Cambio:</span>
-                  <span>{fmt(lastChange)}</span>
-                </div>
-              </div>
-
-              <div className="text-center text-[10px] italic text-slate-500 pt-2 border-t border-slate-200">
-                ¡Gracias por preferirnos!
-              </div>
+            <div className="max-h-[520px] overflow-y-auto rounded-2xl border border-slate-200 dark:border-slate-800 bg-white shadow-sm p-1">
+              <PrintableInvoice
+                invoiceData={completedInvoiceData}
+              />
             </div>
           </div>
         </div>
