@@ -6,7 +6,7 @@ import ProductFormModal from './ProductFormModal';
 import PriceLabelModal from './PriceLabelModal';
 import ProductImportModal from './ProductImportModal';
 import ModalShell from '@/components/ui/ModalShell';
-import { X, Package, Scale, ShoppingCart, Plus, FileSpreadsheet, Edit, Printer, Calendar, CheckCircle } from 'lucide-react';
+import { X, Package, Scale, ShoppingCart, Edit, Printer, Calendar, CheckCircle } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { exportTableToPdf, formatMoneyPdf } from '@/lib/exportPdf';
 import { useProductos } from '@/hooks/useProductos';
@@ -198,34 +198,34 @@ export default function ProductManagementScreen() {
 
       const payload = existing
         ? uiAProductoInsert({
-            ...existing,
-            name: item.name,
-            salePrice: item.salePrice,
-            wholesalePrice: item.wholesalePrice || item.salePrice,
-            costPrice: item.costPrice > 0 ? item.costPrice : existing.costPrice,
-            pricePerWeight: item.salePrice,
-            plu: plu || existing.plu,
-            barcode: isGenericScaleItemCode(existing.barcode)
-              ? item.barcode || existing.barcode
-              : existing.barcode || item.barcode,
-            sku: isGenericScaleItemCode(existing.sku)
-              ? item.sku || existing.sku
-              : existing.sku || item.sku,
-            isWeightProduct: true,
-            saleType: existing.saleType === 'both' ? 'both' : 'weight',
-            generateScaleBarcode: true,
-            unit: existing.unit && existing.unit !== 'Unidad' ? existing.unit : 'Libra',
-            weightUnit: existing.weightUnit || 'lb',
-            currentStock: existing.currentStock,
-            minStock: existing.minStock,
-            status: existing.status,
-            category: existing.category || item.category,
-            brand: existing.brand || item.brand,
-          })
+          ...existing,
+          name: item.name,
+          salePrice: item.salePrice,
+          wholesalePrice: item.wholesalePrice || item.salePrice,
+          costPrice: item.costPrice > 0 ? item.costPrice : existing.costPrice,
+          pricePerWeight: item.salePrice,
+          plu: plu || existing.plu,
+          barcode: isGenericScaleItemCode(existing.barcode)
+            ? item.barcode || existing.barcode
+            : existing.barcode || item.barcode,
+          sku: isGenericScaleItemCode(existing.sku)
+            ? item.sku || existing.sku
+            : existing.sku || item.sku,
+          isWeightProduct: true,
+          saleType: existing.saleType === 'both' ? 'both' : 'weight',
+          generateScaleBarcode: true,
+          unit: existing.unit && existing.unit !== 'Unidad' ? existing.unit : 'Libra',
+          weightUnit: existing.weightUnit || 'lb',
+          currentStock: existing.currentStock,
+          minStock: existing.minStock,
+          status: existing.status,
+          category: existing.category || item.category,
+          brand: existing.brand || item.brand,
+        })
         : (() => {
-            const { id: _localId, ...rest } = item;
-            return uiAProductoInsert(rest);
-          })();
+          const { id: _localId, ...rest } = item;
+          return uiAProductoInsert(rest);
+        })();
 
       const result = existing
         ? { data: await actualizarProducto(existing.id, payload), created: false }
@@ -360,181 +360,146 @@ export default function ProductManagementScreen() {
   return (
     <div className="space-y-6">
       {!viewingProduct && (
-      <>
-      <ProductsHeader
-        onAdd={() => {
-          setEditProduct(null);
-          setIsNewScaleProductMode(false);
-          setAddModalOpen(true);
-        }}
-        onExport={handleExportPdf}
-        onImport={() => {
-          setImportIsScaleMode(false);
-          setImportModalOpen(true);
-        }}
-        totalProducts={products.length}
-        activeProducts={products.filter((p) => p.status === 'active').length}
-        lowStockCount={products.filter((p) => p.stockStatus === 'low' || p.stockStatus === 'out').length}
-      />
+        <>
+          <ProductsHeader
+            onAdd={() => {
+              setEditProduct(null);
+              setIsNewScaleProductMode(productTypeTab === 'balanza');
+              setAddModalOpen(true);
+            }}
+            onExport={handleExportPdf}
+            onImport={() => {
+              setImportIsScaleMode(true);
+              setImportModalOpen(true);
+            }}
+            totalProducts={products.length}
+            activeProducts={products.filter((p) => p.status === 'active').length}
+            lowStockCount={products.filter((p) => p.stockStatus === 'low' || p.stockStatus === 'out').length}
+          />
 
-      {/* Metric Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="card p-4 hover:border-primary/40 transition-all">
-          <p className="text-xs text-muted-foreground font-medium">Productos en Catálogo</p>
-          <p className="text-2xl font-bold text-foreground mt-1">{products.length} productos</p>
-        </div>
-        <div className="card p-4 hover:border-emerald-500/40 transition-all">
-          <p className="text-xs text-muted-foreground font-medium">Productos Activos</p>
-          <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
-            {products.filter((p) => p.status === 'active').length}
-          </p>
-        </div>
-        <div className="card p-4 hover:border-amber-500/40 transition-all">
-          <p className="text-xs text-muted-foreground font-medium">Con Stock Bajo / Agotado</p>
-          <p className="text-2xl font-bold text-amber-600 dark:text-amber-400 mt-1">
-            {products.filter((p) => p.stockStatus === 'low' || p.stockStatus === 'out').length}
-          </p>
-        </div>
-        <div className="card p-4 hover:border-blue-500/40 transition-all">
-          <p className="text-xs text-muted-foreground font-medium">Valor en Inventario</p>
-          <p className="text-2xl font-bold text-info mt-1">
-            RD$ {products.reduce((s, p) => s + p.costPrice * p.currentStock, 0).toLocaleString('es-DO', { maximumFractionDigits: 0 })}
-          </p>
-        </div>
-      </div>
-
-      {/* Sección de pestañas de productos: Normales vs Balanza */}
-      <div className="flex items-center gap-2 border-b border-border pb-1 overflow-x-auto">
-        <button
-          type="button"
-          onClick={() => setProductTypeTab('all')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-t-lg font-bold text-xs transition-all border-b-2 ${
-            productTypeTab === 'all'
-              ? 'border-primary text-primary bg-primary/10'
-              : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-secondary/60'
-          }`}
-        >
-          <Package size={16} />
-          <span>Todos los Productos</span>
-          <span className="ml-1 text-[10px] px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-extrabold">
-            {products.length}
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setProductTypeTab('normal')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-t-lg font-bold text-xs transition-all border-b-2 ${
-            productTypeTab === 'normal'
-              ? 'border-blue-500 text-blue-600 dark:text-blue-400 bg-blue-500/10'
-              : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-secondary/60'
-          }`}
-        >
-          <ShoppingCart size={16} />
-          <span>Productos Estándar (Unidades)</span>
-          <span className="ml-1 text-[10px] px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-extrabold">
-            {normalCount}
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setProductTypeTab('balanza')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-t-lg font-bold text-xs transition-all border-b-2 ${
-            productTypeTab === 'balanza'
-              ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10'
-              : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-secondary/60'
-          }`}
-        >
-          <Scale size={16} />
-          <span>Productos de Balanza (mscale / PLU)</span>
-          <span className="ml-1 text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-extrabold">
-            {scaleCount}
-          </span>
-        </button>
-      </div>
-
-      {/* Banner Minimalista Ajustado para Sección Balanza */}
-      {productTypeTab === 'balanza' && (
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-5 py-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/25">
-          <div className="flex items-center gap-2.5 text-emerald-800 dark:text-emerald-200 font-semibold text-sm">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-            <span>Catálogo Balanza: Productos con PLU de 5 dígitos en sincronización con <strong>mscale</strong></span>
+          {/* Metric Cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="card p-4 hover:border-primary/40 transition-all">
+              <p className="text-xs text-muted-foreground font-medium">Productos en Catálogo</p>
+              <p className="text-2xl font-bold text-foreground mt-1">{products.length} productos</p>
+            </div>
+            <div className="card p-4 hover:border-emerald-500/40 transition-all">
+              <p className="text-xs text-muted-foreground font-medium">Productos Activos</p>
+              <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
+                {products.filter((p) => p.status === 'active').length}
+              </p>
+            </div>
+            <div className="card p-4 hover:border-amber-500/40 transition-all">
+              <p className="text-xs text-muted-foreground font-medium">Con Stock Bajo / Agotado</p>
+              <p className="text-2xl font-bold text-amber-600 dark:text-amber-400 mt-1">
+                {products.filter((p) => p.stockStatus === 'low' || p.stockStatus === 'out').length}
+              </p>
+            </div>
+            <div className="card p-4 hover:border-blue-500/40 transition-all">
+              <p className="text-xs text-muted-foreground font-medium">Valor en Inventario</p>
+              <p className="text-2xl font-bold text-info mt-1">
+                RD$ {products.reduce((s, p) => s + p.costPrice * p.currentStock, 0).toLocaleString('es-DO', { maximumFractionDigits: 0 })}
+              </p>
+            </div>
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
+
+          {/* Sección de pestañas de productos: Normales vs Balanza */}
+          <div className="flex items-center gap-2 border-b border-border pb-1 overflow-x-auto">
             <button
               type="button"
-              onClick={() => {
-                setImportIsScaleMode(true);
-                setImportModalOpen(true);
-              }}
-              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-800 dark:text-emerald-200 font-bold text-sm border border-emerald-500/30 transition-all shrink-0"
+              onClick={() => setProductTypeTab('all')}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-t-lg font-bold text-xs transition-all border-b-2 ${productTypeTab === 'all'
+                  ? 'border-primary text-primary bg-primary/10'
+                  : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-secondary/60'
+                }`}
             >
-              <FileSpreadsheet size={16} /> Importar / actualizar balanza
+              <Package size={16} />
+              <span>Todos los Productos</span>
+              <span className="ml-1 text-[10px] px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-extrabold">
+                {products.length}
+              </span>
             </button>
+
             <button
               type="button"
-              onClick={() => {
-                setEditProduct(null);
-                setIsNewScaleProductMode(true);
-                setAddModalOpen(true);
-              }}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm shadow-sm transition-all shrink-0 hover:scale-[1.01]"
+              onClick={() => setProductTypeTab('normal')}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-t-lg font-bold text-xs transition-all border-b-2 ${productTypeTab === 'normal'
+                  ? 'border-blue-500 text-blue-600 dark:text-blue-400 bg-blue-500/10'
+                  : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-secondary/60'
+                }`}
             >
-              <Plus size={16} /> Nuevo Producto Balanza
+              <ShoppingCart size={16} />
+              <span>Productos Estándar (Unidades)</span>
+              <span className="ml-1 text-[10px] px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-extrabold">
+                {normalCount}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setProductTypeTab('balanza')}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-t-lg font-bold text-xs transition-all border-b-2 ${productTypeTab === 'balanza'
+                  ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10'
+                  : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-secondary/60'
+                }`}
+            >
+              <Scale size={16} />
+              <span>Productos de Balanza (mscale / PLU)</span>
+              <span className="ml-1 text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-extrabold">
+                {scaleCount}
+              </span>
             </button>
           </div>
-        </div>
-      )}
 
-      <ProductsToolbar
-        search={search}
-        onSearch={setSearch}
-        filterCategory={filterCategory}
-        onFilterCategory={setFilterCategory}
-        filterStatus={filterStatus}
-        onFilterStatus={setFilterStatus}
-        filterStock={filterStock}
-        onFilterStock={setFilterStock}
-        selectedCount={selectedIds.size}
-        onBulkDelete={handleBulkDelete}
-        onPrintSelectedLabels={() => {
-          const selected = products.filter((p) => selectedIds.has(p.id));
-          if (selected.length > 0) setLabelModalProducts(selected);
-        }}
-        onAdd={() => {
-          setEditProduct(null);
-          setIsNewScaleProductMode(productTypeTab === 'balanza');
-          setAddModalOpen(true);
-        }}
-        totalFiltered={filtered.length}
-        onExportPdf={handleExportPdf}
-      />
 
-      <ProductsTable
-        products={filtered}
-        selectedIds={selectedIds}
-        onToggleSelect={handleToggleSelect}
-        onSelectAll={handleSelectAll}
-        sortField={sortField}
-        sortDir={sortDir}
-        onSort={handleSort}
-        onView={(p) => setViewingProduct(p)}
-        onEdit={(p) => { setEditProduct(p); setAddModalOpen(true); }}
-        onDelete={(id) => handleDelete(id)}
-        onToggleStatus={handleToggleStatus}
-        onPrintLabel={(prods) => setLabelModalProducts(prods)}
-        onUpdateProduct={async (p) => {
-          try {
-            await actualizar(p.id, p);
-          } catch (e) {
-            toast.error(e instanceof Error ? e.message : 'Error al actualizar');
-            await refetch();
-          }
-        }}
-      />
+          <ProductsToolbar
+            search={search}
+            onSearch={setSearch}
+            filterCategory={filterCategory}
+            onFilterCategory={setFilterCategory}
+            filterStatus={filterStatus}
+            onFilterStatus={setFilterStatus}
+            filterStock={filterStock}
+            onFilterStock={setFilterStock}
+            selectedCount={selectedIds.size}
+            onBulkDelete={handleBulkDelete}
+            onPrintSelectedLabels={() => {
+              const selected = products.filter((p) => selectedIds.has(p.id));
+              if (selected.length > 0) setLabelModalProducts(selected);
+            }}
+            onAdd={() => {
+              setEditProduct(null);
+              setIsNewScaleProductMode(productTypeTab === 'balanza');
+              setAddModalOpen(true);
+            }}
+            totalFiltered={filtered.length}
+            onExportPdf={handleExportPdf}
+          />
 
-      </>
+          <ProductsTable
+            products={filtered}
+            selectedIds={selectedIds}
+            onToggleSelect={handleToggleSelect}
+            onSelectAll={handleSelectAll}
+            sortField={sortField}
+            sortDir={sortDir}
+            onSort={handleSort}
+            onView={(p) => setViewingProduct(p)}
+            onEdit={(p) => { setEditProduct(p); setAddModalOpen(true); }}
+            onDelete={(id) => handleDelete(id)}
+            onToggleStatus={handleToggleStatus}
+            onPrintLabel={(prods) => setLabelModalProducts(prods)}
+            onUpdateProduct={async (p) => {
+              try {
+                await actualizar(p.id, p);
+              } catch (e) {
+                toast.error(e instanceof Error ? e.message : 'Error al actualizar');
+                await refetch();
+              }
+            }}
+          />
+
+        </>
       )}
 
       <ModalShell
@@ -614,11 +579,10 @@ export default function ProductManagementScreen() {
                   </div>
 
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold border ${
-                      viewingProduct.status === 'active'
+                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold border ${viewingProduct.status === 'active'
                         ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800'
                         : 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
-                    }`}>
+                      }`}>
                       {viewingProduct.status === 'active' ? <CheckCircle size={13} /> : <X size={13} />}
                       <span className="capitalize">{viewingProduct.status === 'active' ? 'Activo' : 'Inactivo'}</span>
                     </span>
