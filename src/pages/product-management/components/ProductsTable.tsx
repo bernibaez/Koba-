@@ -163,7 +163,7 @@ export default function ProductsTable({
   return (
     <div className="card border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-xs">
       <div className="overflow-x-auto scrollbar-thin rounded-2xl">
-        <table className="w-full text-sm min-w-[1050px]">
+        <table className="w-full text-sm min-w-[720px]">
           <thead>
             <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/60 text-slate-600 dark:text-slate-400 text-xs font-bold uppercase tracking-wider">
               <th className="px-4 py-3.5 w-10 text-left">
@@ -184,28 +184,10 @@ export default function ProductsTable({
                   <SortIcon field="name" sortField={sortField} sortDir={sortDir} />
                 </div>
               </th>
-              <th className="px-3 py-3.5 text-center cursor-pointer select-none" onClick={() => onSort('plu')}>
-                <div className="flex items-center gap-1.5 justify-center">
-                  <span>PLU</span>
-                  <SortIcon field="plu" sortField={sortField} sortDir={sortDir} />
-                </div>
-              </th>
               <th className="px-4 py-3.5 text-left cursor-pointer select-none" onClick={() => onSort('category')}>
                 <div className="flex items-center gap-1.5">
                   <span>CATEGORÍA</span>
                   <SortIcon field="category" sortField={sortField} sortDir={sortDir} />
-                </div>
-              </th>
-              <th className="px-4 py-3.5 text-left cursor-pointer select-none" onClick={() => onSort('brand')}>
-                <div className="flex items-center gap-1.5">
-                  <span>MARCA</span>
-                  <SortIcon field="brand" sortField={sortField} sortDir={sortDir} />
-                </div>
-              </th>
-              <th className="px-4 py-3.5 text-right cursor-pointer select-none" onClick={() => onSort('costPrice')}>
-                <div className="flex items-center gap-1.5 justify-end">
-                  <span>COSTO</span>
-                  <SortIcon field="costPrice" sortField={sortField} sortDir={sortDir} />
                 </div>
               </th>
               <th className="px-5 py-3.5 text-right cursor-pointer select-none" onClick={() => onSort('salePrice')}>
@@ -214,21 +196,10 @@ export default function ProductsTable({
                   <SortIcon field="salePrice" sortField={sortField} sortDir={sortDir} />
                 </div>
               </th>
-              <th className="px-3 py-3.5 text-center select-none">
-                <div className="flex items-center gap-1.5 justify-center">
-                  <span>BALANZA</span>
-                </div>
-              </th>
               <th className="px-4 py-3.5 text-center cursor-pointer select-none" onClick={() => onSort('currentStock')}>
                 <div className="flex items-center gap-1.5 justify-center">
                   <span>STOCK</span>
                   <SortIcon field="currentStock" sortField={sortField} sortDir={sortDir} />
-                </div>
-              </th>
-              <th className="px-4 py-3.5 text-left cursor-pointer select-none" onClick={() => onSort('expiryDate')}>
-                <div className="flex items-center gap-1.5">
-                  <span>VENCIMIENTO</span>
-                  <SortIcon field="expiryDate" sortField={sortField} sortDir={sortDir} />
                 </div>
               </th>
               <th className="px-4 py-3.5 text-center cursor-pointer select-none" onClick={() => onSort('status')}>
@@ -271,31 +242,47 @@ export default function ProductsTable({
                       </div>
                       <div>
                         <div className="font-mono text-slate-900 dark:text-white font-bold text-xs flex items-center gap-1.5 flex-wrap">
-                          <span>{product.name}</span>
+                          <button
+                            type="button"
+                            onClick={() => onView && onView(product)}
+                            className="hover:text-emerald-600 dark:hover:text-emerald-400 hover:underline text-left cursor-pointer transition-colors"
+                            title="Ver vista previa del producto"
+                          >
+                            {product.name}
+                          </button>
                           <WeightBadge
                             saleType={product.saleType}
                             weightUnit={product.weightUnit}
                             isWeighted={product.isWeightProduct}
                             size="sm"
                           />
+                          {product.plu && (
+                            <span className="px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[10px] text-slate-700 dark:text-slate-300 font-mono font-bold" title="PLU de Balanza">
+                              PLU: {product.plu}
+                            </span>
+                          )}
                         </div>
-                        <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5 font-medium">
+                        <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5 mt-0.5 font-medium flex-wrap">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0 inline-block" />
-                          <span className="truncate max-w-[220px]">SKU: {product.sku}</span>
+                          <span className="truncate max-w-[200px]">SKU: {product.sku}</span>
+                          {product.brand && product.brand !== 'Genérico' && product.brand !== '—' && (
+                            <>
+                              <span className="text-slate-300 dark:text-slate-700">•</span>
+                              <span className="text-slate-500 dark:text-slate-400">{product.brand}</span>
+                            </>
+                          )}
+                          {expiryInfo.badge && (
+                            <>
+                              <span className="text-slate-300 dark:text-slate-700">•</span>
+                              <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[10px] font-bold border ${expiryInfo.color}`}>
+                                <Calendar size={10} />
+                                {expiryInfo.text}
+                              </span>
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>
-                  </td>
-
-                  {/* PLU */}
-                  <td className="px-3 py-3.5 text-center font-mono text-xs font-bold text-slate-800 dark:text-slate-200">
-                    {product.plu ? (
-                      <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-mono font-bold">
-                        {product.plu}
-                      </span>
-                    ) : (
-                      <span className="text-slate-400 font-normal">—</span>
-                    )}
                   </td>
 
                   {/* Categoría */}
@@ -303,18 +290,6 @@ export default function ProductsTable({
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
                       {product.category}
                     </span>
-                  </td>
-
-                  {/* Marca */}
-                  <td className="px-4 py-3.5 text-xs font-medium text-slate-700 dark:text-slate-300 whitespace-nowrap">
-                    {product.brand}
-                  </td>
-
-                  {/* Costo */}
-                  <td className="px-4 py-3.5 text-right text-xs">
-                    <div className="font-semibold text-slate-600 dark:text-slate-400 tabular-nums">
-                      RD$ {product.costPrice.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                    </div>
                   </td>
 
                   {/* Precio Venta */}
@@ -325,20 +300,10 @@ export default function ProductsTable({
                         <span className="text-[10px] text-emerald-600 font-bold ml-0.5">/{product.weightUnit || 'lb'}</span>
                       )}
                     </div>
-                  </td>
-
-                  {/* Balanza */}
-                  <td className="px-3 py-3.5 text-center text-xs">
-                    {product.isWeightProduct || product.saleType === 'weight' || product.saleType === 'both' ? (
-                      <span
-                        className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 shadow-2xs"
-                        title="Producto de peso variable para balanza"
-                      >
-                        <Scale size={12} className="text-emerald-600 dark:text-emerald-400" />
-                        <span>Balanza</span>
-                      </span>
-                    ) : (
-                      <span className="text-slate-400 font-normal">—</span>
+                    {product.wholesalePrice > 0 && (
+                      <div className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">
+                        Mayor: RD$ {product.wholesalePrice.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                      </div>
                     )}
                   </td>
 
@@ -370,18 +335,6 @@ export default function ProductsTable({
                     </span>
                   </td>
 
-                  {/* Vencimiento */}
-                  <td className="px-4 py-3.5 text-xs whitespace-nowrap">
-                    {expiryInfo.badge ? (
-                      <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-xs font-semibold border ${expiryInfo.color}`}>
-                        <Calendar size={12} />
-                        {expiryInfo.text}
-                      </span>
-                    ) : (
-                      <span className={expiryInfo.color}>{expiryInfo.text}</span>
-                    )}
-                  </td>
-
                   {/* Estado */}
                   <td className="px-4 py-3.5 text-center">
                     <span
@@ -409,14 +362,26 @@ export default function ProductsTable({
 
                   {/* Acciones */}
                   <td className="px-5 py-3.5 text-right">
-                    <button
-                      type="button"
-                      onClick={(e) => handleToggleActions(product.id, e)}
-                      className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 font-semibold text-xs flex items-center gap-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all cursor-pointer shadow-2xs inline-flex"
-                    >
-                      <span>Acciones</span>
-                      <MoreVertical size={14} className="text-slate-400" />
-                    </button>
+                    <div className="flex items-center justify-end gap-1.5">
+                      {onView && (
+                        <button
+                          type="button"
+                          onClick={() => onView(product)}
+                          className="p-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:text-emerald-600 hover:border-emerald-300 dark:hover:border-emerald-800 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/30 transition-all cursor-pointer shadow-2xs"
+                          title="Ver detalle del producto"
+                        >
+                          <Eye size={14} />
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={(e) => handleToggleActions(product.id, e)}
+                        className="px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 font-semibold text-xs flex items-center gap-1 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all cursor-pointer shadow-2xs inline-flex"
+                      >
+                        <span>Acciones</span>
+                        <MoreVertical size={13} className="text-slate-400" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               );
