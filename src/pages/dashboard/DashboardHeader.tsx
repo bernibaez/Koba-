@@ -1,77 +1,89 @@
 import React, { useState, useEffect } from 'react';
-import { RefreshCw, Calendar, Zap } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
 
 interface DashboardHeaderProps {
   onRefresh?: () => void;
 }
 
 export default function DashboardHeader({ onRefresh }: DashboardHeaderProps) {
+  const { user } = useAuth();
   const [timeStr, setTimeStr] = useState('');
   const [dateStr, setDateStr] = useState('');
-  const [refreshing, setRefreshing] = useState(false);
+  const [greeting, setGreeting] = useState('Buenas tardes');
 
   useEffect(() => {
     const update = () => {
       const now = new Date();
-      const h = now?.getHours()?.toString()?.padStart(2, '0');
-      const m = now?.getMinutes()?.toString()?.padStart(2, '0');
-      const s = now?.getSeconds()?.toString()?.padStart(2, '0');
-      setTimeStr(`${h}:${m}:${s}`);
+      const hour = now.getHours();
 
-      const days = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
-      const months = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
-      const d = now?.getDate();
-      const day = days?.[now?.getDay()];
-      const mon = months?.[now?.getMonth()];
-      const yr = now?.getFullYear();
-      setDateStr(`${day}, ${d} de ${mon} de ${yr}`);
+      if (hour < 12) {
+        setGreeting('Buenos días');
+      } else if (hour < 19) {
+        setGreeting('Buenas tardes');
+      } else {
+        setGreeting('Buenas noches');
+      }
+
+      // Formato hora estilo: "11:51 a. m."
+      const timeFormatted = now.toLocaleTimeString('es-DO', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+      });
+      setTimeStr(timeFormatted);
+
+      // Formato fecha estilo: "Jueves, 8 de Octubre de 2026"
+      const days = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+      const months = [
+        'Enero',
+        'Febrero',
+        'Marzo',
+        'Abril',
+        'Mayo',
+        'Junio',
+        'Julio',
+        'Agosto',
+        'Septiembre',
+        'Octubre',
+        'Noviembre',
+        'Diciembre',
+      ];
+      const dayName = days[now.getDay()];
+      const dayNum = now.getDate();
+      const monthName = months[now.getMonth()];
+      const year = now.getFullYear();
+
+      setDateStr(`${dayName}, ${dayNum} de ${monthName} de ${year}`);
     };
+
     update();
     const interval = setInterval(update, 1000);
     return () => clearInterval(interval);
   }, []);
 
-  const handleRefresh = () => {
-    setRefreshing(true);
-    onRefresh?.();
-    setTimeout(() => setRefreshing(false), 1200);
-  };
+  const userName = user?.name || user?.username || 'Admin';
 
   return (
-    <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2">
       <div>
-        <div className="flex items-center gap-2 mb-1">
-          <Zap size={16} className="text-primary" />
-          <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-            Resumen del día
-          </span>
-        </div>
-        <h1 className="text-2xl font-extrabold text-foreground tracking-tight">
-          Panel de Control
+        <span className="text-[11px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+          BIENVENIDO DE NUEVO
+        </span>
+        <h1 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight mt-0.5">
+          {greeting}, {userName}
         </h1>
-        <div className="flex items-center gap-2 mt-1">
-          <Calendar size={13} className="text-muted-foreground" />
-          <span className="text-sm text-muted-foreground capitalize">{dateStr}</span>
-          {timeStr && (
-            <span className="text-sm font-mono font-semibold tabular-nums text-muted-foreground/70">
-              · {timeStr}
-            </span>
-          )}
-        </div>
+        <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">
+          Aquí tienes un resumen de lo que está pasando en tu negocio hoy.
+        </p>
       </div>
 
-      <div className="flex items-center gap-2.5">
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-success-bg border border-success/30 rounded-xl">
-          <span className="w-2 h-2 rounded-full bg-success animate-pulse" />
-          <span className="text-xs font-bold text-success">Caja Abierta</span>
-        </div>
-        <button
-          onClick={handleRefresh}
-          className="flex items-center gap-2 btn-secondary text-sm py-1.5 px-3"
-        >
-          <RefreshCw size={14} className={refreshing ? 'animate-spin text-primary' : 'text-primary'} />
-          <span>Actualizar</span>
-        </button>
+      <div className="text-left sm:text-right flex-shrink-0">
+        <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+          {dateStr}
+        </p>
+        <p className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-slate-100 tabular-nums mt-0.5 tracking-tight">
+          {timeStr}
+        </p>
       </div>
     </div>
   );

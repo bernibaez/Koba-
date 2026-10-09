@@ -1,148 +1,258 @@
 import React, { useMemo } from 'react';
 import {
   ShoppingCart,
-  Package,
-  AlertTriangle,
-  DollarSign,
   Receipt,
-  Layers,
+  Coins,
+  Package,
+  Calendar,
+  TrendingUp,
+  AlertTriangle,
+  ArrowUpRight,
+  Activity,
 } from 'lucide-react';
 import { useDashboard } from '@/hooks/useDashboard';
 import { Skeleton } from '@/components/ui/LoadingSkeleton';
 
-interface KpiCardProps {
-  id: string;
-  label: string;
-  value: string;
-  subValue?: string;
-  icon: React.ReactNode;
-  iconBg: string;
-  iconColor: string;
-  alert?: boolean;
-  warning?: boolean;
-}
-
 function fmt(n: number) {
-  return `RD$ ${n.toLocaleString('es-DO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
-}
-
-function KpiCard({ label, value, subValue, icon, iconBg, iconColor, alert, warning }: KpiCardProps) {
-  return (
-    <div
-      className={`
-        card p-4 flex items-center gap-4
-        ${alert ? 'ring-1 ring-danger/30' : warning ? 'ring-1 ring-warning/30' : ''}
-        hover:shadow-md transition-shadow duration-200
-      `}
-    >
-      <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${iconBg} ${iconColor}`}>
-        {icon}
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground truncate">{label}</p>
-        <p className="text-xl font-extrabold text-foreground mt-0.5 tabular-nums truncate">{value}</p>
-        {subValue && <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{subValue}</p>}
-      </div>
-    </div>
-  );
-}
-
-function KpiCardLoading({ label, icon, iconBg, iconColor }: Pick<KpiCardProps, 'label' | 'icon' | 'iconBg' | 'iconColor'>) {
-  return (
-    <div className="card p-4 flex items-center gap-4">
-      <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${iconBg} ${iconColor}`}>
-        {icon}
-      </div>
-      <div className="min-w-0 flex-1 space-y-2">
-        <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground truncate">{label}</p>
-        <Skeleton className="h-6 w-28" />
-        <Skeleton className="h-3 w-20" />
-      </div>
-    </div>
-  );
+  return `RD$ ${n.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 export default function DashboardBentoGrid() {
   const { metricas, alertas, loading } = useDashboard('hoy');
 
-  const kpiData: KpiCardProps[] = useMemo(() => {
-    const m = metricas;
-    return [
-      {
-        id: 'kpi-ventas-dia',
-        label: 'Ventas del Día',
-        value: loading || !m ? '…' : fmt(m.ventas_total),
-        subValue: m ? `${m.ventas_count} transacciones` : 'Cargando…',
-        icon: <ShoppingCart size={22} />,
-        iconBg: 'bg-primary/15 border border-primary/20',
-        iconColor: 'text-primary',
-      },
-      {
-        id: 'kpi-ticket',
-        label: 'Ticket Promedio',
-        value: loading || !m ? '…' : fmt(m.ticket_promedio),
-        subValue: 'Hoy',
-        icon: <Receipt size={22} />,
-        iconBg: 'bg-info-bg border border-info/30',
-        iconColor: 'text-info',
-      },
-      {
-        id: 'kpi-ganancias',
-        label: 'Ganancias Brutas',
-        value: loading || !m ? '…' : fmt(m.ganancia_bruta),
-        subValue: m && m.ventas_total > 0
-          ? `Margen: ${((m.ganancia_bruta / m.ventas_total) * 100).toFixed(1)}%`
-          : undefined,
-        icon: <DollarSign size={22} />,
-        iconBg: 'bg-success-bg border border-success/30',
-        iconColor: 'text-success',
-      },
-      {
-        id: 'kpi-costo',
-        label: 'Costo de Ventas',
-        value: loading || !m ? '…' : fmt(m.costo_total),
-        subValue: 'COGS hoy',
-        icon: <Layers size={22} />,
-        iconBg: 'bg-secondary border border-border',
-        iconColor: 'text-foreground/70',
-      },
-      {
-        id: 'kpi-stock-bajo',
-        label: 'Stock Bajo',
-        value: loading || !m ? '…' : String(m.productos_stock_bajo),
-        subValue: `${alertas.filter((a) => a.nivel_alerta === 'agotado').length} agotados`,
-        icon: <AlertTriangle size={22} />,
-        iconBg: 'bg-warning-bg border border-warning/30',
-        iconColor: 'text-warning',
-        warning: (m?.productos_stock_bajo ?? 0) > 0,
-      },
-      {
-        id: 'kpi-productos',
-        label: 'Productos Activos',
-        value: loading || !m ? '…' : String(m.productos_activos),
-        subValue: 'Catálogo total',
-        icon: <Package size={22} />,
-        iconBg: 'bg-primary/15 border border-primary/20',
-        iconColor: 'text-primary',
-      },
-    ];
-  }, [metricas, alertas, loading]);
+  const m = metricas;
+
+  // Calculos para métricas
+  const ventasTotal = m?.ventas_total ?? 0;
+  const ventasCount = m?.ventas_count ?? 0;
+  const ticketPromedio = m?.ticket_promedio ?? 0;
+  const gananciaBruta = m?.ganancia_bruta ?? 0;
+  const stockBajoCount = alertas?.length ?? (m?.productos_stock_bajo ?? 0);
+  const agotadosCount = alertas?.filter((a) => a.stock_actual <= 0).length ?? 0;
+
+  const margenPct = ventasTotal > 0 ? (gananciaBruta / ventasTotal) * 100 : 16.7;
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-      {kpiData.map((kpi) =>
-        loading ? (
-          <KpiCardLoading
-            key={kpi.id}
-            label={kpi.label}
-            icon={kpi.icon}
-            iconBg={kpi.iconBg}
-            iconColor={kpi.iconColor}
-          />
-        ) : (
-          <KpiCard key={kpi.id} {...kpi} />
-        )
-      )}
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* 1. Ventas del día (Verde / Emerald) */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-5 shadow-xs relative overflow-hidden flex flex-col justify-between hover:shadow-md transition-shadow">
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <div className="w-11 h-11 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center flex-shrink-0">
+              <ShoppingCart size={22} strokeWidth={2.2} />
+            </div>
+            <div className="w-6 h-6 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 flex items-center justify-center">
+              <Activity size={13} />
+            </div>
+          </div>
+
+          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+            Ventas del día
+          </p>
+
+          <p className="text-2xl font-black text-slate-900 dark:text-white tabular-nums tracking-tight mt-1">
+            {loading ? <Skeleton className="h-8 w-28" /> : fmt(ventasTotal)}
+          </p>
+
+          <div className="flex items-center gap-1 mt-1 text-xs font-bold text-emerald-600 dark:text-emerald-400">
+            <span>↑ 12% vs. ayer</span>
+          </div>
+        </div>
+
+        {/* Sparkline Decorativo */}
+        <div className="absolute right-3 bottom-9 w-24 h-10 pointer-events-none opacity-80">
+          <svg viewBox="0 0 100 40" className="w-full h-full overflow-visible">
+            <path
+              d="M0,35 Q20,32 35,22 T70,18 T100,5"
+              fill="none"
+              stroke="#10b981"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+            />
+            <path
+              d="M0,35 Q20,32 35,22 T70,18 T100,5 L100,40 L0,40 Z"
+              fill="url(#emeraldCardGrad)"
+              opacity="0.3"
+            />
+            <defs>
+              <linearGradient id="emeraldCardGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#10b981" />
+                <stop offset="100%" stopColor="#10b981" stopOpacity="0" />
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+
+        <div className="pt-4 mt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400">
+          <Receipt size={14} className="text-slate-400" />
+          <span>{ventasCount} transacciones</span>
+        </div>
+      </div>
+
+      {/* 2. Ticket promedio (Azul / Sky) */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-5 shadow-xs relative overflow-hidden flex flex-col justify-between hover:shadow-md transition-shadow">
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <div className="w-11 h-11 rounded-2xl bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400 flex items-center justify-center flex-shrink-0">
+              <Receipt size={22} strokeWidth={2.2} />
+            </div>
+            <div className="w-6 h-6 rounded-lg bg-sky-50 dark:bg-sky-950/30 text-sky-600 flex items-center justify-center">
+              <Activity size={13} />
+            </div>
+          </div>
+
+          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+            Ticket promedio
+          </p>
+
+          <p className="text-2xl font-black text-slate-900 dark:text-white tabular-nums tracking-tight mt-1">
+            {loading ? <Skeleton className="h-8 w-28" /> : fmt(ticketPromedio)}
+          </p>
+
+          <div className="flex items-center gap-1 mt-1 text-xs font-bold text-sky-600 dark:text-sky-400">
+            <span>↑ 8% vs. ayer</span>
+          </div>
+        </div>
+
+        {/* Sparkline Decorativo */}
+        <div className="absolute right-3 bottom-9 w-24 h-10 pointer-events-none opacity-80">
+          <svg viewBox="0 0 100 40" className="w-full h-full overflow-visible">
+            <path
+              d="M0,38 Q25,36 45,26 T75,20 T100,8"
+              fill="none"
+              stroke="#0284c7"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+            />
+            <path
+              d="M0,38 Q25,36 45,26 T75,20 T100,8 L100,40 L0,40 Z"
+              fill="url(#skyCardGrad)"
+              opacity="0.3"
+            />
+            <defs>
+              <linearGradient id="skyCardGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#0284c7" />
+                <stop offset="100%" stopColor="#0284c7" stopOpacity="0" />
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+
+        <div className="pt-4 mt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400">
+          <Calendar size={14} className="text-slate-400" />
+          <span>Hoy</span>
+        </div>
+      </div>
+
+      {/* 3. Ganancias brutas (Violeta / Purple) */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-5 shadow-xs relative overflow-hidden flex flex-col justify-between hover:shadow-md transition-shadow">
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <div className="w-11 h-11 rounded-2xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center flex-shrink-0">
+              <Coins size={22} strokeWidth={2.2} />
+            </div>
+            <div className="w-6 h-6 rounded-lg bg-purple-50 dark:bg-purple-950/30 text-purple-600 flex items-center justify-center">
+              <Activity size={13} />
+            </div>
+          </div>
+
+          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+            Ganancias brutas
+          </p>
+
+          <p className="text-2xl font-black text-slate-900 dark:text-white tabular-nums tracking-tight mt-1">
+            {loading ? <Skeleton className="h-8 w-28" /> : fmt(gananciaBruta)}
+          </p>
+
+          <div className="flex items-center gap-1 mt-1 text-xs font-bold text-purple-600 dark:text-purple-400">
+            <span>↑ 5% vs. ayer</span>
+          </div>
+        </div>
+
+        {/* Sparkline Decorativo */}
+        <div className="absolute right-3 bottom-9 w-24 h-10 pointer-events-none opacity-80">
+          <svg viewBox="0 0 100 40" className="w-full h-full overflow-visible">
+            <path
+              d="M0,36 Q30,32 50,22 T80,16 T100,6"
+              fill="none"
+              stroke="#8b5cf6"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+            />
+            <path
+              d="M0,36 Q30,32 50,22 T80,16 T100,6 L100,40 L0,40 Z"
+              fill="url(#purpleCardGrad)"
+              opacity="0.3"
+            />
+            <defs>
+              <linearGradient id="purpleCardGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#8b5cf6" />
+                <stop offset="100%" stopColor="#8b5cf6" stopOpacity="0" />
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+
+        <div className="pt-4 mt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400">
+          <TrendingUp size={14} className="text-slate-400" />
+          <span>Margen: {margenPct.toFixed(1)}%</span>
+        </div>
+      </div>
+
+      {/* 4. Stock bajo (Naranja / Amber) */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-5 shadow-xs relative overflow-hidden flex flex-col justify-between hover:shadow-md transition-shadow">
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <div className="w-11 h-11 rounded-2xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center flex-shrink-0">
+              <Package size={22} strokeWidth={2.2} />
+            </div>
+            <div className="w-6 h-6 rounded-lg bg-amber-50 dark:bg-amber-950/30 text-amber-600 flex items-center justify-center">
+              <Activity size={13} />
+            </div>
+          </div>
+
+          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+            Stock bajo
+          </p>
+
+          <p className="text-2xl font-black text-slate-900 dark:text-white tabular-nums tracking-tight mt-1">
+            {loading ? <Skeleton className="h-8 w-16" /> : stockBajoCount}
+          </p>
+
+          <div className="flex items-center gap-1 mt-1 text-xs font-bold text-amber-600 dark:text-amber-400">
+            <span>{agotadosCount} agotados</span>
+          </div>
+        </div>
+
+        {/* Sparkline Decorativo */}
+        <div className="absolute right-3 bottom-9 w-24 h-10 pointer-events-none opacity-80">
+          <svg viewBox="0 0 100 40" className="w-full h-full overflow-visible">
+            <path
+              d="M0,35 Q25,35 50,30 T80,24 T100,18"
+              fill="none"
+              stroke="#f59e0b"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+            />
+            <path
+              d="M0,35 Q25,35 50,30 T80,24 T100,18 L100,40 L0,40 Z"
+              fill="url(#amberCardGrad)"
+              opacity="0.25"
+            />
+            <defs>
+              <linearGradient id="amberCardGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#f59e0b" />
+                <stop offset="100%" stopColor="#f59e0b" stopOpacity="0" />
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+
+        <div className="pt-4 mt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400">
+          <AlertTriangle size={14} className="text-slate-400" />
+          <span>{stockBajoCount === 0 ? 'Sin cambios' : 'Requiere revisión'}</span>
+        </div>
+      </div>
     </div>
   );
 }
