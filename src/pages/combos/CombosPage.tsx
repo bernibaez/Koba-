@@ -6,7 +6,6 @@ import CombosTable from './components/CombosTable';
 import ComboFormModal from './components/ComboFormModal';
 import ComboDetailModal from './components/ComboDetailModal';
 import ComboImportModal from './components/ComboImportModal';
-import ConfirmModal from '@/components/ui/ConfirmModal';
 import { Combo, duplicateCombo } from '@/lib/comboStore';
 import { useCombos } from '@/hooks/useCombos';
 import { exportTableToPdf, exportTableToExcel, formatMoneyPdf } from '@/lib/exportPdf';
@@ -23,7 +22,7 @@ export default function CombosPage() {
   const [editingCombo, setEditingCombo] = useState<Combo | null>(null);
   const [detailCombo, setDetailCombo] = useState<Combo | null>(null);
   const [importOpen, setImportOpen] = useState(false);
-  const [deleteTargetCombo, setDeleteTargetCombo] = useState<Combo | null>(null);
+  const [deleteBusyId, setDeleteBusyId] = useState<string | null>(null);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -111,19 +110,17 @@ export default function CombosPage() {
     }
   };
 
-  const handleDeleteConfirm = async () => {
-    if (!deleteTargetCombo) return;
+  const handleDelete = async (combo: Combo) => {
+    if (deleteBusyId) return;
+    setDeleteBusyId(combo.id);
     try {
-      await eliminar(deleteTargetCombo.id);
-      toast.error(`Combo "${deleteTargetCombo.name}" eliminado.`);
-      setDeleteTargetCombo(null);
+      await eliminar(combo.id);
+      toast.error(`Combo "${combo.name}" eliminado.`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Error al eliminar');
+    } finally {
+      setDeleteBusyId(null);
     }
-  };
-
-  const handleDeleteRequest = (combo: Combo) => {
-    setDeleteTargetCombo(combo);
   };
 
   const exportHeaders = [
@@ -240,17 +237,8 @@ export default function CombosPage() {
           onEdit={handleEdit}
           onDuplicate={handleDuplicate}
           onToggleStatus={handleToggleStatus}
-          onDeleteRequest={handleDeleteRequest}
+          onDeleteRequest={handleDelete}
           onViewDetail={(combo) => setDetailCombo(combo)}
-        />
-
-        <ConfirmModal
-          open={!!deleteTargetCombo}
-          onClose={() => setDeleteTargetCombo(null)}
-          onConfirm={handleDeleteConfirm}
-          title="Eliminar Combo"
-          description={`¿Estás seguro de que deseas eliminar permanentemente el combo "${deleteTargetCombo?.name}"? Esta acción no se puede deshacer.`}
-          confirmLabel="Sí, Eliminar Combo"
         />
       </div>
     </AppLayout>

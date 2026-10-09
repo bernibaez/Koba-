@@ -39,7 +39,12 @@ interface ProductPanelProps {
   onSearchChange?: (q: string) => void;
 }
 
-export default function ProductPanel({ onAddToCart, onOpenScale, searchQuery = '' }: ProductPanelProps) {
+export default function ProductPanel({
+  onAddToCart,
+  onOpenScale,
+  awaitingDelete = false,
+  searchQuery = '',
+}: ProductPanelProps) {
   const [alertOpen, setAlertOpen] = useState(false);
   const [alertComboName, setAlertComboName] = useState('');
   const [missingItems, setMissingItems] = useState<{ productId: string; sku: string; name: string; required: number; available: number }[]>([]);
@@ -134,6 +139,23 @@ export default function ProductPanel({ onAddToCart, onOpenScale, searchQuery = '
   }, [products, searchQuery]);
 
   const handleProductClick = (p: Product) => {
+    if (awaitingDelete) {
+      onAddToCart({
+        id: `cart-${p.id}-${Date.now()}`,
+        productId: p.id,
+        name: p.name,
+        sku: p.sku,
+        barcode: p.barcode || '',
+        price: p.price,
+        cost: p.cost,
+        tax: p.tax,
+        image: p.image,
+        unit: p.unit,
+        isWeighted: p.isWeighted,
+      });
+      return;
+    }
+
     if (p.outOfStock) {
       toast.error(`Producto agotado: ${p.name}`);
       return;
@@ -156,6 +178,7 @@ export default function ProductPanel({ onAddToCart, onOpenScale, searchQuery = '
       productId: p.id,
       name: p.name,
       sku: p.sku,
+      barcode: p.barcode || '',
       price: p.price,
       cost: p.cost,
       tax: p.tax,
@@ -166,6 +189,25 @@ export default function ProductPanel({ onAddToCart, onOpenScale, searchQuery = '
   };
 
   const handleComboClick = (combo: Combo) => {
+    if (awaitingDelete) {
+      onAddToCart({
+        id: `cart-combo-${combo.id}-${Date.now()}`,
+        productId: combo.id,
+        name: combo.name,
+        sku: combo.code,
+        barcode: combo.barcode || '',
+        price: combo.price,
+        cost: Math.round(combo.normalPrice * 0.7),
+        tax: combo.applyTax ? 18 : 0,
+        image: combo.image || '',
+        unit: 'Combo',
+        isCombo: true,
+        comboId: combo.id,
+        comboItems: combo.items,
+      });
+      return;
+    }
+
     const stockCheck = checkComboStockAvailability(combo, 1, productosUi as any);
     if (!stockCheck.available) {
       setAlertComboName(combo.name);
@@ -215,12 +257,14 @@ export default function ProductPanel({ onAddToCart, onOpenScale, searchQuery = '
                   key={p.id}
                   type="button"
                   onClick={() => handleProductClick(p)}
-                  disabled={p.outOfStock}
+                  disabled={awaitingDelete ? false : p.outOfStock}
                   className={`group flex flex-col items-center justify-between text-center bg-white dark:bg-slate-850 border rounded-xl p-2 transition-all hover:shadow-md cursor-pointer min-h-[110px]
                     ${
-                      p.outOfStock
-                        ? 'opacity-45 border-slate-200 cursor-not-allowed'
-                        : 'border-slate-200/80 dark:border-slate-700/70 hover:border-blue-400 dark:hover:border-blue-500'
+                      awaitingDelete
+                        ? 'border-rose-300 dark:border-rose-800 hover:border-rose-500 hover:bg-rose-50/20'
+                        : p.outOfStock
+                          ? 'opacity-45 border-slate-200 cursor-not-allowed'
+                          : 'border-slate-200/80 dark:border-slate-700/70 hover:border-blue-400 dark:hover:border-blue-500'
                     }
                   `}
                 >

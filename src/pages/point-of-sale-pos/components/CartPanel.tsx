@@ -11,12 +11,14 @@ import {
   Trash2,
   Banknote,
   FileText,
+  Barcode,
 } from 'lucide-react';
 import type { CartItem, Customer } from './POSTerminal';
 import { useClientes } from '@/hooks/useClientes';
 import { useProductos } from '@/hooks/useProductos';
 import { initialProducts } from '@/pages/product-management/components/ProductManagementScreen';
 import PosAddCustomerModal from './PosAddCustomerModal';
+import { toast } from '@/lib/toast';
 
 interface CartPanelProps {
   cart: CartItem[];
@@ -40,6 +42,9 @@ interface CartPanelProps {
   onSearchChange?: (q: string) => void;
   onSearchSubmit?: (q: string) => void | Promise<boolean | void>;
   onAddToCart?: (product: any, qty?: number) => void;
+  awaitingDelete?: boolean;
+  onToggleDeleteMode?: () => void;
+  onCancelDelete?: () => void;
 }
 
 export default function CartPanel({
@@ -58,6 +63,9 @@ export default function CartPanel({
   onSearchChange,
   onSearchSubmit,
   onAddToCart,
+  awaitingDelete = false,
+  onToggleDeleteMode,
+  onCancelDelete,
 }: CartPanelProps) {
   const { clientes, refetch } = useClientes('');
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -126,6 +134,7 @@ export default function CartPanel({
         productId: p.id,
         name: p.name,
         sku: p.sku,
+        barcode: p.barcode || '',
         price: p.salePrice ?? p.price,
         cost: p.costPrice ?? p.cost ?? 0,
         tax: p.tax ?? 18,
@@ -145,7 +154,13 @@ export default function CartPanel({
       e.preventDefault();
       e.stopPropagation();
       if (searchResults.length > 0) {
-        handleSelectProduct(searchResults[0]);
+        const qTrim = searchQuery.trim().toLowerCase();
+        const exact = searchResults.find(
+          (p) =>
+            (p.barcode && p.barcode.toLowerCase() === qTrim) ||
+            (p.sku && p.sku.toLowerCase() === qTrim)
+        );
+        handleSelectProduct(exact || searchResults[0]);
         return;
       }
       const valueToSubmit = searchQuery.trim();
@@ -157,6 +172,9 @@ export default function CartPanel({
       }
     } else if (e.key === 'Escape') {
       setDropdownOpen(false);
+      if (awaitingDelete && onCancelDelete) {
+        onCancelDelete();
+      }
     }
   };
 
@@ -167,7 +185,7 @@ export default function CartPanel({
         {/* Customer Select (Cols 5) */}
         <div className="md:col-span-5 flex items-center gap-1.5">
           <div className="relative flex-1">
-            <User size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+            <User size={16} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
             <select
               value={customer?.id || ''}
               onChange={(e) => {
@@ -179,7 +197,7 @@ export default function CartPanel({
                 const found = customers.find((c) => c.id === val);
                 if (found) onSetCustomer(found);
               }}
-              className="w-full bg-slate-50/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl pl-8 pr-7 h-9 text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500 appearance-none cursor-pointer truncate"
+              className="w-full bg-slate-50/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl pl-8 pr-7 h-10 text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500 appearance-none cursor-pointer truncate"
             >
               <option value="">Cliente Contado</option>
               {customers.map((c) => (
@@ -197,21 +215,25 @@ export default function CartPanel({
           <button
             type="button"
             onClick={() => setAddCustomerOpen(true)}
-            className="w-9 h-9 rounded-xl bg-[#0284c7] hover:bg-[#0369a1] text-white flex items-center justify-center flex-shrink-0 transition-colors shadow-2xs cursor-pointer active:scale-95"
+            className="w-10 h-10 rounded-xl bg-[#0284c7] hover:bg-[#0369a1] text-white flex items-center justify-center flex-shrink-0 transition-colors shadow-2xs cursor-pointer active:scale-95"
             title="Agregar nuevo cliente"
           >
-            <Plus size={16} strokeWidth={2.6} />
+            <Plus size={18} strokeWidth={2.8} />
           </button>
         </div>
 
         {/* Search Input with Autocomplete (Cols 7) */}
         <div className="md:col-span-7 relative flex items-center gap-1.5" ref={searchContainerRef}>
           <div className="relative flex-1">
-            <Search size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
             <input
               id="pos-barcode-search-input"
               type="text"
-              placeholder="Buscar producto o escanear código..."
+              placeholder={
+                awaitingDelete
+                  ? 'MODO QUITAR: Escanea o busca producto a restar/eliminar...'
+                  : 'Buscar producto o escanear código...'
+              }
               value={searchQuery}
               onChange={(e) => {
                 if (onSearchChange) onSearchChange(e.target.value);
@@ -220,20 +242,42 @@ export default function CartPanel({
               onFocus={() => setDropdownOpen(true)}
               onKeyDown={handleKeyDown}
               autoFocus
-              className="w-full bg-slate-50/80 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-600 rounded-xl pl-8 pr-8 h-9 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 placeholder:text-slate-400"
+              className={`w-full rounded-xl pl-9 pr-9 h-10 text-xs sm:text-sm font-semibold focus:outline-none transition-all ${
+                awaitingDelete
+                  ? 'bg-rose-50/70 dark:bg-rose-950/40 border-2 border-rose-500 text-rose-900 dark:text-rose-100 placeholder:text-rose-400 focus:ring-2 focus:ring-rose-400'
+                  : 'bg-slate-50/80 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+              }`}
             />
             {/* Card / Barcode reader icon inside right */}
-            <CreditCard size={15} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-blue-600 dark:text-blue-400 pointer-events-none" />
+            {awaitingDelete ? (
+              <Minus size={17} className="absolute right-3 top-1/2 -translate-y-1/2 text-rose-600 dark:text-rose-400 pointer-events-none" />
+            ) : (
+              <CreditCard size={17} className="absolute right-3 top-1/2 -translate-y-1/2 text-blue-600 dark:text-blue-400 pointer-events-none" />
+            )}
           </div>
 
-          {/* Plus Blue Button next to search */}
+          {/* Botón Minimalista para Activar/Desactivar Modo Quitar Producto */}
           <button
             type="button"
-            onClick={() => onOpenWeightScan && onOpenWeightScan()}
-            className="w-9 h-9 rounded-xl bg-[#0284c7] hover:bg-[#0369a1] text-white flex items-center justify-center flex-shrink-0 transition-colors shadow-2xs cursor-pointer active:scale-95"
-            title="Pesaje / Escaneo Avanzado"
+            onClick={() => {
+              if (cart.length === 0 && !awaitingDelete) {
+                toast.error('El carrito está vacío');
+                return;
+              }
+              if (onToggleDeleteMode) onToggleDeleteMode();
+            }}
+            className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-all shadow-2xs cursor-pointer active:scale-95 border ${
+              awaitingDelete
+                ? 'bg-rose-600 hover:bg-rose-700 text-white border-rose-600 shadow-md ring-2 ring-rose-400/40'
+                : 'bg-slate-100 hover:bg-rose-50 dark:bg-slate-800 dark:hover:bg-rose-950/40 text-slate-600 hover:text-rose-600 dark:text-slate-300 dark:hover:text-rose-400 border-slate-200 dark:border-slate-700 hover:border-rose-300'
+            }`}
+            title={
+              awaitingDelete
+                ? 'Modo quitar activo (clic para volver a modo normal o presiona Esc)'
+                : 'Activar modo quitar producto (F4)'
+            }
           >
-            <Plus size={16} strokeWidth={2.6} />
+            <Minus size={20} strokeWidth={3} />
           </button>
 
           {/* Floating Search Dropdown (Matches Reference Image) */}
@@ -288,15 +332,15 @@ export default function CartPanel({
       </div>
 
       {/* Row 3: Product Table Header */}
-      <div className="bg-slate-50 dark:bg-slate-800/60 rounded-t-xl px-3 py-2 border-b border-slate-200 dark:border-slate-700 grid grid-cols-12 gap-2 text-xs font-black text-slate-800 dark:text-slate-200 flex-shrink-0">
-        <div className="col-span-6 flex items-center gap-1">
+      <div className="bg-slate-50 dark:bg-slate-800/60 rounded-t-xl px-4 py-3 border-b border-slate-200 dark:border-slate-700 grid grid-cols-12 gap-2 text-sm sm:text-[15px] font-black text-slate-800 dark:text-slate-200 flex-shrink-0">
+        <div className="col-span-6 flex items-center gap-2">
           <span>Producto</span>
-          <Info size={13} className="text-sky-500" />
+          <Info size={16} className="text-sky-500" strokeWidth={2.4} />
         </div>
         <div className="col-span-3 text-center">Cantidad / Peso</div>
         <div className="col-span-2 text-right">Subtotal</div>
-        <div className="col-span-1 text-center text-slate-400">
-          <X size={14} className="mx-auto" />
+        <div className="col-span-1 text-center text-slate-400 flex justify-center">
+          <X size={18} strokeWidth={2.5} />
         </div>
       </div>
 
@@ -304,8 +348,8 @@ export default function CartPanel({
       <div className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800 border-x border-b border-slate-200/90 dark:border-slate-700/80 rounded-b-xl mb-2.5 min-h-[160px]">
         {cart.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-48 gap-1.5 text-slate-400">
-            <p className="text-xs font-bold">Carrito vacío</p>
-            <p className="text-[11px]">Busca o escanea productos para comenzar la venta</p>
+            <p className="text-sm font-bold">Carrito vacío</p>
+            <p className="text-xs">Busca o escanea productos para comenzar la venta</p>
           </div>
         ) : (
           cart.map((item) => {
@@ -313,77 +357,82 @@ export default function CartPanel({
               item.isWeighted ||
               ['lb', 'kg', 'g', 'oz', 'libra'].some((u) => (item.unit || '').toLowerCase().includes(u));
             const unitLabel = item.unit || 'lb';
+            const codeToDisplay = item.barcode || item.sku || '';
 
             return (
               <div
                 key={item.id}
-                className="grid grid-cols-12 gap-2 px-3 py-2.5 items-center hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+                className="grid grid-cols-12 gap-2 px-4 py-3.5 sm:py-4 items-center hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
               >
-                <div className="col-span-6 min-w-0">
-                  <p className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
+                <div className="col-span-6 min-w-0 pr-1">
+                  <p className="text-[16px] sm:text-[17px] font-black text-slate-900 dark:text-slate-100 truncate leading-snug">
                     {item.name}
                   </p>
                   {isWeightItem ? (
-                    <p className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 truncate">
+                    <p className="text-xs sm:text-[13px] font-bold text-emerald-600 dark:text-emerald-400 truncate mt-0.5">
                       {item.qty} {unitLabel} × RD$ {item.price}
                     </p>
                   ) : (
-                    <p className="text-[10px] font-mono text-slate-400 truncate">{item.sku}</p>
+                    <p className="text-xs sm:text-[13px] font-mono font-medium text-slate-500 dark:text-slate-400 truncate mt-0.5 tracking-wide">
+                      {codeToDisplay}
+                    </p>
                   )}
                 </div>
 
-                <div className="col-span-3 flex items-center justify-center gap-1">
+                <div className="col-span-3 flex items-center justify-center gap-1.5 sm:gap-2">
                   {isWeightItem ? (
                     <button
                       type="button"
                       onClick={() => onEditWeight && onEditWeight(item)}
-                      className="px-2 py-0.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 rounded-lg text-xs font-bold tabular-nums transition-colors cursor-pointer flex items-center gap-1"
+                      className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 rounded-xl text-xs sm:text-sm font-black tabular-nums transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs"
                       title="Editar peso"
                     >
                       <span>{item.qty} {unitLabel}</span>
-                      <Pencil size={10} />
+                      <Pencil size={14} />
                     </button>
                   ) : (
                     <>
                       <button
                         type="button"
                         onClick={() => onUpdateQty(item.id, item.qty - 1)}
-                        className="w-5 h-5 rounded bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 font-bold text-xs flex items-center justify-center cursor-pointer"
+                        className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 font-bold flex items-center justify-center cursor-pointer transition-all active:scale-95 shadow-2xs"
+                        title="Restar 1"
                       >
-                        <Minus size={11} />
+                        <Minus size={18} strokeWidth={3} />
                       </button>
                       <input
                         type="number"
                         min={0}
                         value={item.qty}
                         onChange={(e) => onUpdateQty(item.id, Number(e.target.value))}
-                        className="w-9 h-6 text-center text-xs font-bold border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-800 tabular-nums focus:outline-none"
+                        className="w-12 sm:w-14 h-9 sm:h-10 text-center text-sm sm:text-base font-black border border-slate-300 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-850 text-slate-900 dark:text-white tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                       <button
                         type="button"
                         onClick={() => onUpdateQty(item.id, item.qty + 1)}
-                        className="w-5 h-5 rounded bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 font-bold text-xs flex items-center justify-center cursor-pointer"
+                        className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 font-bold flex items-center justify-center cursor-pointer transition-all active:scale-95 shadow-2xs"
+                        title="Sumar 1"
                       >
-                        <Plus size={11} />
+                        <Plus size={18} strokeWidth={3} />
                       </button>
                     </>
                   )}
                 </div>
 
                 <div className="col-span-2 text-right">
-                  <p className="text-xs font-extrabold tabular-nums text-slate-900 dark:text-white">
+                  <p className="text-sm sm:text-base font-black tabular-nums text-slate-900 dark:text-white">
                     {fmt(item.price * item.qty * (1 - item.discount / 100))}
                   </p>
                 </div>
 
-                <div className="col-span-1 text-center">
+                <div className="col-span-1 text-center flex justify-center">
                   <button
                     type="button"
                     onClick={() => onRemove(item.id)}
-                    className="text-slate-400 hover:text-red-500 p-1 transition-colors cursor-pointer"
+                    className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center text-slate-400 hover:text-rose-600 hover:bg-rose-100/70 dark:hover:bg-rose-950/40 border border-transparent hover:border-rose-200 dark:hover:border-rose-900 transition-all cursor-pointer active:scale-95"
                     title="Eliminar ítem"
                   >
-                    <Trash2 size={14} />
+                    <Trash2 size={21} strokeWidth={2.4} />
                   </button>
                 </div>
               </div>

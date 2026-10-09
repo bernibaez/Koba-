@@ -18,6 +18,7 @@ import {
   Users,
   Monitor,
   CheckCircle2,
+  ScanLine,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { canAccessRoute } from '@/lib/auth';
@@ -37,6 +38,7 @@ interface POSHeaderProps {
   onScale?: () => void;
   onReturn: () => void;
   onCancelDelete: () => void;
+  onToggleDeleteMode?: () => void;
   onSwitchCash: () => void;
   onOpenRegisterDetails?: () => void;
   cashIsOpen?: boolean;
@@ -58,6 +60,7 @@ export default function POSHeader({
   onScale,
   onReturn,
   onCancelDelete,
+  onToggleDeleteMode,
   onSwitchCash,
   onOpenRegisterDetails,
   cashIsOpen = false,

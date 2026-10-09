@@ -79,6 +79,7 @@ export interface CartItem {
   productId: string;
   name: string;
   sku: string;
+  barcode?: string;
   price: number;
   cost: number;
   qty: number;
@@ -176,40 +177,112 @@ export default function POSTerminal() {
 
   const refreshHeld = () => setHeldSales(getHeldSales());
 
-  const addToCart = useCallback((product: Omit<CartItem, 'qty' | 'discount'>, qty = 1) => {
-    if (product.sku.toUpperCase() === DELETE_SKU || product.sku.toUpperCase() === 'ELIMINAR') {
-      setAwaitingDeleteScan(true);
-      toast.info('Modo eliminar: escanea el SKU del producto a quitar del carrito');
+  const handleCancelDeleteMode = useCallback(() => {
+    setAwaitingDeleteScan(false);
+    toast.info('Modo venta normal activado');
+    setTimeout(focusPosBarcodeInput, 50);
+  }, []);
+
+  const toggleDeleteMode = useCallback(() => {
+    if (cart.length === 0 && !awaitingDeleteScan) {
+      toast.error('El carrito está vacío');
       return;
     }
+    setAwaitingDeleteScan((prev) => {
+      const next = !prev;
+      if (next) {
+        toast.info('Modo quitar activado: escanea los productos a descontar o quitar del carrito');
+      } else {
+        toast.info('Modo venta normal activado');
+      }
+      setTimeout(focusPosBarcodeInput, 50);
+      return next;
+    });
+  }, [cart.length, awaitingDeleteScan]);
 
-    if (awaitingDeleteScan) {
+  const deductOrRemoveFromCart = useCallback(
+    (product: { productId?: string; sku?: string; barcode?: string; name?: string }) => {
       setCart((prev) => {
-        const idx = [...prev].reverse().findIndex((i) => i.sku === product.sku || i.productId === product.productId);
-        if (idx === -1) {
-          toast.error(`No hay ${product.name} en el carrito`);
+        const prodSku = (product.sku || '').toLowerCase();
+        const prodBarcode = (product.barcode || '').toLowerCase();
+        const prodName = (product.name || '').toLowerCase();
+
+        const idxReversed = [...prev].reverse().findIndex((item) => {
+          if (product.productId && item.productId === product.productId) return true;
+          if (prodSku && item.sku && item.sku.toLowerCase() === prodSku) return true;
+          if (prodBarcode && item.barcode && item.barcode.toLowerCase() === prodBarcode) return true;
+          if (prodBarcode && item.sku && item.sku.toLowerCase() === prodBarcode) return true;
+          if (prodSku && item.barcode && item.barcode.toLowerCase() === prodSku) return true;
+          if (prodName && item.name.toLowerCase() === prodName) return true;
+          return false;
+        });
+
+        if (idxReversed === -1) {
+          toast.error(
+            `"${product.name || product.sku || product.barcode || 'Producto'}" no está en el carrito`
+          );
           return prev;
         }
-        const realIdx = prev.length - 1 - idx;
-        toast.success(`Eliminado: ${prev[realIdx].name}`);
-        return prev.filter((_, i) => i !== realIdx);
-      });
-      setAwaitingDeleteScan(false);
-      return;
-    }
 
-    setCart((prev) => {
-      const existing = prev.find((item) => item.productId === product.productId || item.sku === product.sku);
-      if (existing) {
-        return prev.map((item) =>
-          (item.productId === product.productId || item.sku === product.sku)
-            ? { ...item, qty: Math.round((item.qty + qty) * 100) / 100 }
-            : item
-        );
+        const realIdx = prev.length - 1 - idxReversed;
+        const currentItem = prev[realIdx];
+
+        // Restar 1 unidad por cada escaneo (y eliminarlo si la cantidad llega a 0 o es producto por peso)
+        if (currentItem.qty > 1 && !currentItem.isWeighted) {
+          const newQty = Math.round((currentItem.qty - 1) * 100) / 100;
+          toast.info(`Restada 1 unidad de "${currentItem.name}" (Quedan ${newQty})`);
+          return prev.map((item, i) => (i === realIdx ? { ...item, qty: newQty } : item));
+        } else {
+          toast.success(`Eliminado del carrito: "${currentItem.name}"`);
+          const nextCart = prev.filter((_, i) => i !== realIdx);
+          if (nextCart.length === 0) {
+            toast.info('Carrito vacío. Modo quitar desactivado.');
+            setAwaitingDeleteScan(false);
+          }
+          return nextCart;
+        }
+      });
+    },
+    []
+  );
+
+  const addToCart = useCallback(
+    (product: Omit<CartItem, 'qty' | 'discount'>, qty = 1) => {
+      if (
+        product.sku.toUpperCase() === DELETE_SKU ||
+        product.sku.toUpperCase() === 'ELIMINAR' ||
+        product.sku.toUpperCase() === 'QUITAR'
+      ) {
+        toggleDeleteMode();
+        return;
       }
-      return [...prev, { ...product, qty, discount: 0 }];
-    });
-  }, [awaitingDeleteScan]);
+
+      if (awaitingDeleteScan) {
+        deductOrRemoveFromCart({
+          productId: product.productId,
+          sku: product.sku,
+          barcode: product.barcode,
+          name: product.name,
+        });
+        return;
+      }
+
+      setCart((prev) => {
+        const existing = prev.find(
+          (item) => item.productId === product.productId || item.sku === product.sku
+        );
+        if (existing) {
+          return prev.map((item) =>
+            item.productId === product.productId || item.sku === product.sku
+              ? { ...item, qty: Math.round((item.qty + qty) * 100) / 100 }
+              : item
+          );
+        }
+        return [...prev, { ...product, qty, discount: 0 }];
+      });
+    },
+    [awaitingDeleteScan, deductOrRemoveFromCart, toggleDeleteMode]
+  );
 
   const updateQty = useCallback((cartId: string, qty: number) => {
     if (qty <= 0) {
@@ -374,6 +447,208 @@ export default function POSTerminal() {
         requestAnimationFrame(() => selectPosBarcodeInput());
         return false;
       };
+
+      if (
+        q.toUpperCase() === DELETE_SKU ||
+        q.toUpperCase() === 'ELIMINAR' ||
+        q.toUpperCase() === 'QUITAR'
+      ) {
+        toggleDeleteMode();
+        setSearchQuery('');
+        focusPosBarcodeInput();
+        return true;
+      }
+
+      // ── MODO QUITAR / RESTAR ACTIVO ──────────────────────────────────────────
+      if (awaitingDeleteScan) {
+        const qLower = q.toLowerCase();
+
+        // 1. Coincidencia directa con algún ítem ya presente en el carrito
+        const directCartItem = cart.find(
+          (item) =>
+            (item.barcode && item.barcode.toLowerCase() === qLower) ||
+            (item.sku && item.sku.toLowerCase() === qLower) ||
+            item.productId === q ||
+            item.name.toLowerCase() === qLower
+        );
+
+        if (directCartItem) {
+          deductOrRemoveFromCart({
+            productId: directCartItem.productId,
+            sku: directCartItem.sku,
+            barcode: directCartItem.barcode,
+            name: directCartItem.name,
+          });
+          setSearchQuery('');
+          focusPosBarcodeInput();
+          return true;
+        }
+
+        // 2. Balanza EAN-13
+        const scaleParsed = parseScaleBarcode(q, realScaleCatalog);
+        if (scaleParsed) {
+          const inCart = cart.find(
+            (i) =>
+              i.productId === scaleParsed.product.productId ||
+              i.sku.toLowerCase() === scaleParsed.product.sku.toLowerCase()
+          );
+          if (inCart) {
+            deductOrRemoveFromCart({
+              productId: scaleParsed.product.productId,
+              sku: scaleParsed.product.sku,
+              barcode: scaleParsed.product.barcode,
+              name: scaleParsed.product.name,
+            });
+            setSearchQuery('');
+            focusPosBarcodeInput();
+            return true;
+          }
+        }
+
+        // 3. Peso variable
+        if (isVariableWeightBarcode(q)) {
+          try {
+            const fromDb = await buscarProductoPorCodigoEscaneado(q);
+            if (fromDb) {
+              const ui = productoAUi(fromDb);
+              const inCart = cart.find(
+                (i) => i.productId === ui.id || i.sku.toLowerCase() === ui.sku.toLowerCase()
+              );
+              if (inCart) {
+                deductOrRemoveFromCart({
+                  productId: ui.id,
+                  sku: ui.sku,
+                  barcode: ui.barcode || '',
+                  name: ui.name,
+                });
+                setSearchQuery('');
+                focusPosBarcodeInput();
+                return true;
+              }
+            }
+          } catch {
+            // continuar
+          }
+        }
+
+        // 4. Catálogo de productos
+        const storeProducts = productosUi.map((p) => ({
+          id: p.id,
+          sku: p.sku,
+          barcode: p.barcode || '',
+          name: p.name,
+          price: p.salePrice,
+          cost: p.costPrice,
+          stock: p.currentStock,
+          unit: p.unit,
+          tax: p.tax,
+          image: p.image,
+          outOfStock: p.stockStatus === 'out',
+          plu: p.plu || '',
+          isWeighted:
+            p.isWeightProduct ||
+            p.saleType === 'weight' ||
+            p.saleType === 'both' ||
+            p.unit.toLowerCase().includes('lb') ||
+            p.unit.toLowerCase().includes('kg'),
+          saleType: p.saleType,
+        }));
+        const storeSkus = new Set(storeProducts.map((p) => p.sku.toLowerCase()));
+        const demoExtras = initialProducts
+          .filter((ip) => !storeSkus.has(ip.sku.toLowerCase()))
+          .map((ip) => ({
+            id: ip.id,
+            sku: ip.sku,
+            barcode: ip.barcode || '',
+            plu: ip.plu || '',
+            name: ip.name,
+            price: ip.salePrice,
+            cost: ip.costPrice,
+            stock: ip.currentStock,
+            unit: ip.unit,
+            tax: ip.tax,
+            image: ip.image,
+            outOfStock: ip.stockStatus === 'out',
+            isWeighted:
+              ip.isWeightProduct ||
+              ip.saleType === 'weight' ||
+              ip.saleType === 'both' ||
+              ip.unit.toLowerCase().includes('lb') ||
+              ip.unit.toLowerCase().includes('kg'),
+            saleType: ip.saleType,
+          }));
+        const allProds = [...storeProducts, ...demoExtras];
+
+        let matchedProd = allProds.find((p) => productMatchesScanCode(p, q));
+        if (!matchedProd) {
+          matchedProd = allProds.find((p) => p.name.toLowerCase() === qLower);
+        }
+        if (!matchedProd) {
+          matchedProd = allProds.find(
+            (p) =>
+              p.barcode.toLowerCase().includes(qLower) ||
+              p.sku.toLowerCase().includes(qLower) ||
+              (p.plu && p.plu.toLowerCase().includes(qLower)) ||
+              p.name.toLowerCase().includes(qLower)
+          );
+        }
+
+        if (matchedProd) {
+          const inCart = cart.find(
+            (i) => i.productId === matchedProd.id || i.sku.toLowerCase() === matchedProd.sku.toLowerCase()
+          );
+          if (inCart) {
+            deductOrRemoveFromCart({
+              productId: matchedProd.id,
+              sku: matchedProd.sku,
+              barcode: matchedProd.barcode,
+              name: matchedProd.name,
+            });
+            setSearchQuery('');
+            focusPosBarcodeInput();
+            return true;
+          } else {
+            toast.error(`"${matchedProd.name}" no está en el carrito de compras`);
+            return keepCodeSelected();
+          }
+        }
+
+        // 5. Combos
+        const activeCombos = combos.filter((c) => c.active);
+        let matchedCombo = activeCombos.find(
+          (c) => c.code.toLowerCase() === qLower || (c.barcode && c.barcode.toLowerCase() === qLower)
+        );
+        if (!matchedCombo) {
+          matchedCombo = activeCombos.find(
+            (c) =>
+              c.name.toLowerCase().includes(qLower) ||
+              c.code.toLowerCase().includes(qLower) ||
+              (c.barcode && c.barcode.toLowerCase() === qLower)
+          );
+        }
+
+        if (matchedCombo) {
+          const inCart = cart.find(
+            (i) => i.productId === matchedCombo.id || i.sku.toLowerCase() === matchedCombo.code.toLowerCase()
+          );
+          if (inCart) {
+            deductOrRemoveFromCart({
+              productId: matchedCombo.id,
+              sku: matchedCombo.code,
+              name: matchedCombo.name,
+            });
+            setSearchQuery('');
+            focusPosBarcodeInput();
+            return true;
+          } else {
+            toast.error(`El combo "${matchedCombo.name}" no está en el carrito`);
+            return keepCodeSelected();
+          }
+        }
+
+        toast.error(`No se encontró ningún producto con código: "${q}"`);
+        return keepCodeSelected();
+      }
 
       const addWeightedFromScale = (
         product: {
@@ -600,7 +875,17 @@ export default function POSTerminal() {
       toast.error(`No se encontró producto ni combo con SKU o código: "${q}"`);
       return keepCodeSelected();
     },
-    [addToCart, handleOpenScale, productosUi, combos, realScaleCatalog]
+    [
+      addToCart,
+      handleOpenScale,
+      productosUi,
+      combos,
+      realScaleCatalog,
+      awaitingDeleteScan,
+      cart,
+      deductOrRemoveFromCart,
+      toggleDeleteMode,
+    ]
   );
 
   useEffect(() => {
@@ -659,10 +944,22 @@ export default function POSTerminal() {
         setPaymentOpen(false);
         return;
       }
-      if (e.key === 'Escape' && paymentOpen) {
+      if (e.key === 'F4') {
         e.preventDefault();
-        setPaymentOpen(false);
+        toggleDeleteMode();
         return;
+      }
+      if (e.key === 'Escape') {
+        if (paymentOpen) {
+          e.preventDefault();
+          setPaymentOpen(false);
+          return;
+        }
+        if (awaitingDeleteScan) {
+          e.preventDefault();
+          handleCancelDeleteMode();
+          return;
+        }
       }
 
       // Ignore scans if user is editing inside another text field/modal
@@ -697,7 +994,16 @@ export default function POSTerminal() {
 
     window.addEventListener('keydown', onGlobalKeyDown);
     return () => window.removeEventListener('keydown', onGlobalKeyDown);
-  }, [handleSearchSubmit, orderCompleted, paymentOpen, clearCart, openPayment]);
+  }, [
+    handleSearchSubmit,
+    orderCompleted,
+    paymentOpen,
+    clearCart,
+    openPayment,
+    awaitingDeleteScan,
+    toggleDeleteMode,
+    handleCancelDeleteMode,
+  ]);
 
   const handleQuickCashSale = () => {
     if (cart.length === 0) {
@@ -833,6 +1139,7 @@ export default function POSTerminal() {
         total={total}
         heldCount={heldSales.length}
         awaitingDelete={awaitingDeleteScan}
+        onToggleDeleteMode={toggleDeleteMode}
         cashLabel={activeCash.label}
         cashierName={activeCash.cashier}
         isRemoteAdmin={isRemoteAdmin}
@@ -840,7 +1147,7 @@ export default function POSTerminal() {
         onHold={() => setHoldOpen(true)}
         onExpense={() => setExpenseOpen(true)}
         onReturn={() => setReturnOpen(true)}
-        onCancelDelete={() => setAwaitingDeleteScan(false)}
+        onCancelDelete={handleCancelDeleteMode}
         onSwitchCash={() => setCashSwitchOpen(true)}
         onOpenRegisterDetails={() => setRegisterDetailsOpen(true)}
         cashIsOpen={cashIsOpen}
@@ -874,6 +1181,9 @@ export default function POSTerminal() {
             onSearchChange={setSearchQuery}
             onSearchSubmit={handleSearchSubmit}
             onAddToCart={addToCart}
+            awaitingDelete={awaitingDeleteScan}
+            onToggleDeleteMode={toggleDeleteMode}
+            onCancelDelete={handleCancelDeleteMode}
           />
         </div>
 

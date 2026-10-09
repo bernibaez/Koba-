@@ -5,7 +5,6 @@ import ProductsTable from './ProductsTable';
 import ProductFormModal from './ProductFormModal';
 import PriceLabelModal from './PriceLabelModal';
 import ProductImportModal from './ProductImportModal';
-import ConfirmModal from '@/components/ui/ConfirmModal';
 import ModalShell from '@/components/ui/ModalShell';
 import { X, Package, Scale, ShoppingCart, Plus, FileSpreadsheet } from 'lucide-react';
 import { toast } from '@/lib/toast';
@@ -84,8 +83,7 @@ export default function ProductManagementScreen() {
   const [importIsScaleMode, setImportIsScaleMode] = useState(false);
   const [editProduct, setEditProduct] = useState<Product | null>(null);
   const [viewingProduct, setViewingProduct] = useState<Product | null>(null);
-  const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteBusyId, setDeleteBusyId] = useState<string | null>(null);
   const [sortField, setSortField] = useState<keyof Product>('name');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [labelModalProducts, setLabelModalProducts] = useState<Product[] | null>(null);
@@ -250,23 +248,22 @@ export default function ProductManagementScreen() {
     );
   };
 
-  const handleDelete = async () => {
-    if (!deleteId) return;
-    setDeleteLoading(true);
+  const handleDelete = async (id: string) => {
+    if (deleteBusyId) return;
+    setDeleteBusyId(id);
     try {
-      const name = products.find((p) => p.id === deleteId)?.name;
-      await eliminar(deleteId);
-      setDeleteId(null);
+      const name = products.find((p) => p.id === id)?.name;
+      await eliminar(id);
       setSelectedIds((prev) => {
         const n = new Set(prev);
-        n.delete(deleteId);
+        n.delete(id);
         return n;
       });
       toast.success(`Producto "${name}" eliminado`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Error al eliminar');
     } finally {
-      setDeleteLoading(false);
+      setDeleteBusyId(null);
     }
   };
 
@@ -362,7 +359,7 @@ export default function ProductManagementScreen() {
 
   return (
     <div className="space-y-6">
-      {!viewingProduct && !deleteId && (
+      {!viewingProduct && (
       <>
       <ProductsHeader
         onAdd={() => {
@@ -524,7 +521,7 @@ export default function ProductManagementScreen() {
         onSort={handleSort}
         onView={(p) => setViewingProduct(p)}
         onEdit={(p) => { setEditProduct(p); setAddModalOpen(true); }}
-        onDelete={(id) => setDeleteId(id)}
+        onDelete={(id) => handleDelete(id)}
         onToggleStatus={handleToggleStatus}
         onPrintLabel={(prods) => setLabelModalProducts(prods)}
         onUpdateProduct={async (p) => {
@@ -641,16 +638,6 @@ export default function ProductManagementScreen() {
           </>
         )}
       </ModalShell>
-
-      <ConfirmModal
-        open={!!deleteId}
-        onClose={() => setDeleteId(null)}
-        onConfirm={handleDelete}
-        title="Eliminar Producto"
-        description={`¿Estás seguro de que deseas eliminar "${products.find((p) => p.id === deleteId)?.name}"? Esta acción no se puede deshacer y eliminará todo el historial de inventario asociado.`}
-        confirmLabel="Eliminar Producto"
-        loading={deleteLoading}
-      />
     </div>
   );
 }
