@@ -1,7 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
-import { Toaster } from 'sileo';
+import { DynamicIslandToaster } from './components/DynamicIslandToaster';
 import { AuthProvider } from './context/AuthContext';
 import App from './App';
 import './styles/tailwind.css';
@@ -11,7 +11,7 @@ createRoot(document.getElementById('root')!).render(
     <BrowserRouter>
       <AuthProvider>
         <App />
-        <Toaster position="top-center" theme="light" />
+        <DynamicIslandToaster />
       </AuthProvider>
     </BrowserRouter>
   </StrictMode>
