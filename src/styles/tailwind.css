@@ -459,184 +459,201 @@
 }
 
 /* ==========================================================================
-   MINIMALIST TOAST OVERRIDES FOR SILEO
-   Rediseño minimalista inspirado en Stripe, Linear y Shopify
+   DYNAMIC ISLAND NOTIFICATIONS (ISLA DINÁMICA)
+   Diseño inspirado en Dynamic Island de Apple:
+   - Centrado en la parte superior de la pantalla
+   - Cápsula OLED profunda con morphing líquido
+   - Badges luminiscentes con halo de estado
+   - Tipografía nítida blanca y animación fluida
    ========================================================================== */
 
-/* Override Sileo viewport positioning */
-[data-sileo-viewport][data-position="top-right"] {
-  top: 1.5rem !important;
-  right: 1.5rem !important;
-  left: auto !important;
-  transform: none !important;
-  align-items: flex-end !important;
+/* Posicionamiento en el centro superior (Dynamic Island Notch) */
+[data-sileo-viewport][data-position="top-center"],
+[data-sileo-viewport][data-position^="top"] {
+  top: 1rem !important;
+  left: 50% !important;
+  right: auto !important;
+  transform: translateX(-50%) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  gap: 0.75rem !important;
+  z-index: 99999 !important;
+  pointer-events: none !important;
+  padding: 0 !important;
 }
 
-/* Override toast container - improved minimalist design */
+/* Contenedor del Toast estilo Cápsula Flotante */
 [data-sileo-toast] {
-  width: auto !important;
-  max-width: 400px !important;
-  min-width: 300px !important;
-  height: auto !important;
-  background: #ffffff !important;
-  border: 1px solid #e5e7eb !important;
-  border-radius: 16px !important;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.06) !important;
-  padding: 16px 20px !important;
-  cursor: default !important;
-  overflow: hidden !important;
+  pointer-events: auto !important;
+  cursor: pointer !important;
+  border: 0 !important;
+  background: transparent !important;
+  outline: none !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  filter: drop-shadow(0 20px 32px rgba(0, 0, 0, 0.55)) drop-shadow(0 4px 10px rgba(0, 0, 0, 0.35)) !important;
+  transition:
+    transform 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+    filter 0.35s ease !important;
 }
 
-/* Remove Sileo's SVG canvas/shapes */
+[data-sileo-toast]:hover {
+  transform: translateY(2px) scale(1.015) !important;
+  filter: drop-shadow(0 24px 38px rgba(0, 0, 0, 0.65)) drop-shadow(0 6px 14px rgba(0, 0, 0, 0.4)) !important;
+}
+
+/* El lienzo SVG que genera el cuerpo y morphing líquido */
 [data-sileo-canvas] {
-  display: none !important;
+  display: block !important;
+  pointer-events: none !important;
 }
 
-/* Override header - improved layout */
+/* Borde sutil de cristal líquido en el contorno de la cápsula */
+[data-sileo-pill],
+[data-sileo-body] {
+  stroke: rgba(255, 255, 255, 0.14) !important;
+  stroke-width: 1px !important;
+}
+
+/* Cabecera interna de la isla */
 [data-sileo-header] {
-  position: relative !important;
-  z-index: 1 !important;
+  position: absolute !important;
+  z-index: 20 !important;
   display: flex !important;
   align-items: center !important;
-  gap: 12px !important;
-  padding: 0 !important;
-  height: auto !important;
-  left: 0 !important;
-  transform: none !important;
-  max-width: none !important;
-  width: 100% !important;
-  margin-bottom: 4px !important;
+  padding: 0 14px !important;
+  height: 40px !important;
 }
 
-/* Override header inner */
+[data-sileo-header-stack] {
+  display: inline-flex !important;
+  align-items: center !important;
+  height: 100% !important;
+}
+
 [data-sileo-header-inner] {
-  display: flex !important;
+  display: inline-flex !important;
   align-items: center !important;
   gap: 10px !important;
-  white-space: normal !important;
-  opacity: 1 !important;
-  filter: none !important;
-  transform: none !important;
-  animation: none !important;
 }
 
-/* Override badge - improved icon styling */
+/* Ícono / Badge de estado — Cápsula circular luminiscente */
 [data-sileo-badge] {
-  height: 24px !important;
-  width: 24px !important;
+  width: 22px !important;
+  height: 22px !important;
+  border-radius: 9999px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
   flex-shrink: 0 !important;
-  border-radius: 8px !important;
-  background: transparent !important;
-  color: inherit !important;
-  padding: 0 !important;
+  transition: all 0.3s ease !important;
 }
 
-/* Override title - improved typography */
-[data-sileo-title] {
-  font-size: 15px !important;
-  line-height: 1.4 !important;
-  font-weight: 600 !important;
-  text-transform: none !important;
-  color: #1f2937 !important;
-  font-family: var(--font-sans) !important;
+[data-sileo-badge] svg {
+  width: 13px !important;
+  height: 13px !important;
+  stroke-width: 2.3 !important;
 }
 
-/* Override content area */
-[data-sileo-content] {
-  position: relative !important;
-  z-index: 1 !important;
-  width: 100% !important;
-  pointer-events: auto !important;
-  opacity: 1 !important;
-  left: 0 !important;
-  top: 0 !important;
-  margin-top: 6px !important;
-}
-
-[data-sileo-content]:not([data-visible="true"]) {
-  content-visibility: visible !important;
-}
-
-/* Override description - improved typography */
-[data-sileo-description] {
-  width: 100% !important;
-  text-align: left !important;
-  padding: 0 !important;
-  padding-left: 36px !important;
-  font-size: 14px !important;
-  line-height: 1.5 !important;
-  color: #6b7280 !important;
-  font-family: var(--font-sans) !important;
-  contain: none !important;
-  content-visibility: visible !important;
-}
-
-/* Override state colors - subtle icon colors only */
+/* Halo Success — Esmeralda vibrante */
 [data-sileo-badge][data-state="success"] {
-  color: #10b981 !important;
+  background: rgba(16, 185, 129, 0.22) !important;
+  color: #34d399 !important;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.45), inset 0 0 4px rgba(16, 185, 129, 0.3) !important;
 }
 
+/* Halo Error — Carmesí brillante */
 [data-sileo-badge][data-state="error"] {
-  color: #ef4444 !important;
+  background: rgba(239, 68, 68, 0.22) !important;
+  color: #f87171 !important;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.45), inset 0 0 4px rgba(239, 68, 68, 0.3) !important;
 }
 
+/* Halo Warning — Ámbar cálido */
 [data-sileo-badge][data-state="warning"] {
-  color: #f59e0b !important;
+  background: rgba(245, 158, 11, 0.22) !important;
+  color: #fbbf24 !important;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.45), inset 0 0 4px rgba(245, 158, 11, 0.3) !important;
 }
 
-[data-sileo-badge][data-state="info"] {
-  color: #3b82f6 !important;
+/* Halo Info & Loading — Celeste cian */
+[data-sileo-badge][data-state="info"],
+[data-sileo-badge][data-state="loading"] {
+  background: rgba(56, 189, 248, 0.22) !important;
+  color: #38bdf8 !important;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.45), inset 0 0 4px rgba(56, 189, 248, 0.3) !important;
 }
 
-[data-sileo-title][data-state] {
-  color: #1f2937 !important;
+/* Título de la Isla Dinámica — Blanco puro de alto contraste */
+[data-sileo-title] {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif !important;
+  font-size: 13.5px !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.015em !important;
+  color: #ffffff !important;
+  white-space: nowrap !important;
+  text-transform: none !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5) !important;
 }
 
-/* Override animations - smooth and elegant */
-[data-sileo-toast][data-ready="true"] {
-  transition:
-    transform 280ms cubic-bezier(0.16, 1, 0.3, 1),
-    opacity 280ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+/* Contenido expandido (Descripción secundaria) */
+[data-sileo-content] {
+  position: absolute !important;
+  left: 0 !important;
+  width: 100% !important;
+  top: 40px !important;
+  padding: 2px 16px 12px 16px !important;
 }
 
-/* Entry animation */
-[data-sileo-viewport][data-position^="top"]
-  [data-sileo-toast]:not([data-ready="true"]) {
-  transform: translateY(-12px) scale(0.96) !important;
-  opacity: 0 !important;
+[data-sileo-description] {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif !important;
+  font-size: 12.5px !important;
+  line-height: 1.45 !important;
+  color: rgba(255, 255, 255, 0.72) !important;
+  text-align: left !important;
+  padding: 0 4px !important;
 }
 
-/* Exit animation */
-[data-sileo-viewport][data-position^="top"]
-  [data-sileo-toast][data-ready="true"][data-exiting="true"] {
-  transform: translateY(-12px) scale(0.96) !important;
-  opacity: 0 !important;
-}
-
-/* Remove header animations */
-[data-sileo-header-inner][data-layer="current"] {
-  animation: none !important;
-}
-
-[data-sileo-header-inner][data-exiting="true"] {
-  animation: none !important;
-}
-
-/* Override button styling */
+/* Botón interactivo opcional dentro de la isla */
 [data-sileo-button] {
-  display: none !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  margin-top: 8px !important;
+  margin-left: 4px !important;
+  height: 26px !important;
+  padding: 0 12px !important;
+  border-radius: 9999px !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  background: rgba(255, 255, 255, 0.15) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  backdrop-filter: blur(8px) !important;
+  transition: all 0.2s ease !important;
 }
 
-/* Dark mode support */
-.dark [data-sileo-toast] {
-  background: #1e293b !important;
-  border-color: #334155 !important;
+[data-sileo-button]:hover {
+  background: rgba(255, 255, 255, 0.28) !important;
+  transform: scale(1.03) !important;
 }
 
-.dark [data-sileo-title] {
-  color: #f1f5f9 !important;
+/* Animaciones de entrada y salida estilo Dynamic Island (desde arriba hacia abajo) */
+[data-sileo-toast]:not([data-ready="true"]) {
+  transform: translateY(-22px) scale(0.86) !important;
+  opacity: 0 !important;
 }
 
-.dark [data-sileo-description] {
-  color: #94a3b8 !important;
+[data-sileo-toast][data-ready="true"] {
+  opacity: 1 !important;
+  transform: translateY(0) scale(1) !important;
 }
+
+[data-sileo-toast][data-ready="true"][data-exiting="true"] {
+  transform: translateY(-22px) scale(0.86) !important;
+  opacity: 0 !important;
+  transition:
+    transform 0.3s cubic-bezier(0.4, 0, 1, 1),
+    opacity 0.25s ease !important;
+}

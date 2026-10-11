@@ -31,13 +31,8 @@ const TYPE_LABELS: Record<string, string> = {
   info: 'Info',
 };
 
-/** Color del ícono por tipo */
-const TYPE_FILL: Record<string, string> = {
-  success: '#10b981', // esmeralda
-  error:   '#ef4444', // rojo
-  warning: '#f59e0b', // ámbar
-  info:    '#38bdf8', // celeste
-};
+/** Superficie OLED profunda característica de la Isla Dinámica */
+const DYNAMIC_ISLAND_BG = '#08090c';
 
 function toSileoOpts(
   type: 'success' | 'error' | 'warning' | 'info',
@@ -52,9 +47,10 @@ function toSileoOpts(
         : String(message ?? '');
 
   const base: SileoOptions = {
-    title: options?.description ? messageStr : messageStr,
+    title: messageStr,
     description: options?.description,
-    fill: TYPE_FILL[type],
+    fill: DYNAMIC_ISLAND_BG,
+    roundness: 20,
   };
 
   if (typeof options?.duration === 'number') base.duration = options.duration;
@@ -90,18 +86,26 @@ const toast = Object.assign(
       messages: PromiseMessages<T>,
     ) {
       const opts = {
-        loading: { title: messages.loading },
+        loading: {
+          title: messages.loading,
+          fill: DYNAMIC_ISLAND_BG,
+          roundness: 20,
+        },
         success: (data: T) => ({
           title:
             typeof messages.success === 'function'
               ? messages.success(data)
               : messages.success,
+          fill: DYNAMIC_ISLAND_BG,
+          roundness: 20,
         }),
         error: (err: unknown) => ({
           title:
             typeof messages.error === 'function'
               ? messages.error(err)
               : messages.error,
+          fill: DYNAMIC_ISLAND_BG,
+          roundness: 20,
         }),
       };
       return sileo.promise(promise, opts);
