@@ -29,3 +29,6 @@ coverage/
 .env
 .env.local
 .env.*.local
+
+# Local submodule / repos
+sileo/
