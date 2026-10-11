@@ -1,11 +1,12 @@
 /**
  * toast.ts — Adapter de notificaciones estilo Dynamic Island (Apple)
  *
- * Mantiene compatibilidad total con la API tradicional:
+ * Mantiene compatibilidad total con la API:
  *   toast.success('...')
  *   toast.error('...')
  *   toast.warning('...')
  *   toast.info('...')
+ *   toast.loading('...')
  *   toast.promise(...)
  *   toast.dismiss(...)
  */
@@ -38,6 +39,9 @@ type Listener = (toasts: ToastItem[]) => void;
 
 let toasts: ToastItem[] = [];
 const listeners = new Set<Listener>();
+const toastTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+const DEFAULT_DURATION = 3000; // Exactamente 3 segundos en pantalla según lo solicitado
 
 function notify() {
   listeners.forEach((listener) => listener([...toasts]));
@@ -51,19 +55,30 @@ export function subscribeToasts(listener: Listener): () => void {
   };
 }
 
-export function dismissToast(id: string | number) {
-  const strId = String(id);
-  const target = toasts.find((t) => t.id === strId);
-  if (!target) return;
+export function dismissToast(id?: string | number) {
+  if (toasts.length === 0) return;
 
-  // Iniciar animación de salida
+  const strId = id !== undefined ? String(id) : toasts[toasts.length - 1]?.id;
+  const target = toasts.find((t) => t.id === strId);
+  if (!target || target.exiting) return;
+
+  // Limpiar timer activo si existe
+  const activeTimer = toastTimers.get(strId);
+  if (activeTimer) {
+    clearTimeout(activeTimer);
+    toastTimers.delete(strId);
+  }
+
+  // Activar animación de repliegue hacia el notch (island-exit)
   target.exiting = true;
   notify();
 
+  // Remover de pantalla una vez terminada la animación física (220ms)
   setTimeout(() => {
     toasts = toasts.filter((t) => t.id !== strId);
+    toastTimers.delete(strId);
     notify();
-  }, 220);
+  }, 230);
 }
 
 function addToast(type: ToastType, message: unknown, options?: ToastOptions): string {
@@ -75,24 +90,35 @@ function addToast(type: ToastType, message: unknown, options?: ToastOptions): st
         ? message.message
         : String(message ?? '');
 
+  // Limpiar timers previos para evitar solapamientos
+  for (const [prevId, timer] of toastTimers.entries()) {
+    clearTimeout(timer);
+    toastTimers.delete(prevId);
+  }
+
+  const duration = typeof options?.duration === 'number' ? options.duration : DEFAULT_DURATION;
+
   const newToast: ToastItem = {
     id,
     type,
     title,
     description: options?.description,
-    duration: typeof options?.duration === 'number' ? options.duration : 2200, // 2.2s snappy duration
+    duration,
     exiting: false,
   };
 
-  // Reemplazar o agregar
-  const existingIdx = toasts.findIndex((t) => t.id === id);
-  if (existingIdx >= 0) {
-    toasts[existingIdx] = newToast;
-  } else {
-    toasts.push(newToast);
+  // La Isla Dinámica enfoca la notificación actual (morphing continuo)
+  toasts = [newToast];
+  notify();
+
+  // Programar desaparición automática a los 3 segundos (excepto si es 'loading')
+  if (type !== 'loading') {
+    const timer = setTimeout(() => {
+      dismissToast(id);
+    }, duration);
+    toastTimers.set(id, timer);
   }
 
-  notify();
   return id;
 }
 
@@ -109,30 +135,26 @@ const toast = Object.assign(
       promise: Promise<T> | (() => Promise<T>),
       messages: PromiseMessages<T>
     ) {
-      const id = addToast('loading', messages.loading, { duration: 60000 });
+      const id = addToast('loading', messages.loading);
       const p = typeof promise === 'function' ? promise() : promise;
 
       return p
         .then((data) => {
           const successMsg =
             typeof messages.success === 'function' ? messages.success(data) : messages.success;
-          addToast('success', successMsg, { id, duration: 2200 });
+          addToast('success', successMsg, { id, duration: 3000 });
           return data;
         })
         .catch((err) => {
           const errorMsg =
             typeof messages.error === 'function' ? messages.error(err) : messages.error;
-          addToast('error', errorMsg, { id, duration: 2600 });
+          addToast('error', errorMsg, { id, duration: 3000 });
           throw err;
         });
     },
 
     dismiss: (id?: string | number) => {
-      if (id !== undefined) {
-        dismissToast(id);
-      } else if (toasts.length > 0) {
-        dismissToast(toasts[toasts.length - 1].id);
-      }
+      dismissToast(id);
     },
   }
 );

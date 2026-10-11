@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Check,
   AlertTriangle,
@@ -10,53 +10,18 @@ import { subscribeToasts, dismissToast, type ToastItem } from '../lib/toast';
 
 export const DynamicIslandToaster: React.FC = () => {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
-  const [isHovered, setIsHovered] = useState(false);
-  const timerMapRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
 
   useEffect(() => {
     return subscribeToasts((updated) => {
-      setToasts([...updated]);
+      setToasts(updated);
     });
   }, []);
 
-  // Control de timers con pausa en hover
-  useEffect(() => {
-    if (isHovered) {
-      // Pausar auto-dismiss mientras el usuario pasa el cursor por encima
-      for (const timer of timerMapRef.current.values()) {
-        clearTimeout(timer);
-      }
-      timerMapRef.current.clear();
-      return;
-    }
-
-    // Programar auto-dismiss para cada notificación activa
-    toasts.forEach((t) => {
-      if (t.exiting || t.type === 'loading') return;
-      if (timerMapRef.current.has(t.id)) return;
-
-      const duration = t.duration ?? 2200; // Snappy Apple Dynamic Island timing (2.2s)
-      const timer = setTimeout(() => {
-        dismissToast(t.id);
-      }, duration);
-
-      timerMapRef.current.set(t.id, timer);
-    });
-
-    return () => {
-      for (const [id, timer] of timerMapRef.current.entries()) {
-        if (!toasts.some((t) => t.id === id)) {
-          clearTimeout(timer);
-          timerMapRef.current.delete(id);
-        }
-      }
-    };
-  }, [toasts, isHovered]);
-
   if (toasts.length === 0) return null;
 
-  // Mostramos la notificación más reciente (estilo Dynamic Island Notch de Apple)
   const currentToast = toasts[toasts.length - 1];
+  if (!currentToast) return null;
+
   const hasDesc = Boolean(currentToast.description);
 
   return (
@@ -67,8 +32,6 @@ export const DynamicIslandToaster: React.FC = () => {
       <div
         key={currentToast.id}
         onClick={() => dismissToast(currentToast.id)}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
         className={`pointer-events-auto cursor-pointer select-none relative group overflow-hidden
           bg-black text-white
           border border-white/15 border-t-white/30
