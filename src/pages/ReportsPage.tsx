@@ -18,6 +18,9 @@ import {
   ClipboardList,
   Sliders,
   Tag,
+  Boxes,
+  Calendar,
+  CheckCircle2,
 } from 'lucide-react';
 import ProfitLossReport from './reports/ProfitLossReport';
 import ProductProfitReport from './reports/ProductProfitReport';
@@ -34,7 +37,6 @@ import FiscalDGIIReport from './reports/FiscalDGIIReport';
 import CashierReport from './reports/CashierReport';
 import CombosReport from './reports/CombosReport';
 import { exportReportPdf } from './reports/exportReportPdf';
-import { Boxes } from 'lucide-react';
 
 type ReportId =
   | 'profit-loss'
@@ -53,20 +55,20 @@ type ReportId =
   | 'cashier';
 
 const reportTypes: { id: ReportId; label: string; icon: React.ReactNode; color: string }[] = [
-  { id: 'profit-loss', label: 'Ganancias y Pérdidas', icon: <TrendingUp size={18} />, color: 'text-success' },
-  { id: 'product-profit', label: 'Ganancias por Producto', icon: <Tag size={18} />, color: 'text-primary' },
-  { id: 'combos', label: 'Informe de Combos', icon: <Boxes size={18} />, color: 'text-purple-600' },
-  { id: 'sales', label: 'Ventas', icon: <ShoppingCart size={18} />, color: 'text-info' },
-  { id: 'purchases', label: 'Compras', icon: <ShoppingBag size={18} />, color: 'text-warning' },
-  { id: 'stock', label: 'Inventario', icon: <Package size={18} />, color: 'text-primary' },
-  { id: 'stock-detail', label: 'Informe Stock', icon: <ClipboardList size={18} />, color: 'text-primary' },
-  { id: 'adjustments', label: 'Informe Ajustes', icon: <Sliders size={18} />, color: 'text-warning' },
-  { id: 'expenses', label: 'Gastos', icon: <DollarSign size={18} />, color: 'text-danger' },
-  { id: 'customers', label: 'Clientes', icon: <Users size={18} />, color: 'text-info' },
-  { id: 'suppliers', label: 'Proveedores', icon: <Truck size={18} />, color: 'text-warning' },
-  { id: 'agents', label: 'Agentes', icon: <UserCheck size={18} />, color: 'text-primary' },
-  { id: 'fiscal', label: 'Informe Fiscal DGII', icon: <FileText size={18} />, color: 'text-warning' },
-  { id: 'cashier', label: 'Informe de Caja', icon: <Wallet size={18} />, color: 'text-success' },
+  { id: 'profit-loss', label: 'Ganancias y Pérdidas', icon: <TrendingUp className="w-4 h-4" />, color: 'text-emerald-500' },
+  { id: 'product-profit', label: 'Ganancias por Producto', icon: <Tag className="w-4 h-4" />, color: 'text-blue-500' },
+  { id: 'combos', label: 'Informe de Combos', icon: <Boxes className="w-4 h-4" />, color: 'text-purple-500' },
+  { id: 'sales', label: 'Ventas y Facturación', icon: <ShoppingCart className="w-4 h-4" />, color: 'text-indigo-500' },
+  { id: 'purchases', label: 'Compras y Recepciones', icon: <ShoppingBag className="w-4 h-4" />, color: 'text-amber-500' },
+  { id: 'stock', label: 'Valoración Inventario', icon: <Package className="w-4 h-4" />, color: 'text-blue-500' },
+  { id: 'stock-detail', label: 'Informe Stock Detallado', icon: <ClipboardList className="w-4 h-4" />, color: 'text-cyan-500' },
+  { id: 'adjustments', label: 'Ajustes y Mermas', icon: <Sliders className="w-4 h-4" />, color: 'text-amber-500' },
+  { id: 'expenses', label: 'Gastos Operativos', icon: <DollarSign className="w-4 h-4" />, color: 'text-rose-500' },
+  { id: 'customers', label: 'Clientes y Cobros', icon: <Users className="w-4 h-4" />, color: 'text-blue-500' },
+  { id: 'suppliers', label: 'Proveedores y Pagos', icon: <Truck className="w-4 h-4" />, color: 'text-amber-500' },
+  { id: 'agents', label: 'Vendedores y Comisiones', icon: <UserCheck className="w-4 h-4" />, color: 'text-indigo-500' },
+  { id: 'fiscal', label: 'Informe Fiscal DGII 606/607', icon: <FileText className="w-4 h-4" />, color: 'text-purple-500' },
+  { id: 'cashier', label: 'Cuadre y Cajas', icon: <Wallet className="w-4 h-4" />, color: 'text-emerald-500' },
 ];
 
 function renderReport(id: ReportId, dateFrom: string, dateTo: string) {
@@ -127,115 +129,158 @@ export default function ReportsPage() {
   };
 
   return (
-    <AppLayout>
-      <div className="space-y-6 slide-up">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <AppLayout fullWidth>
+      <div className="apple-scope space-y-4">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[var(--border)] pb-4">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Informes</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Análisis y reportes del negocio — {activeLabel}
+            <div className="flex items-center gap-2 mb-1">
+              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-[var(--surface2)] text-[var(--ink2)] border border-[var(--border)]">
+                <BarChart2 className="w-3.5 h-3.5 text-blue-500" />
+                Inteligencia de Negocios & Auditoría
+              </span>
+            </div>
+            <h1 className="text-2xl font-bold tracking-tight text-[var(--ink)]">
+              Informes & Análisis
+            </h1>
+            <p className="text-xs text-[var(--ink2)] mt-0.5">
+              Estados financieros, rentabilidad por SKU, informes fiscales DGII y conciliación de cajas.
             </p>
           </div>
-          <div className="flex gap-2">
-            <button type="button" className="btn-secondary flex items-center gap-2" onClick={() => window.print()}>
-              <Printer size={16} />
-              Imprimir
+
+          <div className="flex items-center gap-2 flex-wrap print:hidden">
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[var(--ink)] hover:bg-[var(--surface2)] transition-colors cursor-pointer"
+              onClick={() => window.print()}
+            >
+              <Printer className="w-3.5 h-3.5 text-[var(--ink2)]" />
+              <span>Imprimir</span>
             </button>
             <button
               type="button"
-              className="btn-primary flex items-center gap-2"
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-[var(--primary)] text-[var(--primary-contrast,#ffffff)] hover:opacity-90 transition-opacity cursor-pointer shadow-xs"
               onClick={() => {
                 void exportReportPdf(activeReport, activeLabel, dateFrom, dateTo);
               }}
             >
-              <Download size={16} />
-              Exportar PDF
+              <Download className="w-4 h-4" />
+              <span>Exportar PDF</span>
             </button>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 print:block">
-          <div className="card p-3 space-y-1 h-fit print:hidden">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1">
-              Tipo de Informe
+        {/* Content Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 print:block">
+          {/* Report Categories Navigation */}
+          <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-2 space-y-0.5 h-fit print:hidden shadow-xs">
+            <p className="text-[10px] font-bold text-[var(--ink3)] uppercase tracking-wider px-2.5 py-2">
+              Tipos de Informes
             </p>
-            {reportTypes.map((r) => (
-              <button
-                key={r.id}
-                type="button"
-                onClick={() => {
-                  setActiveReport(r.id);
-                  setGenerated(true);
-                }}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all text-left ${
-                  activeReport === r.id
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
-                }`}
-              >
-                <span className={activeReport === r.id ? 'text-primary' : r.color}>{r.icon}</span>
-                {r.label}
-              </button>
-            ))}
+            {reportTypes.map((r) => {
+              const isActive = activeReport === r.id;
+              return (
+                <button
+                  key={r.id}
+                  type="button"
+                  onClick={() => {
+                    setActiveReport(r.id);
+                    setGenerated(true);
+                  }}
+                  className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-medium transition-colors text-left cursor-pointer ${
+                    isActive
+                      ? 'bg-[var(--primary)] text-[var(--primary-contrast,#ffffff)] font-semibold shadow-xs'
+                      : 'text-[var(--ink2)] hover:text-[var(--ink)] hover:bg-[var(--surface2)]'
+                  }`}
+                >
+                  <span className={isActive ? 'text-[var(--primary-contrast,#ffffff)]' : r.color}>
+                    {r.icon}
+                  </span>
+                  <span className="truncate">{r.label}</span>
+                </button>
+              );
+            })}
           </div>
 
-          <div className="lg:col-span-3 space-y-4 print:w-full print:p-0">
-            {/* Cabecera formal de reporte para impresión */}
+          {/* Active Report Viewport */}
+          <div className="lg:col-span-3 space-y-3.5 print:w-full print:p-0">
+            {/* Header for Printed Format */}
             <div className="hidden print:block pb-4 mb-4 border-b border-black text-center">
               <h2 className="text-base font-black uppercase text-black">MERCATO SUPERMERCADO S.R.L.</h2>
               <h3 className="text-sm font-bold uppercase text-black">{activeLabel}</h3>
               <p className="text-xs text-black/70">
-                Período: {dateFrom || 'Inicio'} al {dateTo || 'Actualidad'} · Generado el {new Date().toLocaleDateString('es-DO')}
+                Período: {dateFrom || 'Inicio'} al {dateTo || 'Actualidad'} · Generado el{' '}
+                {new Date().toLocaleDateString('es-DO')}
               </p>
             </div>
 
-            <div className="card p-4 flex flex-wrap gap-3 items-end print:hidden">
-              <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1 block">Desde</label>
+            {/* Filter Toolbar */}
+            <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-3 flex flex-wrap gap-3 items-end print:hidden shadow-xs">
+              <div className="flex-1 min-w-[130px]">
+                <label className="block text-[11px] font-medium text-[var(--ink2)] mb-1">
+                  Fecha Desde
+                </label>
                 <input
                   type="date"
-                  className="input-field"
+                  className="w-full px-2.5 py-1.5 text-xs bg-[var(--surface2)] border border-[var(--border)] rounded-lg text-[var(--ink)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)] font-mono"
                   value={dateFrom}
                   onChange={(e) => setDateFrom(e.target.value)}
                 />
               </div>
-              <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1 block">Hasta</label>
+
+              <div className="flex-1 min-w-[130px]">
+                <label className="block text-[11px] font-medium text-[var(--ink2)] mb-1">
+                  Fecha Hasta
+                </label>
                 <input
                   type="date"
-                  className="input-field"
+                  className="w-full px-2.5 py-1.5 text-xs bg-[var(--surface2)] border border-[var(--border)] rounded-lg text-[var(--ink)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)] font-mono"
                   value={dateTo}
                   onChange={(e) => setDateTo(e.target.value)}
                 />
               </div>
-              <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1 block">Sucursal</label>
+
+              <div className="flex-1 min-w-[150px]">
+                <label className="block text-[11px] font-medium text-[var(--ink2)] mb-1">
+                  Sucursal
+                </label>
                 <select
-                  className="input-field"
+                  className="w-full px-2.5 py-1.5 text-xs bg-[var(--surface2)] border border-[var(--border)] rounded-lg text-[var(--ink)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)] cursor-pointer"
                   value={branch}
                   onChange={(e) => setBranch(e.target.value)}
                 >
                   <option value="all">Todas las sucursales</option>
+                  <option value="main">Sucursal Principal</option>
                 </select>
               </div>
-              <button type="button" className="btn-primary flex items-center gap-2" onClick={handleGenerate}>
-                <Filter size={16} />
-                Generar
+
+              <button
+                type="button"
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-[var(--primary)] text-[var(--primary-contrast,#ffffff)] hover:opacity-90 transition-opacity cursor-pointer shadow-xs"
+                onClick={handleGenerate}
+              >
+                <Filter className="w-3.5 h-3.5" />
+                <span>Actualizar Informe</span>
               </button>
             </div>
 
-            <div className="flex items-center gap-2 text-xs text-muted-foreground px-1">
-              <BarChart2 size={14} />
-              Periodo: {dateFrom} → {dateTo} · Datos en vivo desde Supabase
+            <div className="flex items-center gap-2 text-[11px] text-[var(--ink3)] px-1">
+              <BarChart2 className="w-3.5 h-3.5" />
+              <span>
+                Reporte: <strong>{activeLabel}</strong> · Rango: {dateFrom} → {dateTo} · Conectado en tiempo real
+              </span>
             </div>
 
-            {generated ? (
-              renderReport(activeReport, dateFrom, dateTo)
-            ) : (
-              <div className="card p-12 text-center text-muted-foreground">
-                Selecciona un periodo y pulsa <strong>Generar</strong> para ver el informe.
-              </div>
-            )}
+            {/* Report Content */}
+            <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 shadow-xs">
+              {generated ? (
+                renderReport(activeReport, dateFrom, dateTo)
+              ) : (
+                <div className="p-12 text-center text-xs text-[var(--ink2)]">
+                  Selecciona un periodo y pulsa <strong>Actualizar Informe</strong> para ver los datos.
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

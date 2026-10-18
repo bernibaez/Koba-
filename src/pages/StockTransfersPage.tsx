@@ -1,42 +1,42 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
-import { Plus, Search, Download, Eye } from 'lucide-react';
 import { exportTableToPdf } from '@/lib/exportPdf';
 import { toast } from '@/lib/toast';
 import {
   crearTransferencia,
   obtenerSucursales,
   obtenerTransferencias,
-  type SucursalUi,
-  type TransferenciaUi,
 } from '@/services/transferencias.service';
+import type { TransferenciaUi, SucursalUi, TransferStatusFilter } from './stock-transfers/types';
+import { TRANSFER_STATUS_CONFIG } from './stock-transfers/types';
 import { useProductos } from '@/hooks/useProductos';
+import type { ProductItem } from '@/lib/productStore';
 
-const statusMap: Record<
-  TransferenciaUi['estado'],
-  { label: string; cls: string }
-> = {
-  pendiente: { label: 'Pendiente', cls: 'badge-warning' },
-  en_transito: { label: 'En tránsito', cls: 'badge-info' },
-  recibida: { label: 'Recibida', cls: 'badge-success' },
-  anulada: { label: 'Anulada', cls: 'badge-danger' },
-};
+import StockTransfersHeader from './stock-transfers/components/StockTransfersHeader';
+import StockTransfersMetrics from './stock-transfers/components/StockTransfersMetrics';
+import StockTransfersToolbar from './stock-transfers/components/StockTransfersToolbar';
+import StockTransfersTable from './stock-transfers/components/StockTransfersTable';
+import StockTransferFormModal from './stock-transfers/components/StockTransferFormModal';
+import StockTransferDetailDrawer from './stock-transfers/components/StockTransferDetailDrawer';
 
 export default function StockTransfersPage() {
-  const [search, setSearch] = useState('');
-  const [showForm, setShowForm] = useState(false);
   const [transfers, setTransfers] = useState<TransferenciaUi[]>([]);
   const [sucursales, setSucursales] = useState<SucursalUi[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
 
-  const [origenId, setOrigenId] = useState('');
-  const [destinoId, setDestinoId] = useState('');
-  const [motivo, setMotivo] = useState('');
-  const [productoId, setProductoId] = useState('');
-  const [cantidad, setCantidad] = useState('1');
+  // Filters
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<TransferStatusFilter>('all');
+
+  // Modals & Drawers
+  const [showModal, setShowModal] = useState(false);
+  const [selectedTransfer, setSelectedTransfer] = useState<TransferenciaUi | null>(null);
 
   const { productosUi } = useProductos({ pagina: 1, limite: 300, estado: 'activo' });
+
+  const catalogProducts = useMemo(() => {
+    return (productosUi || []) as ProductItem[];
+  }, [productosUi]);
 
   const reload = async () => {
     setLoading(true);
@@ -56,61 +56,65 @@ export default function StockTransfersPage() {
     void reload();
   }, []);
 
+  // Global hotkey "T" to open new transfer modal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const activeEl = document.activeElement;
+      const isInput =
+        activeEl?.tagName === 'INPUT' ||
+        activeEl?.tagName === 'TEXTAREA' ||
+        activeEl?.tagName === 'SELECT' ||
+        (activeEl as HTMLElement)?.isContentEditable;
+
+      if ((e.key === 't' || e.key === 'T') && !isInput && !showModal && !selectedTransfer) {
+        e.preventDefault();
+        setShowModal(true);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showModal, selectedTransfer]);
+
   const filtered = useMemo(() => {
-    const q = search.toLowerCase();
-    return transfers.filter(
-      (t) =>
+    const q = search.toLowerCase().trim();
+    return transfers.filter((t) => {
+      const matchSearch =
+        !q ||
         t.codigo.toLowerCase().includes(q) ||
         t.origen.toLowerCase().includes(q) ||
-        t.destino.toLowerCase().includes(q)
-    );
-  }, [transfers, search]);
+        t.destino.toLowerCase().includes(q) ||
+        (t.motivo && t.motivo.toLowerCase().includes(q));
 
-  const mesActual = new Date().toISOString().slice(0, 7);
-  const delMes = transfers.filter((t) => t.fecha.startsWith(mesActual));
-  const pendientes = transfers.filter((t) => t.estado === 'pendiente' || t.estado === 'en_transito').length;
-  const completadas = transfers.filter((t) => t.estado === 'recibida').length;
+      const matchStatus = statusFilter === 'all' || t.estado === statusFilter;
+      return matchSearch && matchStatus;
+    });
+  }, [transfers, search, statusFilter]);
 
-  const closeForm = () => {
-    setShowForm(false);
-    setOrigenId('');
-    setDestinoId('');
-    setMotivo('');
-    setProductoId('');
-    setCantidad('1');
-  };
-
-  const handleCreate = async () => {
-    const qty = Number(cantidad);
-    if (!origenId || !destinoId) {
-      toast.error('Selecciona origen y destino');
-      return;
-    }
-    if (!productoId || !qty || qty <= 0) {
-      toast.error('Selecciona un producto y cantidad válida');
-      return;
-    }
-    setSaving(true);
+  const handleCreate = async (params: {
+    sucursal_origen_id: string;
+    sucursal_destino_id: string;
+    motivo?: string;
+    producto_id: string;
+    cantidad: number;
+  }) => {
     try {
       await crearTransferencia({
-        sucursal_origen_id: origenId,
-        sucursal_destino_id: destinoId,
-        motivo: motivo.trim() || undefined,
-        lineas: [{ producto_id: productoId, cantidad: qty }],
+        sucursal_origen_id: params.sucursal_origen_id,
+        sucursal_destino_id: params.sucursal_destino_id,
+        motivo: params.motivo,
+        lineas: [{ producto_id: params.producto_id, cantidad: params.cantidad }],
       });
-      toast.success('Transferencia registrada');
-      closeForm();
+      toast.success('Transferencia registrada exitosamente');
       await reload();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'No se pudo crear la transferencia');
-    } finally {
-      setSaving(false);
+      throw e;
     }
   };
 
   const handleExportPdf = () => {
     exportTableToPdf({
-      title: 'Transferencias de Stock',
+      title: 'Reporte de Transferencias de Stock',
       filename: 'transferencias-stock',
       headers: ['Código', 'Origen', 'Destino', 'Fecha', 'Ítems', 'Estado'],
       rows: filtered.map((t) => [
@@ -118,217 +122,65 @@ export default function StockTransfersPage() {
         t.origen,
         t.destino,
         t.fecha,
-        t.items,
-        statusMap[t.estado]?.label ?? t.estado,
+        `${t.items} items`,
+        TRANSFER_STATUS_CONFIG[t.estado]?.label ?? t.estado,
       ]),
+      landscape: true,
     });
   };
 
-  if (showForm) {
-    return (
-      <AppLayout>
-        <div className="space-y-6 slide-up">
-          <div className="flex items-center justify-between gap-4 flex-wrap">
-            <div>
-              <h1 className="text-2xl font-bold text-foreground">Nueva Transferencia</h1>
-              <p className="text-sm text-muted-foreground mt-1">
-                Mueve productos entre sucursales registradas en la base de datos
-              </p>
-            </div>
-            <button type="button" onClick={closeForm} className="btn-secondary" disabled={saving}>
-              ← Volver a Transferencias
-            </button>
-          </div>
-
-          <div className="card p-5 sm:p-6 space-y-4 max-w-2xl">
-            {sucursales.length < 2 && (
-              <p className="text-sm text-amber-600 dark:text-amber-400">
-                Necesitas al menos 2 sucursales activas en Supabase para crear transferencias.
-              </p>
-            )}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1 block">Sucursal Origen *</label>
-                <select className="input-field" value={origenId} onChange={(e) => setOrigenId(e.target.value)}>
-                  <option value="">Seleccionar…</option>
-                  {sucursales.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.nombre}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1 block">Sucursal Destino *</label>
-                <select className="input-field" value={destinoId} onChange={(e) => setDestinoId(e.target.value)}>
-                  <option value="">Seleccionar…</option>
-                  {sucursales.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.nombre}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="sm:col-span-2">
-                <label className="text-xs font-medium text-muted-foreground mb-1 block">Producto *</label>
-                <select className="input-field" value={productoId} onChange={(e) => setProductoId(e.target.value)}>
-                  <option value="">Seleccionar producto…</option>
-                  {productosUi.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} ({p.sku}) — stock {p.currentStock}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1 block">Cantidad *</label>
-                <input
-                  type="number"
-                  min={1}
-                  className="input-field"
-                  value={cantidad}
-                  onChange={(e) => setCantidad(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1 block">Motivo</label>
-                <input
-                  className="input-field"
-                  value={motivo}
-                  onChange={(e) => setMotivo(e.target.value)}
-                  placeholder="Opcional"
-                />
-              </div>
-            </div>
-            <div className="flex justify-end gap-2 pt-2 border-t border-border">
-              <button type="button" className="btn-secondary" disabled={saving} onClick={closeForm}>
-                Cancelar
-              </button>
-              <button type="button" className="btn-primary" disabled={saving} onClick={handleCreate}>
-                {saving ? 'Guardando…' : 'Crear Transferencia'}
-              </button>
-            </div>
-          </div>
-        </div>
-      </AppLayout>
-    );
-  }
+  const hasFilters = Boolean(search) || statusFilter !== 'all';
 
   return (
-    <AppLayout>
-      <div className="space-y-6 slide-up">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">Transferencia de Stock</h1>
-            <p className="text-sm text-muted-foreground mt-1">Mueve productos entre sucursales</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setShowForm(true)}
-            className="btn-primary flex items-center gap-2 w-fit"
-          >
-            <Plus size={16} />
-            Nueva Transferencia
-          </button>
-        </div>
+    <AppLayout fullWidth>
+      <div className="apple-scope space-y-4">
+        {/* Header */}
+        <StockTransfersHeader
+          onNewTransfer={() => setShowModal(true)}
+          transfersCount={transfers.length}
+        />
 
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-          <div className="card p-4">
-            <p className="text-xs text-muted-foreground">Transferencias del mes</p>
-            <p className="text-2xl font-bold text-foreground mt-1">{delMes.length}</p>
-          </div>
-          <div className="card p-4">
-            <p className="text-xs text-muted-foreground">Pendientes</p>
-            <p className="text-2xl font-bold text-warning mt-1">{pendientes}</p>
-          </div>
-          <div className="card p-4">
-            <p className="text-xs text-muted-foreground">Completadas</p>
-            <p className="text-2xl font-bold text-success mt-1">{completadas}</p>
-          </div>
-        </div>
+        {/* Metrics */}
+        <StockTransfersMetrics transfers={transfers} />
 
-        <div className="card p-4 flex flex-col sm:flex-row gap-3">
-          <div className="relative flex-1">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <input
-              className="input-field pl-9"
-              placeholder="Buscar transferencias..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-          <button type="button" onClick={handleExportPdf} className="btn-secondary flex items-center gap-2">
-            <Download size={16} />
-            Exportar PDF
-          </button>
-        </div>
+        {/* Toolbar */}
+        <StockTransfersToolbar
+          search={search}
+          onSearchChange={setSearch}
+          statusFilter={statusFilter}
+          onStatusFilterChange={setStatusFilter}
+          onExportPdf={handleExportPdf}
+          filteredCount={filtered.length}
+        />
 
-        <div className="card overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border bg-secondary/50">
-                  <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Código</th>
-                  <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Origen</th>
-                  <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Destino</th>
-                  <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden md:table-cell">
-                    Fecha
-                  </th>
-                  <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden md:table-cell">
-                    Productos
-                  </th>
-                  <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Estado</th>
-                  <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? (
-                  <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">
-                      Cargando…
-                    </td>
-                  </tr>
-                ) : filtered.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">
-                      No hay transferencias registradas en la base de datos
-                    </td>
-                  </tr>
-                ) : (
-                  filtered.map((t, i) => (
-                    <tr
-                      key={t.id}
-                      className={`border-b border-border hover:bg-secondary/30 transition-colors ${
-                        i % 2 === 0 ? '' : 'bg-secondary/10'
-                      }`}
-                    >
-                      <td className="px-4 py-3 font-mono text-primary font-medium">{t.codigo}</td>
-                      <td className="px-4 py-3 text-foreground">{t.origen}</td>
-                      <td className="px-4 py-3 text-foreground">{t.destino}</td>
-                      <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">{t.fecha}</td>
-                      <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">{t.items} items</td>
-                      <td className="px-4 py-3">
-                        <span className={statusMap[t.estado].cls}>{statusMap[t.estado].label}</span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-end gap-1">
-                          <button
-                            type="button"
-                            className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
-                            title={t.motivo || 'Sin motivo'}
-                          >
-                            <Eye size={14} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        {/* Table */}
+        <StockTransfersTable
+          transfers={filtered}
+          isLoading={loading && transfers.length === 0}
+          onSelect={(t) => setSelectedTransfer(t)}
+          hasFilters={hasFilters}
+          onClearFilters={() => {
+            setSearch('');
+            setStatusFilter('all');
+          }}
+        />
       </div>
+
+      {/* Modal: Nueva Transferencia */}
+      <StockTransferFormModal
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        onSubmit={handleCreate}
+        sucursales={sucursales}
+        productos={catalogProducts}
+      />
+
+      {/* Drawer: Detalle de Transferencia */}
+      <StockTransferDetailDrawer
+        transfer={selectedTransfer}
+        isOpen={Boolean(selectedTransfer)}
+        onClose={() => setSelectedTransfer(null)}
+      />
     </AppLayout>
   );
 }

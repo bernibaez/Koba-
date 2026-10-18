@@ -1,125 +1,70 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
-import { Search, Download, RotateCcw, FileSpreadsheet, Eye, Printer, X, Check, XCircle, Clock, Shield, CheckCircle, BellRing } from 'lucide-react';
-import type { PosReturn, PosReturnStatus } from '@/lib/posStore';
+import type { PosReturn, ReturnStatusFilter } from './returns-history/types';
+import {
+  mapDevolucionToPosReturn,
+  RETURN_METHOD_LABEL,
+  RETURN_TYPE_LABEL,
+  RETURN_STATUS_CONFIG,
+} from './returns-history/types';
 import { exportTableToPdf, exportTableToExcel, formatMoneyPdf } from '@/lib/exportPdf';
 import { logAuditEvent } from '@/lib/auditStore';
 import { toast } from '@/lib/toast';
 import { useDevoluciones } from '@/hooks/useDevoluciones';
-import type { DevolucionConDetalle } from '@/services/devoluciones.service';
 import { useAuth } from '@/context/AuthContext';
 import PrintableReturnReceipt from '@/components/printing/PrintableReturnReceipt';
 
-const methodLabel: Record<PosReturn['method'], string> = {
-  cash: 'Efectivo',
-  card: 'Tarjeta',
-  credit_note: 'Nota de crédito',
-  exchange: 'Cambio',
-};
-
-const typeLabel: Record<PosReturn['type'], string> = {
-  partial: 'Parcial',
-  full: 'Total',
-};
-
-function mapDevolucionToPosReturn(d: DevolucionConDetalle): PosReturn {
-  const creado = new Date(d.creado_en);
-  const methodMap: Record<string, PosReturn['method']> = {
-    efectivo: 'cash',
-    tarjeta: 'card',
-    nota_credito: 'credit_note',
-    cambio: 'exchange',
-  };
-  const statusMap: Record<string, PosReturnStatus> = {
-    pendiente: 'pending',
-    aprobada: 'approved',
-    rechazada: 'rejected',
-  };
-  return {
-    id: d.id,
-    code: d.codigo,
-    saleCode: d.numero_factura ?? '—',
-    customer: d.cliente_nombre ?? 'Cliente',
-    date: creado.toISOString().slice(0, 10),
-    time: creado.toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit' }),
-    user: d.cajero_nombre ?? 'Cajero',
-    cashier: d.cajero_nombre ?? 'Caja',
-    products: (d.items ?? []).map((i) => ({
-      sku: i.sku ?? '',
-      name: i.nombre_item,
-      qty: i.cantidad,
-      price: i.precio_unitario,
-      subtotal: i.cantidad * i.precio_unitario,
-    })),
-    items: (d.items ?? []).map((i) => ({
-      sku: i.sku ?? '',
-      name: i.nombre_item,
-      qty: i.cantidad,
-      price: i.precio_unitario,
-      subtotal: i.cantidad * i.precio_unitario,
-    })),
-    total: Number(d.monto_total),
-    reason: d.motivo,
-    method: methodMap[d.metodo_reembolso] ?? 'cash',
-    type: d.tipo === 'total' ? 'full' : 'partial',
-    status: statusMap[d.estado] ?? 'pending',
-    reviewedBy: d.revisado_por_nombre,
-    rejectionReason: d.motivo_rechazo ?? undefined,
-  };
-}
+import ReturnsHistoryHeader from './returns-history/components/ReturnsHistoryHeader';
+import ReturnsHistoryMetrics from './returns-history/components/ReturnsHistoryMetrics';
+import ReturnsHistoryToolbar from './returns-history/components/ReturnsHistoryToolbar';
+import ReturnsHistoryTable from './returns-history/components/ReturnsHistoryTable';
+import ReturnDetailDrawer from './returns-history/components/ReturnDetailDrawer';
+import ReturnRejectModal from './returns-history/components/ReturnRejectModal';
 
 export default function ReturnsHistoryPage() {
   const { user: authUser } = useAuth();
   const { devoluciones, loading, refetch, procesarEstado, procesando } = useDevoluciones({
     limite: 200,
   });
-  const returns = useMemo(() => devoluciones.map(mapDevolucionToPosReturn), [devoluciones]);
-  const [selectedReturn, setSelectedReturn] = useState<PosReturn | null>(null);
-  const [statusTab, setStatusTab] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
-  const [autoModalDismissed, setAutoModalDismissed] = useState(false);
 
-  // Rejection modal state
+  const returns = useMemo(() => devoluciones.map(mapDevolucionToPosReturn), [devoluciones]);
+
+  // Modals & Drawers
+  const [selectedReturn, setSelectedReturn] = useState<PosReturn | null>(null);
   const [rejectingReturn, setRejectingReturn] = useState<PosReturn | null>(null);
-  const [rejectReasonInput, setRejectReasonInput] = useState('No cumple con las políticas de devolución de tienda');
 
   // Filters
-  const [date, setDate] = useState('');
-  const [user, setUser] = useState('');
-  const [customer, setCustomer] = useState('');
-  const [cashier, setCashier] = useState('');
-  const [product, setProduct] = useState('');
+  const [statusTab, setStatusTab] = useState<ReturnStatusFilter>('all');
+  const [dateFilter, setDateFilter] = useState('');
+  const [search, setSearch] = useState('');
 
   const pendingReturns = useMemo(() => returns.filter((r) => r.status === 'pending'), [returns]);
   const pendingCount = pendingReturns.length;
-  const approvedCount = returns.filter((r) => r.status === 'approved').length;
-  const rejectedCount = returns.filter((r) => r.status === 'rejected').length;
-
-  // Auto-open modal for pending returns upon entering screen
-  useEffect(() => {
-    if (pendingReturns.length > 0 && !selectedReturn && !autoModalDismissed) {
-      setSelectedReturn(pendingReturns[0]);
-    }
-  }, [pendingReturns, selectedReturn, autoModalDismissed]);
 
   const filtered = useMemo(() => {
-    const q = product.toLowerCase().trim();
+    const q = search.toLowerCase().trim();
     return returns.filter((r) => {
       if (statusTab !== 'all' && (r.status || 'approved') !== statusTab) return false;
-      if (date && r.date !== date) return false;
-      if (user && !r.user.toLowerCase().includes(user.toLowerCase())) return false;
-      if (customer && !r.customer.toLowerCase().includes(customer.toLowerCase())) return false;
-      if (cashier && !r.cashier.toLowerCase().includes(cashier.toLowerCase())) return false;
+      if (dateFilter && r.date !== dateFilter) return false;
       if (q) {
+        const matchCode = r.code.toLowerCase().includes(q);
+        const matchSale = r.saleCode.toLowerCase().includes(q);
+        const matchCustomer = r.customer.toLowerCase().includes(q);
+        const matchUser = r.user.toLowerCase().includes(q);
+        const matchCashier = r.cashier.toLowerCase().includes(q);
         const matchProduct = r.products.some(
-          (p) => p.name.toLowerCase().includes(q) || (p.sku?.toLowerCase().includes(q) ?? false)
+          (p) =>
+            p.name.toLowerCase().includes(q) ||
+            (p.sku && p.sku.toLowerCase().includes(q))
         );
-        if (!matchProduct) return false;
+        if (!matchCode && !matchSale && !matchCustomer && !matchUser && !matchCashier && !matchProduct) {
+          return false;
+        }
       }
       return true;
     });
-  }, [returns, statusTab, date, user, customer, cashier, product]);
+  }, [returns, statusTab, dateFilter, search]);
 
-  const totalAmount = filtered.reduce((s, r) => s + r.total, 0);
   const reviewerName = authUser?.name || authUser?.email || 'Administrador';
 
   const handleApproveReturn = async (r: PosReturn) => {
@@ -137,72 +82,57 @@ export default function ReturnsHistoryPage() {
       toast.success(`Devolución ${r.code} APROBADA exitosamente`);
       await refetch();
       if (selectedReturn?.id === r.id) {
-        setSelectedReturn((prev) => (prev ? { ...prev, status: 'approved', reviewedBy: reviewerName } : null));
+        setSelectedReturn((prev) =>
+          prev ? { ...prev, status: 'approved', reviewedBy: reviewerName } : null
+        );
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'No se pudo aprobar la devolución');
     }
   };
 
-  const handleOpenRejectModal = (r: PosReturn) => {
-    setRejectingReturn(r);
-    setRejectReasonInput('No cumple con las políticas de devolución de tienda');
-  };
-
-  const handleConfirmRejection = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!rejectingReturn) return;
-
-    const reasonText = rejectReasonInput.trim() || 'Rechazada por administración';
-
+  const handleConfirmRejection = async (r: PosReturn, reasonText: string) => {
     try {
-      await procesarEstado(rejectingReturn.id, 'rechazada', reasonText);
+      await procesarEstado(r.id, 'rechazada', reasonText);
       logAuditEvent({
         user: reviewerName,
         role: 'Administrador',
         action: 'Devolución',
         module: 'Devoluciones',
-        details: `Devolución ${rejectingReturn.code} (Factura: ${rejectingReturn.saleCode}) por RD$ ${rejectingReturn.total.toLocaleString()} RECHAZADA. Motivo: ${reasonText}`,
-        before: { id: rejectingReturn.id, status: rejectingReturn.status },
-        after: { id: rejectingReturn.id, status: 'rejected', reviewedBy: reviewerName, rejectionReason: reasonText },
+        details: `Devolución ${r.code} (Factura: ${r.saleCode}) por RD$ ${r.total.toLocaleString()} RECHAZADA. Motivo: ${reasonText}`,
+        before: { id: r.id, status: r.status },
+        after: {
+          id: r.id,
+          status: 'rejected',
+          reviewedBy: reviewerName,
+          rejectionReason: reasonText,
+        },
       });
-      toast.error(`Devolución ${rejectingReturn.code} RECHAZADA`);
+      toast.error(`Devolución ${r.code} RECHAZADA`);
       await refetch();
-      if (selectedReturn?.id === rejectingReturn.id) {
+      if (selectedReturn?.id === r.id) {
         setSelectedReturn((prev) =>
-          prev ? { ...prev, status: 'rejected', reviewedBy: reviewerName, rejectionReason: reasonText } : null
+          prev
+            ? {
+                ...prev,
+                status: 'rejected',
+                reviewedBy: reviewerName,
+                rejectionReason: reasonText,
+              }
+            : null
         );
       }
-      setRejectingReturn(null);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'No se pudo rechazar la devolución');
+      throw err;
     }
   };
 
-  const renderStatusBadge = (status?: PosReturnStatus) => {
-    const currentStatus = status || 'approved';
-    if (currentStatus === 'pending') {
-      return (
-        <span className="badge-warning inline-flex items-center gap-1 font-bold text-xs">
-          <Clock size={12} />
-          Pendiente
-        </span>
-      );
-    }
-    if (currentStatus === 'approved') {
-      return (
-        <span className="badge-success inline-flex items-center gap-1 font-bold text-xs">
-          <CheckCircle size={12} />
-          Aprobada
-        </span>
-      );
-    }
-    return (
-      <span className="badge-danger inline-flex items-center gap-1 font-bold text-xs">
-        <XCircle size={12} />
-        Rechazada
-      </span>
-    );
+  const handlePrint = (r: PosReturn) => {
+    setSelectedReturn(r);
+    setTimeout(() => {
+      window.print();
+    }, 100);
   };
 
   const handleExportPdf = () => {
@@ -210,7 +140,17 @@ export default function ReturnsHistoryPage() {
       title: 'Historial de Devoluciones de Mercancía',
       filename: 'historial-devoluciones',
       headers: [
-        'Código', 'Venta Ref.', 'Cliente', 'Fecha', 'Hora', 'Usuario', 'Estado', 'Total', 'Motivo', 'Método', 'Tipo',
+        'Código',
+        'Venta Ref.',
+        'Cliente',
+        'Fecha',
+        'Hora',
+        'Usuario',
+        'Estado',
+        'Total',
+        'Motivo',
+        'Método',
+        'Tipo',
       ],
       rows: filtered.map((r) => [
         r.code,
@@ -222,8 +162,8 @@ export default function ReturnsHistoryPage() {
         r.status || 'approved',
         formatMoneyPdf(r.total),
         r.reason,
-        methodLabel[r.method],
-        typeLabel[r.type],
+        RETURN_METHOD_LABEL[r.method] || r.method,
+        RETURN_TYPE_LABEL[r.type] || r.type,
       ]),
       landscape: true,
     });
@@ -234,7 +174,18 @@ export default function ReturnsHistoryPage() {
       title: 'Historial de Devoluciones de Mercancía',
       filename: 'historial-devoluciones',
       headers: [
-        'Código', 'Factura Original', 'Cliente', 'Fecha', 'Hora', 'Usuario', 'Estado', 'Productos Devueltos', 'Total Reembolso', 'Motivo', 'Método Reembolso', 'Tipo Devolución'
+        'Código',
+        'Factura Original',
+        'Cliente',
+        'Fecha',
+        'Hora',
+        'Usuario',
+        'Estado',
+        'Productos Devueltos',
+        'Total Reembolso',
+        'Motivo',
+        'Método Reembolso',
+        'Tipo Devolución',
       ],
       rows: filtered.map((r) => [
         r.code,
@@ -247,472 +198,98 @@ export default function ReturnsHistoryPage() {
         r.products.map((p) => `${p.name} (Cant: ${p.qty})`).join('; '),
         r.total,
         r.reason,
-        methodLabel[r.method],
-        typeLabel[r.type],
+        RETURN_METHOD_LABEL[r.method] || r.method,
+        RETURN_TYPE_LABEL[r.type] || r.type,
       ]),
     });
   };
 
+  const hasFilters = Boolean(search) || statusTab !== 'all' || Boolean(dateFilter);
+
   return (
-    <AppLayout>
-      <div className="space-y-6 slide-up">
+    <AppLayout fullWidth>
+      {/* COMPROBANTE OFICIAL PARA IMPRESIÓN (SOLO VISIBLE EN PRINT) */}
+      {selectedReturn && (
+        <div className="hidden print:block printable-document">
+          <PrintableReturnReceipt
+            data={{
+              code: selectedReturn.code,
+              originalInvoiceCode: selectedReturn.saleCode,
+              date: selectedReturn.date,
+              customerName: selectedReturn.customer,
+              cashierName: selectedReturn.cashier,
+              reason: selectedReturn.reason,
+              items: (selectedReturn.items ?? selectedReturn.products ?? []).map((p) => ({
+                name: p.name,
+                qty: p.qty,
+                price: p.price,
+                subtotal: p.subtotal ?? p.qty * p.price,
+              })),
+              totalAmount: selectedReturn.total,
+            }}
+          />
+        </div>
+      )}
+
+      {/* VISTA PRINCIPAL (OCULTA AL IMPRIMIR) */}
+      <div className="print:hidden apple-scope space-y-4">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-              <RotateCcw className="text-danger" size={24} />
-              Gestión y Aprobación de Devoluciones
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Revisa, aprueba o rechaza solicitudes de devolución enviadas por cajeros
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <button type="button" onClick={handleExportPdf} className="btn-secondary flex items-center gap-1.5">
-              <Download size={16} /> PDF
-            </button>
-            <button type="button" onClick={handleExportExcel} className="btn-secondary flex items-center gap-1.5">
-              <FileSpreadsheet size={16} /> Excel
-            </button>
-          </div>
-        </div>
+        <ReturnsHistoryHeader
+          pendingCount={pendingCount}
+          onFilterPending={() => setStatusTab('pending')}
+        />
 
-        {/* Pending Banner Alert if there are pending returns */}
-        {pendingCount > 0 && (
-          <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center text-amber-600 dark:text-amber-400 flex-shrink-0">
-                <Clock size={22} />
-              </div>
-              <div>
-                <p className="font-extrabold text-foreground text-sm">
-                  {pendingCount} Solicitud(es) de Devolución Pendiente(s) de Aprobación
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Cajeros han solicitado devoluciones que requieren tu revisión como Administrador.
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setStatusTab('pending')}
-              className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs transition-all flex items-center gap-1.5 shadow-sm"
-            >
-              <Shield size={14} />
-              Ver Pendientes ({pendingCount})
-            </button>
-          </div>
-        )}
+        {/* Metrics */}
+        <ReturnsHistoryMetrics returns={returns} />
 
-        {/* Stats */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="card p-4">
-            <p className="text-xs text-muted-foreground font-semibold">Devoluciones Filtradas</p>
-            <p className="text-2xl font-bold text-foreground mt-1">{filtered.length}</p>
-          </div>
-          <div className="card p-4 border-amber-500/20 bg-amber-500/5">
-            <p className="text-xs text-muted-foreground font-semibold">Pendientes de Admin</p>
-            <p className="text-2xl font-black text-amber-600 dark:text-amber-400 mt-1">{pendingCount}</p>
-          </div>
-          <div className="card p-4">
-            <p className="text-xs text-muted-foreground font-semibold">Monto Filtrado Reembolsado</p>
-            <p className="text-2xl font-bold text-danger mt-1">
-              RD$ {totalAmount.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-            </p>
-          </div>
-          <div className="card p-4">
-            <p className="text-xs text-muted-foreground font-semibold">Total Histórico</p>
-            <p className="text-2xl font-bold text-info mt-1">{returns.length} registros</p>
-          </div>
-        </div>
-
-        {/* Status Filter Tabs */}
-        <div className="flex gap-2 border-b border-border pb-3 overflow-x-auto">
-          {[
-            { id: 'all', label: 'Todas', count: returns.length },
-            { id: 'pending', label: 'Pendientes por Aprobar', count: pendingCount, highlight: true },
-            { id: 'approved', label: 'Aprobadas', count: approvedCount },
-            { id: 'rejected', label: 'Rechazadas', count: rejectedCount },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setStatusTab(tab.id as typeof statusTab)}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
-                statusTab === tab.id
-                  ? 'bg-primary text-primary-foreground shadow-sm'
-                  : 'bg-card border border-border text-foreground hover:bg-secondary'
-              }`}
-            >
-              {tab.label}
-              <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-extrabold ${
-                tab.highlight && tab.count > 0 ? 'bg-amber-500 text-white' : 'bg-secondary text-muted-foreground'
-              }`}>
-                {tab.count}
-              </span>
-            </button>
-          ))}
-        </div>
-
-        {/* Filters */}
-        <div className="card p-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-            <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">Fecha</label>
-              <input type="date" className="input-field" value={date} onChange={(e) => setDate(e.target.value)} />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">Usuario</label>
-              <input className="input-field" placeholder="Usuario..." value={user} onChange={(e) => setUser(e.target.value)} />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">Cliente</label>
-              <input className="input-field" placeholder="Cliente..." value={customer} onChange={(e) => setCustomer(e.target.value)} />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">Cajero</label>
-              <input className="input-field" placeholder="Cajero..." value={cashier} onChange={(e) => setCashier(e.target.value)} />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">Producto</label>
-              <div className="relative">
-                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground z-10" />
-                <input
-                  className="input-field !pl-9"
-                  placeholder="Buscar producto..."
-                  value={product}
-                  onChange={(e) => setProduct(e.target.value)}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
+        {/* Toolbar */}
+        <ReturnsHistoryToolbar
+          search={search}
+          onSearchChange={setSearch}
+          statusFilter={statusTab}
+          onStatusFilterChange={setStatusTab}
+          dateFilter={dateFilter}
+          onDateFilterChange={setDateFilter}
+          onExportPdf={handleExportPdf}
+          onExportExcel={handleExportExcel}
+          filteredCount={filtered.length}
+        />
 
         {/* Table */}
-        <div className="card overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border bg-secondary/50">
-                  <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Código</th>
-                  <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Factura Ref.</th>
-                  <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Cliente</th>
-                  <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden md:table-cell">Fecha/Hora</th>
-                  <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden lg:table-cell">Usuario</th>
-                  <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Estado</th>
-                  <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Total</th>
-                  <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden md:table-cell">Motivo</th>
-                  <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Acciones Admin</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? (
-                  <tr>
-                    <td colSpan={9} className="px-4 py-12 text-center text-muted-foreground">
-                      Cargando devoluciones…
-                    </td>
-                  </tr>
-                ) : filtered.length === 0 ? (
-                  <tr>
-                    <td colSpan={9} className="px-4 py-12 text-center text-muted-foreground">
-                      <RotateCcw size={28} className="mx-auto mb-2 opacity-40" />
-                      No hay devoluciones registradas con estos filtros
-                    </td>
-                  </tr>
-                ) : (
-                  filtered.map((r, i) => (
-                    <tr
-                      key={r.id}
-                      onClick={() => setSelectedReturn(r)}
-                      className={`border-b border-border hover:bg-secondary/30 transition-colors cursor-pointer ${i % 2 === 0 ? '' : 'bg-secondary/10'} ${
-                        r.status === 'pending' ? 'bg-amber-500/5' : ''
-                      }`}
-                    >
-                      <td className="px-4 py-3 font-mono text-danger font-bold">{r.code}</td>
-                      <td className="px-4 py-3 font-mono text-primary font-semibold">{r.saleCode}</td>
-                      <td className="px-4 py-3 font-medium text-foreground">{r.customer}</td>
-                      <td className="px-4 py-3 text-muted-foreground hidden md:table-cell text-xs">
-                        {r.date} {r.time}
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell text-xs">{r.user}</td>
-                      <td className="px-4 py-3">{renderStatusBadge(r.status)}</td>
-                      <td className="px-4 py-3 text-right font-bold text-foreground">
-                        RD$ {r.total.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground hidden md:table-cell text-xs">{r.reason}</td>
-                      <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-end gap-1.5">
-                          {r.status === 'pending' ? (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => void handleApproveReturn(r)}
-                                disabled={procesando}
-                                className="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20 text-xs font-bold flex items-center gap-1 transition-all shadow-xs disabled:opacity-50"
-                                title="Aprobar Devolución"
-                              >
-                                <Check size={14} /> Aprobar
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleOpenRejectModal(r)}
-                                className="px-2.5 py-1 rounded-lg bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/30 hover:bg-rose-500/20 text-xs font-bold flex items-center gap-1 transition-all shadow-xs"
-                                title="Rechazar Devolución"
-                              >
-                                <XCircle size={14} /> Rechazar
-                              </button>
-                            </>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => setSelectedReturn(r)}
-                              className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
-                              title="Ver detalles y comprobante"
-                            >
-                              <Eye size={16} />
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Modal: Viewing Detail / Receipt & Admin Approval Dialog */}
-        {selectedReturn && (
-          <div
-            className="dialog-inline-host print:p-0 print:bg-white print:static"
-            onClick={() => {
-              setSelectedReturn(null);
-              setAutoModalDismissed(true);
-            }}
-          >
-            {/* COMPROBANTE OFICIAL PARA IMPRESIÓN (SOLO VISIBLE EN PRINT) */}
-            <div className="hidden print:block printable-document">
-              <PrintableReturnReceipt
-                data={{
-                  code: selectedReturn.code,
-                  originalInvoiceCode: selectedReturn.saleCode,
-                  date: selectedReturn.date,
-                  customerName: selectedReturn.customer,
-                  cashierName: selectedReturn.cashier,
-                  reason: selectedReturn.reason,
-                  items: (selectedReturn.items ?? selectedReturn.products ?? []).map((p) => ({
-                    name: p.name,
-                    qty: p.qty,
-                    price: p.price,
-                    subtotal: p.subtotal ?? p.qty * p.price,
-                  })),
-                  totalAmount: selectedReturn.total,
-                }}
-              />
-            </div>
-
-            {/* VISTA INTERACTIVA WEB (OCULTA EN PRINT) */}
-            <div className="print:hidden card w-full max-w-lg p-6 space-y-4 shadow-2xl border-amber-500/30" onClick={(e) => e.stopPropagation()}>
-              <div className="flex items-center justify-between border-b border-border pb-3">
-                <div className="flex items-center gap-2">
-                  {selectedReturn.status === 'pending' ? (
-                    <BellRing size={22} className="text-amber-500" />
-                  ) : (
-                    <RotateCcw size={20} className="text-danger" />
-                  )}
-                  <h3 className="font-extrabold text-foreground text-lg">
-                    {selectedReturn.status === 'pending' ? '¡Nueva Solicitud de Devolución!' : `Comprobante Devolución ${selectedReturn.code}`}
-                  </h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedReturn(null);
-                    setAutoModalDismissed(true);
-                  }}
-                  className="p-1 text-muted-foreground hover:text-foreground"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-
-              {/* Status Alert Banner */}
-              {selectedReturn.status === 'pending' ? (
-                <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3.5 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-extrabold text-xs">
-                      <Shield size={16} />
-                      <span>Solicitud de Devolución por Cajero</span>
-                    </div>
-                    {renderStatusBadge(selectedReturn.status)}
-                  </div>
-                  <p className="text-xs text-foreground/90 font-medium leading-relaxed">
-                    El cajero <strong>{selectedReturn.user}</strong> (<i>{selectedReturn.cashier}</i>) solicita tu aprobación como Administrador para procesar una devolución por <strong className="text-danger">RD$ {selectedReturn.total.toLocaleString()}</strong> sobre la factura <strong>{selectedReturn.saleCode}</strong>.
-                  </p>
-                </div>
-              ) : (
-                <div className="flex justify-between items-center bg-secondary/30 rounded-xl p-3 text-xs">
-                  <span className="text-muted-foreground font-semibold">Estado de la Solicitud:</span>
-                  {renderStatusBadge(selectedReturn.status)}
-                </div>
-              )}
-
-              <div className="space-y-2.5 text-sm">
-                {selectedReturn.reviewedBy && (
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="text-muted-foreground">Revisado por Admin:</span>
-                    <span className="font-bold text-foreground">{selectedReturn.reviewedBy}</span>
-                  </div>
-                )}
-
-                {selectedReturn.rejectionReason && (
-                  <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-3 text-xs text-rose-600 dark:text-rose-400">
-                    <strong>Motivo del Rechazo:</strong> {selectedReturn.rejectionReason}
-                  </div>
-                )}
-
-                <div className="grid grid-cols-2 gap-2 text-xs bg-secondary/20 rounded-xl p-3">
-                  <div><span className="text-muted-foreground block">Factura Ref:</span><span className="font-bold text-primary font-mono">{selectedReturn.saleCode}</span></div>
-                  <div><span className="text-muted-foreground block">Cliente:</span><span className="font-semibold">{selectedReturn.customer}</span></div>
-                  <div><span className="text-muted-foreground block">Fecha / Hora:</span><span>{selectedReturn.date} {selectedReturn.time}</span></div>
-                  <div><span className="text-muted-foreground block">Cajero Solicitante:</span><span>{selectedReturn.user} ({selectedReturn.cashier})</span></div>
-                  <div><span className="text-muted-foreground block">Motivo Declarado:</span><span>{selectedReturn.reason}</span></div>
-                  <div><span className="text-muted-foreground block">Método Reembolso:</span><span className="font-semibold">{methodLabel[selectedReturn.method]}</span></div>
-                </div>
-
-                <div className="pt-1">
-                  <p className="text-xs font-bold text-muted-foreground uppercase mb-1">Productos a Devolver</p>
-                  <div className="bg-secondary/40 rounded-xl p-3 space-y-1.5 text-xs max-h-36 overflow-y-auto">
-                    {selectedReturn.products.map((p, idx) => (
-                      <div key={idx} className="flex justify-between items-center border-b border-border/40 pb-1 last:border-none">
-                        <div>
-                          <span className="font-semibold">{p.name}</span>
-                          <span className="text-muted-foreground font-mono block text-[11px]">{p.sku} · Cantidad: {p.qty}</span>
-                        </div>
-                        <span className="font-bold">RD$ {(p.qty * p.price).toLocaleString()}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="flex justify-between border-t border-border pt-2 font-bold text-base">
-                  <span>Total Reembolso:</span>
-                  <span className="text-danger font-mono text-lg">RD$ {selectedReturn.total.toLocaleString('es-DO', { minimumFractionDigits: 2 })}</span>
-                </div>
-              </div>
-
-              {/* Modal Actions */}
-              <div className="pt-3 border-t border-border">
-                {selectedReturn.status === 'pending' ? (
-                  <div className="flex gap-2.5">
-                    <button
-                      type="button"
-                      onClick={() => handleOpenRejectModal(selectedReturn)}
-                      className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm"
-                    >
-                      <XCircle size={16} /> Rechazar Devolución
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void handleApproveReturn(selectedReturn)}
-                      disabled={procesando}
-                      className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm disabled:opacity-50"
-                    >
-                      <CheckCircle size={16} /> Aprobar Devolución
-                    </button>
-                  </div>
-                ) : (
-                  <div className="flex justify-end gap-2">
-                    <button type="button" onClick={() => window.print()} className="btn-secondary flex items-center gap-1.5 text-xs py-2">
-                      <Printer size={14} /> Imprimir Comprobante
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedReturn(null);
-                        setAutoModalDismissed(true);
-                      }}
-                      className="btn-primary text-xs py-2"
-                    >
-                      Cerrar
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Modal: Rejection Reason Custom Dialog */}
-        {rejectingReturn && (
-          <div className="dialog-inline-host" onClick={() => setRejectingReturn(null)}>
-            <form onSubmit={handleConfirmRejection} className="card w-full max-w-md p-6 space-y-4 shadow-2xl border-rose-500/30" onClick={(e) => e.stopPropagation()}>
-              <div className="flex items-center justify-between border-b border-border pb-3">
-                <div className="flex items-center gap-2 text-rose-600 dark:text-rose-400">
-                  <XCircle size={24} />
-                  <h3 className="font-extrabold text-foreground text-lg">Rechazar Solicitud de Devolución</h3>
-                </div>
-                <button type="button" onClick={() => setRejectingReturn(null)} className="p-1 text-muted-foreground hover:text-foreground">
-                  <X size={18} />
-                </button>
-              </div>
-
-              <p className="text-xs text-muted-foreground">
-                Por favor especifica o selecciona el motivo por el cual estás rechazando la devolución <strong className="font-mono text-foreground">{rejectingReturn.code}</strong> (<strong className="text-danger">RD$ {rejectingReturn.total.toLocaleString()}</strong>).
-              </p>
-
-              <div>
-                <label className="text-xs font-bold text-muted-foreground mb-1.5 block">Motivo del Rechazo</label>
-                <textarea
-                  rows={3}
-                  required
-                  autoFocus
-                  className="input-field text-xs py-2 w-full focus:ring-rose-500"
-                  placeholder="Escribe el motivo del rechazo..."
-                  value={rejectReasonInput}
-                  onChange={(e) => setRejectReasonInput(e.target.value)}
-                />
-              </div>
-
-              {/* Quick Option Pills */}
-              <div>
-                <span className="text-[11px] font-semibold text-muted-foreground block mb-1.5">Opciones rápidas de motivo:</span>
-                <div className="flex flex-wrap gap-1.5">
-                  {[
-                    'No cumple políticas de tienda',
-                    'Producto deteriorado o usado',
-                    'Fuera del plazo permitido (30 días)',
-                    'Falta comprobante fiscal original',
-                    'Error en la solicitud del cajero',
-                  ].map((preset) => (
-                    <button
-                      key={preset}
-                      type="button"
-                      onClick={() => setRejectReasonInput(preset)}
-                      className={`text-[11px] px-2.5 py-1 rounded-lg border transition-all ${
-                        rejectReasonInput === preset
-                          ? 'bg-rose-600 text-white border-rose-700 font-bold shadow-xs'
-                          : 'bg-secondary/50 text-foreground border-border hover:bg-secondary'
-                      }`}
-                    >
-                      {preset}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-3 border-t border-border">
-                <button type="button" className="btn-secondary text-xs py-2" onClick={() => setRejectingReturn(null)}>
-                  Cancelar
-                </button>
-                <button type="submit" className="btn-primary text-xs py-2 bg-rose-600 hover:bg-rose-700 text-white flex items-center gap-1.5 font-bold">
-                  <XCircle size={15} /> Confirmar Rechazo
-                </button>
-              </div>
-            </form>
-          </div>
-        )}
+        <ReturnsHistoryTable
+          returns={filtered}
+          isLoading={loading && returns.length === 0}
+          onSelect={(r) => setSelectedReturn(r)}
+          onApprove={handleApproveReturn}
+          onReject={(r) => setRejectingReturn(r)}
+          isProcessing={procesando}
+          hasFilters={hasFilters}
+          onClearFilters={() => {
+            setSearch('');
+            setStatusTab('all');
+            setDateFilter('');
+          }}
+        />
       </div>
+
+      {/* Drawer: Detalle y Aprobación de Devolución */}
+      <ReturnDetailDrawer
+        item={selectedReturn}
+        isOpen={Boolean(selectedReturn)}
+        onClose={() => setSelectedReturn(null)}
+        onPrint={handlePrint}
+        onApprove={handleApproveReturn}
+        onReject={(r) => setRejectingReturn(r)}
+        isProcessing={procesando}
+      />
+
+      {/* Modal: Rechazo de Devolución con Motivo */}
+      <ReturnRejectModal
+        item={rejectingReturn}
+        isOpen={Boolean(rejectingReturn)}
+        onClose={() => setRejectingReturn(null)}
+        onConfirm={handleConfirmRejection}
+      />
     </AppLayout>
   );
 }

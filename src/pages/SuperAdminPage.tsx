@@ -645,8 +645,8 @@ export default function SuperAdminPage() {
   }
 
   return (
-    <AppLayout>
-      <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
+    <AppLayout fullWidth>
+      <div className="apple-scope space-y-4">
         {/* ========================================================================= */}
         {/* VISTA 1: REGISTRAR NUEVO NEGOCIO (REEMPLAZA LA PÁGINA)                    */}
         {/* ========================================================================= */}
