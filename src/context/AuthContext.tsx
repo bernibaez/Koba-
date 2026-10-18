@@ -85,6 +85,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  useEffect(() => {
+    const handleSubChanged = () => {
+      const stored = getStoredUser();
+      if (stored) {
+        setUser((prev) => (prev ? { ...prev, ...stored } : stored));
+      }
+    };
+    window.addEventListener('koba_subscription_config_changed', handleSubChanged);
+    return () => window.removeEventListener('koba_subscription_config_changed', handleSubChanged);
+  }, []);
+
   const login = useCallback(async (username: string, password: string) => {
     const result = await iniciarSesion(username, password);
     if (!result.ok) return result;

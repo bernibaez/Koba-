@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import AppLayout from '@/components/AppLayout';
 import {
@@ -48,8 +48,23 @@ import {
 } from '@/services/cotizaciones.service';
 import { useAuth } from '@/context/AuthContext';
 import { hasPermission } from '@/lib/permissionsStore';
+import '@/styles/apple-tokens.css';
+import SalesHeader from './sales/components/SalesHeader';
+import SalesMetrics from './sales/components/SalesMetrics';
+import SalesToolbar from './sales/components/SalesToolbar';
+import SalesEmptyState from './sales/components/SalesEmptyState';
+import SalesTable from './sales/components/SalesTable';
+import SaleDrawer from './sales/components/SaleDrawer';
+import VoidSaleDialog from './sales/components/VoidSaleDialog';
+import ReturnSaleDialog, { type ReturnPayloadData } from './sales/components/ReturnSaleDialog';
+import {
+  fromVentaConDetalleToSale,
+  calculatePeriodDates,
+  type SalesTab,
+  type SalesPeriod,
+} from './sales/types';
 
-type Tab = 'sales' | 'quotes' | 'returns';
+type Tab = SalesTab;
 
 const saleStatusMap: Record<string, { label: string; cls: string }> = {
   completada: { label: 'Completada', cls: 'badge-success' },
@@ -85,11 +100,67 @@ interface CartItem {
 
 export default function SalesPage() {
   const { user } = useAuth();
-  const [searchParams] = useSearchParams();
-  const [tab, setTab] = useState<Tab>('sales');
-  const [search, setSearch] = useState(() => searchParams.get('q') ?? '');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // URL State Synchronization
+  const tab = (searchParams.get('tab') as SalesTab) || 'sales';
+  const period = (searchParams.get('period') as SalesPeriod) || 'all';
+  const urlFrom = searchParams.get('from') || '';
+  const urlTo = searchParams.get('to') || '';
+  const search = searchParams.get('q') || '';
+  const sortField = searchParams.get('sort') || 'date';
+  const sortDir = (searchParams.get('order') as 'asc' | 'desc') || 'desc';
+
+  const updateUrlParam = useCallback(
+    (updates: Record<string, string | undefined>) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          Object.entries(updates).forEach(([key, value]) => {
+            if (
+              !value ||
+              value.trim() === '' ||
+              (key === 'tab' && value === 'sales') ||
+              (key === 'period' && value === 'all') ||
+              (key === 'sort' && value === 'date') ||
+              (key === 'order' && value === 'desc')
+            ) {
+              next.delete(key);
+            } else {
+              next.set(key, value.trim());
+            }
+          });
+          return next;
+        },
+        { replace: true }
+      );
+    },
+    [setSearchParams]
+  );
+
+  const effectiveDates = useMemo(() => {
+    if (period === 'custom') {
+      return { from: urlFrom, to: urlTo };
+    }
+    return calculatePeriodDates(period);
+  }, [period, urlFrom, urlTo]);
+
+  const dateFrom = effectiveDates.from;
+  const dateTo = effectiveDates.to;
+
+  const handleClearFilters = useCallback(() => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('period');
+        next.delete('from');
+        next.delete('to');
+        next.delete('q');
+        return next;
+      },
+      { replace: true }
+    );
+  }, [setSearchParams]);
 
   const isAdmin = user?.role === 'Administrador';
   const canSeeAllSales = isAdmin || user?.role === 'Contador';
@@ -98,11 +169,6 @@ export default function SalesPage() {
   const canCreateSales = hasPermission(user?.role ?? 'Cajero', 'ventas', 'crear');
   const canExportSales = hasPermission(user?.role ?? 'Cajero', 'ventas', 'exportar');
   const ownCajeroId = !canSeeAllSales ? user?.id : undefined;
-
-  useEffect(() => {
-    const q = searchParams.get('q');
-    if (q) setSearch(q);
-  }, [searchParams]);
 
   // Inline forms (reemplazan la lista, como en Compras) & modals de confirmación
   const [showAddSaleForm, setShowAddSaleForm] = useState(false);
@@ -113,6 +179,13 @@ export default function SalesPage() {
 
   const [anulandoSale, setAnulandoSale] = useState<VentaConDetalle | null>(null);
   const [anularMotivo, setAnularMotivo] = useState('Anulación por error de facturación');
+  const [procesandoAnular, setProcesandoAnular] = useState(false);
+
+  const [returningSale, setReturningSale] = useState<VentaConDetalle | null>(null);
+  const [loadingReturnDetail, setLoadingReturnDetail] = useState(false);
+  const [procesandoDevolucion, setProcesandoDevolucion] = useState(false);
+
+  const [optimisticallyDeletedIds, setOptimisticallyDeletedIds] = useState<Set<string>>(new Set());
 
   const [viewingQuote, setViewingQuote] = useState<CotizacionConDetalle | null>(null);
   const [loadingQuoteDetail, setLoadingQuoteDetail] = useState(false);
@@ -150,7 +223,7 @@ export default function SalesPage() {
   }, [search, dateFrom, dateTo, tab]);
 
   // Supabase hooks
-  const { ventas, total: totalVentas, loading: loadingVentas, error: errorVentas, cobrar, obtenerDetalle, anular, actualizar } = useVentas({
+  const { ventas, total: totalVentas, loading: loadingVentas, error: errorVentas, refetch, cobrar, obtenerDetalle, anular, actualizar } = useVentas({
     pagina: page,
     limite: limit,
     busqueda: search,
@@ -158,6 +231,12 @@ export default function SalesPage() {
     fechaFin: dateTo || undefined,
     cajeroId: ownCajeroId,
   });
+
+  const salesList = useMemo(() => {
+    return ventas
+      .filter((v) => !optimisticallyDeletedIds.has(v.id))
+      .map(fromVentaConDetalleToSale);
+  }, [ventas, optimisticallyDeletedIds]);
 
   const {
     cotizaciones,
@@ -227,6 +306,101 @@ export default function SalesPage() {
     setQuoteValidaHasta(new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10));
   };
 
+  // Global Keyboard Shortcuts (Fase 6)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const activeEl = document.activeElement;
+      const isInputFocused =
+        activeEl &&
+        (activeEl.tagName === 'INPUT' ||
+          activeEl.tagName === 'TEXTAREA' ||
+          activeEl.tagName === 'SELECT' ||
+          (activeEl as HTMLElement).isContentEditable);
+
+      // Escape: cerrar formularios o modales activos
+      if (e.key === 'Escape') {
+        if (openActionsId) {
+          setOpenActionsId(null);
+          return;
+        }
+        if (showAddSaleForm) {
+          closeSaleForm();
+          return;
+        }
+        if (showAddQuoteForm) {
+          closeQuoteForm();
+          return;
+        }
+        if (viewingQuote) {
+          setViewingQuote(null);
+          return;
+        }
+        if (convertQuote) {
+          setConvertQuote(null);
+          return;
+        }
+        if (editingSale) {
+          setEditingSale(null);
+          return;
+        }
+        if (printingSale) {
+          setPrintingSale(null);
+          return;
+        }
+        return;
+      }
+
+      // Si el foco está en un campo de texto o hay modal activo, ignorar atajos alfabéticos
+      if (
+        isInputFocused ||
+        showAddSaleForm ||
+        showAddQuoteForm ||
+        viewingSale ||
+        viewingQuote ||
+        convertQuote ||
+        anulandoSale ||
+        returningSale ||
+        editingSale ||
+        printingSale
+      ) {
+        return;
+      }
+
+      // N o Alt+N: Nueva venta
+      if ((e.key === 'n' || e.key === 'N') && !e.ctrlKey && !e.metaKey) {
+        if (canCreateSales) {
+          e.preventDefault();
+          setShowAddSaleForm(true);
+        }
+        return;
+      }
+
+      // C o Alt+C: Nueva cotización
+      if ((e.key === 'c' || e.key === 'C') && !e.ctrlKey && !e.metaKey) {
+        if (canCreateSales) {
+          e.preventDefault();
+          setShowAddQuoteForm(true);
+        }
+        return;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [
+    canCreateSales,
+    openActionsId,
+    showAddSaleForm,
+    showAddQuoteForm,
+    viewingSale,
+    viewingQuote,
+    convertQuote,
+    anulandoSale,
+    returningSale,
+    editingSale,
+    printingSale,
+  ]);
+
   // Open Sale Detail modal with live items
   const handleOpenSaleDetail = async (v: VentaConDetalle) => {
     setViewingSale(v);
@@ -255,19 +429,105 @@ export default function SalesPage() {
   };
 
   // Void Sale
-  const handleConfirmAnular = async () => {
+  const handleConfirmAnular = async (motivoPersonalizado?: string) => {
     if (!anulandoSale) return;
     if (!canDeleteSales) {
       toast.error('Solo un administrador puede anular o eliminar facturas');
       return;
     }
+    setProcesandoAnular(true);
     try {
-      await anular(anulandoSale.id, anularMotivo);
+      await anular(anulandoSale.id, motivoPersonalizado || anularMotivo);
       toast.success(`Factura ${anulandoSale.numero_factura} anulada exitosamente`);
       setAnulandoSale(null);
-    } catch (err: any) {
-      toast.error(err.message || 'Error al anular la venta');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error al anular la venta';
+      toast.error(msg);
+    } finally {
+      setProcesandoAnular(false);
     }
+  };
+
+  // Return Sale
+  const handleOpenReturnSale = async (s: VentaConDetalle) => {
+    setReturningSale(s);
+    setLoadingReturnDetail(true);
+    try {
+      const full = await obtenerDetalle(s.id);
+      if (full) setReturningSale(full);
+    } catch {
+      // Keep summary if detail fails
+    } finally {
+      setLoadingReturnDetail(false);
+    }
+  };
+
+  const handleConfirmReturnSale = async (data: ReturnPayloadData) => {
+    if (!returningSale) return;
+    setProcesandoDevolucion(true);
+    try {
+      await registrarDevolucion({
+        venta_id: returningSale.id,
+        numero_factura: returningSale.numero_factura,
+        cliente_id: returningSale.cliente_id,
+        cajero_id: user?.id || null,
+        monto_total: data.monto_total,
+        motivo: data.motivo,
+        metodo_reembolso: data.metodo_reembolso,
+        tipo: data.items.length === (returningSale.detalle_ventas?.length || 0) ? 'total' : 'parcial',
+        items: data.items,
+      });
+      toast.success(`Devolución para ${returningSale.numero_factura} registrada exitosamente`);
+      setReturningSale(null);
+      void refetch();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error al registrar la devolución';
+      toast.error(msg);
+    } finally {
+      setProcesandoDevolucion(false);
+    }
+  };
+
+  // Optimistic Draft Deletion with Undo Toast (5s)
+  const handleDeleteDraft = (draft: VentaConDetalle) => {
+    if (!canDeleteSales) {
+      toast.error('Solo un administrador puede eliminar borradores');
+      return;
+    }
+    const draftId = draft.id;
+    setOptimisticallyDeletedIds((prev) => new Set(prev).add(draftId));
+
+    let undone = false;
+    const timer = setTimeout(async () => {
+      if (undone) return;
+      try {
+        await anular(draftId, 'Borrador eliminado por el usuario');
+      } catch {
+        setOptimisticallyDeletedIds((prev) => {
+          const next = new Set(prev);
+          next.delete(draftId);
+          return next;
+        });
+        toast.error('Error al eliminar el borrador');
+      }
+    }, 5000);
+
+    toast.success(`Borrador ${draft.numero_factura} eliminado`, {
+      duration: 5000,
+      action: {
+        label: 'Deshacer',
+        onClick: () => {
+          undone = true;
+          clearTimeout(timer);
+          setOptimisticallyDeletedIds((prev) => {
+            const next = new Set(prev);
+            next.delete(draftId);
+            return next;
+          });
+          toast.info(`Eliminación de ${draft.numero_factura} deshecha`);
+        },
+      },
+    });
   };
 
   // Open Edit Sale Modal
@@ -444,7 +704,7 @@ export default function SalesPage() {
   const handleExportPdf = () => {
     if (tab === 'sales') {
       exportTableToPdf({
-        title: 'Historial Detallado de Ventas (Supabase)',
+        title: 'Historial Detallado de Ventas',
         filename: 'historial-ventas',
         headers: [
           'Factura',
@@ -933,529 +1193,90 @@ export default function SalesPage() {
   }
 
   return (
-    <AppLayout>
-      <div className="space-y-6 slide-up">
-        {!(viewingSale || viewingQuote || convertQuote || anulandoSale || editingSale || printingSale) && (
+    <AppLayout fullWidth>
+      <div className="apple-scope space-y-6">
+        {!(viewingQuote || convertQuote || editingSale || printingSale) && (
         <>
-        {/* Top Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-              <ShoppingCart className="text-primary" size={26} />
-              Módulo de Ventas y Gestión Comercial
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              {canSeeAllSales
-                ? 'Control de ventas, facturación con ITBIS 18% transparentado, cotizaciones y devoluciones'
-                : 'Consulta las ventas que realizaste. Editar o anular requiere permiso de administrador'}
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {canCreateSales && (
-              <button
-                onClick={() => setShowAddQuoteForm(true)}
-                className="btn-secondary flex items-center gap-1.5 text-xs font-semibold"
-              >
-                <FileText size={15} /> Nueva Cotización
-              </button>
-            )}
-            {canCreateSales && (
-              <button
-                onClick={() => setShowAddSaleForm(true)}
-                className="btn-primary flex items-center gap-2 font-bold shadow-md"
-              >
-                <Plus size={16} /> Nueva Venta
-              </button>
-            )}
-          </div>
-        </div>
+        {/* Apple Design Header */}
+        <SalesHeader
+          onNewSale={() => setShowAddSaleForm(true)}
+          onNewQuote={() => setShowAddQuoteForm(true)}
+          canCreate={canCreateSales}
+        />
 
-        {/* Live Key Metric Summary Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="card p-4 hover:border-primary/40 transition-all">
-            <p className="text-xs text-muted-foreground font-medium">Ventas Totales (En Filtro)</p>
-            <p className="text-2xl font-bold text-foreground mt-1">
-              RD$ {ventas.reduce((s, x) => s + x.monto_total, 0).toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-            </p>
-          </div>
-          <div className="card p-4 hover:border-emerald-500/40 transition-all">
-            <p className="text-xs text-muted-foreground font-medium">Ganancia Bruta Estimada</p>
-            <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
-              RD${' '}
-              {ventas
-                .reduce((s, x) => s + (x.monto_total - x.costo_total), 0)
-                .toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-            </p>
-          </div>
-          <div className="card p-4 hover:border-amber-500/40 transition-all">
-            <p className="text-xs text-muted-foreground font-medium">ITBIS (18% Transparentado)</p>
-            <p className="text-2xl font-bold text-amber-600 dark:text-amber-400 mt-1">
-              RD$ {ventas.reduce((s, x) => s + x.monto_impuesto, 0).toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-            </p>
-          </div>
-          <div className="card p-4 hover:border-blue-500/40 transition-all">
-            <p className="text-xs text-muted-foreground font-medium">Facturas Emitidas</p>
-            <p className="text-2xl font-bold text-info mt-1">{totalVentas} facturas</p>
-          </div>
-        </div>
+        {/* Apple Design Metrics */}
+        <SalesMetrics sales={salesList} />
 
-        {/* Tab Navigation */}
-        <div className="flex gap-1 bg-secondary rounded-xl p-1 w-fit flex-wrap border border-border/60">
-          {[
-            { id: 'sales' as Tab, label: 'Todas las Ventas', icon: <ShoppingCart size={16} />, count: totalVentas },
-            { id: 'quotes' as Tab, label: 'Cotizaciones', icon: <FileText size={16} />, count: cotizaciones.length },
-            { id: 'returns' as Tab, label: 'Devoluciones', icon: <RotateCcw size={16} />, count: devoluciones.length },
-          ].map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
-                tab === t.id
-                  ? 'bg-card text-foreground shadow-xs border border-border/80'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {t.icon}
-              {t.label}
-              <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-secondary text-muted-foreground font-mono">
-                {t.count}
-              </span>
-            </button>
-          ))}
-        </div>
-
-        {/* Filter Bar */}
-        <div className="card p-4 space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div>
-              <label className="text-xs font-semibold text-muted-foreground mb-1 block">Buscar en Supabase</label>
-              <div className="relative">
-                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                <input
-                  className="input-field !pl-9"
-                  placeholder="Buscar por número de factura, NCF, cliente..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
-              </div>
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-muted-foreground mb-1 block">Desde (Fecha)</label>
-              <input
-                type="date"
-                className="input-field"
-                value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-muted-foreground mb-1 block">Hasta (Fecha)</label>
-              <input
-                type="date"
-                className="input-field"
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="flex justify-between items-center pt-2 border-t border-border">
-            <span className="text-xs text-muted-foreground font-medium">
-              Mostrando {tab === 'sales' ? ventas.length : tab === 'quotes' ? cotizaciones.length : devoluciones.length}{' '}
-              registro(s)
-            </span>
-            <div className="flex gap-2">
-              {canExportSales && (
-                <button
-                  type="button"
-                  onClick={handleExportPdf}
-                  className="btn-secondary flex items-center gap-1.5 text-xs font-semibold"
-                >
-                  <Download size={14} /> PDF
-                </button>
-              )}
-              {canExportSales && (
-                <button
-                  type="button"
-                  onClick={handleExportExcel}
-                  className="btn-secondary flex items-center gap-1.5 text-xs font-semibold"
-                >
-                  <FileSpreadsheet size={14} /> Excel
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
+        {/* Apple Design Toolbar: Vistas, Periodos, Búsqueda debounced y Exportar */}
+        <SalesToolbar
+          currentTab={tab}
+          onTabChange={(newTab) => updateUrlParam({ tab: newTab })}
+          tabCounts={{
+            sales: totalVentas,
+            quotes: cotizaciones.length,
+            returns: devoluciones.length,
+          }}
+          currentPeriod={period}
+          onPeriodChange={(newPeriod) => {
+            if (newPeriod === 'custom') {
+              updateUrlParam({ period: 'custom' });
+            } else {
+              updateUrlParam({ period: newPeriod, from: undefined, to: undefined });
+            }
+          }}
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          onCustomDateChange={(from, to) => updateUrlParam({ period: 'custom', from, to })}
+          search={search}
+          onSearchChange={(newSearch) => updateUrlParam({ q: newSearch })}
+          onExportPdf={handleExportPdf}
+          onExportExcel={handleExportExcel}
+        />
 
         {/* TAB 1: TODAS LAS VENTAS */}
         {tab === 'sales' && (
-          <div className="card overflow-hidden border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-xs">
-            {errorVentas && (
-              <div className="px-5 py-3 bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 text-xs font-semibold border-b border-rose-200 dark:border-rose-900">
-                {errorVentas}
-              </div>
-            )}
-            {!canSeeAllSales && (
-              <div className="px-5 py-2.5 bg-slate-50 dark:bg-slate-900/50 text-slate-600 dark:text-slate-400 text-xs font-medium border-b border-slate-200 dark:border-slate-800">
-                Mostrando solo tus ventas. Para editar o anular una factura, solicita permiso a un administrador.
-              </div>
-            )}
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/60 text-slate-600 dark:text-slate-400 text-xs font-bold uppercase tracking-wider">
-                    <th className="text-left px-5 py-3.5">Factura / NCF</th>
-                    <th className="text-left px-4 py-3.5">
-                      <div className="flex items-center gap-1">
-                        <span>Fecha / Hora</span>
-                        <ArrowRightLeft size={12} className="rotate-90 text-slate-400" />
-                      </div>
-                    </th>
-                    <th className="text-left px-4 py-3.5">Cliente</th>
-                    <th className="text-left px-4 py-3.5">Cajero</th>
-                    <th className="text-center px-4 py-3.5">Método de Pago</th>
-                    <th className="text-right px-5 py-3.5">Total</th>
-                    <th className="text-right px-5 py-3.5">Ganancia Bruta</th>
-                    <th className="text-center px-4 py-3.5">Estado</th>
-                    <th className="text-right px-5 py-3.5">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {loadingVentas ? (
-                    <tr>
-                      <td colSpan={9} className="px-4 py-12 text-center text-slate-400">
-                        Cargando ventas desde Supabase...
-                      </td>
-                    </tr>
-                  ) : ventas.length === 0 ? (
-                    <tr>
-                      <td colSpan={9} className="px-4 py-12 text-center text-slate-400">
-                        No se encontraron ventas registradas
-                      </td>
-                    </tr>
-                  ) : (
-                    ventas.map((s, i) => {
-                      const openUpward = i >= ventas.length - 2 || (ventas.length > 3 && i >= ventas.length / 2);
-                      const ganancia = s.monto_total - s.costo_total;
-                      const marginPct = s.monto_total > 0 ? ((ganancia / s.monto_total) * 100).toFixed(1) : '0.0';
-
-                      return (
-                        <tr
-                          key={s.id}
-                          className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors"
-                        >
-                          {/* Factura / NCF */}
-                          <td className="px-5 py-3.5">
-                            <div className="flex items-center gap-3">
-                              <div className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-800 flex items-center justify-center text-emerald-600 dark:text-emerald-400 flex-shrink-0">
-                                <FileText size={18} />
-                              </div>
-                              <div>
-                                <div className="font-mono text-slate-900 dark:text-white font-bold text-xs">
-                                  {s.numero_factura}
-                                </div>
-                                <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5 font-medium">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
-                                  <span>{s.ncf ? `NCF: ${s.ncf}` : 'Factura Simple'}</span>
-                                </div>
-                              </div>
-                            </div>
-                          </td>
-
-                          {/* Fecha / Hora */}
-                          <td className="px-4 py-3.5 text-xs">
-                            <div className="font-semibold text-slate-800 dark:text-slate-200">
-                              {new Date(s.creado_en).toLocaleDateString('es-DO')}
-                            </div>
-                            <div className="text-[11px] text-slate-400 font-medium">
-                              {new Date(s.creado_en).toLocaleTimeString('es-DO', {
-                                hour: '2-digit',
-                                minute: '2-digit',
-                                second: '2-digit',
-                              })}
-                            </div>
-                          </td>
-
-                          {/* Cliente */}
-                          <td className="px-4 py-3.5">
-                            <div className="font-bold text-xs text-slate-900 dark:text-white">
-                              {s.cliente_nombre || 'Cliente general'}
-                            </div>
-                          </td>
-
-                          {/* Cajero */}
-                          <td className="px-4 py-3.5 text-xs font-medium text-slate-600 dark:text-slate-400">
-                            {s.cajero_nombre || 'super admin'}
-                          </td>
-
-                          {/* Método de Pago */}
-                          <td className="px-4 py-3.5 text-center">
-                            <span
-                              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${
-                                s.metodo_pago === 'efectivo'
-                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800'
-                                  : s.metodo_pago === 'tarjeta'
-                                    ? 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/30 dark:text-purple-400 dark:border-purple-800'
-                                    : s.metodo_pago === 'transferencia'
-                                      ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-800'
-                                      : s.metodo_pago === 'credito'
-                                        ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800'
-                                        : 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
-                              }`}
-                            >
-                              {s.metodo_pago === 'efectivo' && <Banknote size={14} />}
-                              {s.metodo_pago === 'tarjeta' && <CreditCard size={14} />}
-                              {s.metodo_pago === 'transferencia' && <Smartphone size={14} />}
-                              {s.metodo_pago === 'credito' && <Split size={14} />}
-                              {s.metodo_pago === 'mixto' && <Layers size={14} />}
-                              <span className="capitalize">{metodoLabel[s.metodo_pago] || s.metodo_pago}</span>
-                            </span>
-                          </td>
-
-                          {/* Total */}
-                          <td className="px-5 py-3.5 text-right">
-                            <div className="font-extrabold text-xs tabular-nums text-slate-900 dark:text-white">
-                              RD$ {s.monto_total.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </div>
-                            <div className="text-[10px] text-slate-400 font-medium mt-0.5">
-                              RD$ {s.subtotal.toLocaleString('es-DO', { minimumFractionDigits: 2 })} + ITBIS RD$ {s.monto_impuesto.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                            </div>
-                          </td>
-
-                          {/* Ganancia Bruta */}
-                          <td className="px-5 py-3.5 text-right">
-                            <div className="font-extrabold text-xs tabular-nums text-emerald-600 dark:text-emerald-400">
-                              RD$ {ganancia.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </div>
-                            <div className="text-[11px] text-slate-400 font-medium mt-0.5">
-                              {marginPct}%
-                            </div>
-                          </td>
-
-                          {/* Estado */}
-                          <td className="px-4 py-3.5 text-center">
-                            <span
-                              className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold border ${
-                                (s.estado as string) === 'anulada' || (s.estado as string) === 'cancelled'
-                                  ? 'bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-950/30 dark:text-rose-400 dark:border-rose-800'
-                                  : 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800'
-                              }`}
-                            >
-                              {(s.estado as string) === 'anulada' || (s.estado as string) === 'cancelled' ? (
-                                <>
-                                  <XCircle size={13} />
-                                  <span>Anulada</span>
-                                </>
-                              ) : (
-                                <>
-                                  <CheckCircle size={13} />
-                                  <span>Completada</span>
-                                </>
-                              )}
-                            </span>
-                          </td>
-
-                          {/* Acciones */}
-                          <td className="px-5 py-3.5 text-right">
-                            <div className="relative inline-block text-left">
-                              <button
-                                type="button"
-                                onClick={() => setOpenActionsId(openActionsId === s.id ? null : s.id)}
-                                className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 font-semibold text-xs flex items-center gap-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all cursor-pointer shadow-2xs"
-                              >
-                                <span>Acciones</span>
-                                <MoreVertical size={14} className="text-slate-400" />
-                              </button>
-
-                              {openActionsId === s.id && (
-                                <>
-                                  <div
-                                    className="fixed inset-0 z-30"
-                                    onClick={() => setOpenActionsId(null)}
-                                  />
-                                  <div
-                                    className={`absolute right-0 ${
-                                      openUpward ? 'bottom-full mb-1.5' : 'top-full mt-1.5'
-                                    } w-48 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-2xl z-40 py-1 divide-y divide-slate-100 dark:divide-slate-800 text-xs animate-in fade-in zoom-in-95`}
-                                  >
-                                    <div className="py-1">
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setOpenActionsId(null);
-                                          void handleOpenSaleDetail(s);
-                                        }}
-                                        className="w-full text-left px-3.5 py-2 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2.5 font-semibold transition-colors cursor-pointer"
-                                      >
-                                        <Eye size={15} className="text-emerald-600" />
-                                        <span>Ver Detalle</span>
-                                      </button>
-                                      {canEditSales && (
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            setOpenActionsId(null);
-                                            handleOpenEditSale(s);
-                                          }}
-                                          className="w-full text-left px-3.5 py-2 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2.5 font-semibold transition-colors cursor-pointer"
-                                        >
-                                          <Edit size={15} className="text-amber-500" />
-                                          <span>Editar Factura</span>
-                                        </button>
-                                      )}
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setOpenActionsId(null);
-                                          void handleOpenPrintSale(s);
-                                        }}
-                                        className="w-full text-left px-3.5 py-2 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2.5 font-semibold transition-colors cursor-pointer"
-                                      >
-                                        <Printer size={15} className="text-blue-500" />
-                                        <span>Imprimir Factura</span>
-                                      </button>
-                                    </div>
-                                    {canDeleteSales && s.estado !== 'anulada' && (
-                                      <div className="py-1">
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            setOpenActionsId(null);
-                                            setAnulandoSale(s);
-                                          }}
-                                          className="w-full text-left px-3.5 py-2 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 flex items-center gap-2.5 font-semibold transition-colors cursor-pointer"
-                                        >
-                                          <Trash2 size={15} />
-                                          <span>Eliminar / Anular</span>
-                                        </button>
-                                      </div>
-                                    )}
-                                  </div>
-                                </>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Bottom Pagination Bar */}
-            {(() => {
-              const totalCount = totalVentas || ventas.length;
-              const totalPages = Math.max(1, Math.ceil(totalCount / limit));
-              const startRecord = totalCount > 0 ? (page - 1) * limit + 1 : 0;
-              const endRecord = Math.min(totalCount, page * limit);
-
-              const getPageNumbers = () => {
-                const pages: (number | string)[] = [];
-                if (totalPages <= 5) {
-                  for (let i = 1; i <= totalPages; i++) pages.push(i);
-                } else {
-                  if (page <= 3) {
-                    pages.push(1, 2, 3, '...', totalPages);
-                  } else if (page >= totalPages - 2) {
-                    pages.push(1, '...', totalPages - 2, totalPages - 1, totalPages);
-                  } else {
-                    pages.push(1, '...', page, '...', totalPages);
-                  }
-                }
-                return pages;
-              };
-
-              return (
-                <div className="px-5 py-3.5 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs font-semibold text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-900">
-                  <div>
-                    Mostrando {startRecord} a {endRecord} de {totalCount.toLocaleString()} ventas
-                  </div>
-
-                  <div className="flex items-center gap-4 flex-wrap">
-                    {/* Rows Per Page selector */}
-                    <div className="flex items-center gap-2">
-                      <span>Mostrar</span>
-                      <select
-                        value={limit}
-                        onChange={(e) => {
-                          setLimit(Number(e.target.value));
-                          setPage(1);
-                        }}
-                        className="px-2.5 py-1 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-bold text-slate-700 dark:text-slate-200 cursor-pointer"
-                      >
-                        <option value="10">10</option>
-                        <option value="25">25</option>
-                        <option value="50">50</option>
-                        <option value="100">100</option>
-                        <option value="200">200</option>
-                      </select>
-                      <span>por página</span>
-                    </div>
-
-                    {/* Pagination Buttons */}
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        disabled={page <= 1}
-                        onClick={() => setPage((p) => Math.max(1, p - 1))}
-                        className="w-8 h-8 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
-                      >
-                        <ChevronLeft size={16} />
-                      </button>
-
-                      {getPageNumbers().map((pNum, pIdx) =>
-                        typeof pNum === 'number' ? (
-                          <button
-                            key={`pnum-${pNum}`}
-                            type="button"
-                            onClick={() => setPage(pNum)}
-                            className={`w-8 h-8 rounded-xl font-bold flex items-center justify-center transition-colors cursor-pointer ${
-                              page === pNum
-                                ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800'
-                                : 'border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                            }`}
-                          >
-                            {pNum}
-                          </button>
-                        ) : (
-                          <span key={`pdots-${pIdx}`} className="px-1 text-slate-400">
-                            ...
-                          </span>
-                        )
-                      )}
-
-                      <button
-                        type="button"
-                        disabled={page >= totalPages}
-                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                        className="w-8 h-8 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
-                      >
-                        <ChevronDown size={16} className="-rotate-90" />
-                      </button>
-                    </div>
-
-                    {/* Direct Jump to Page */}
-                    <div className="flex items-center gap-2">
-                      <span>Ir a</span>
-                      <input
-                        type="number"
-                        min={1}
-                        max={totalPages}
-                        value={page}
-                        onChange={(e) => {
-                          const val = Number(e.target.value);
-                          if (val >= 1 && val <= totalPages) setPage(val);
-                        }}
-                        className="w-14 h-8 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-center font-bold text-slate-800 dark:text-slate-200"
-                      />
-                      <span>de {totalPages}</span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
-          </div>
+          <SalesTable
+            sales={salesList}
+            isLoading={loadingVentas}
+            error={errorVentas}
+            onRetry={() => {
+              void refetch();
+            }}
+            sortField={sortField}
+            sortDir={sortDir}
+            onSortChange={(field, dir) => {
+              updateUrlParam({ sort: field, order: dir });
+            }}
+            onRowClick={(sale) => {
+              if (sale.rawSale) void handleOpenSaleDetail(sale.rawSale);
+            }}
+            hasFilters={Boolean(search || dateFrom || dateTo || period !== 'all')}
+            onClearFilters={handleClearFilters}
+            permissions={{
+              canEdit: canEditSales,
+              canDelete: canDeleteSales,
+              canCreate: canCreateSales,
+            }}
+            openActionsId={openActionsId}
+            onToggleActionsId={setOpenActionsId}
+            onAction={(actionType, sale) => {
+              const s = sale.rawSale;
+              if (!s) return;
+              if (actionType === 'detail') {
+                void handleOpenSaleDetail(s);
+              } else if (actionType === 'print') {
+                void handleOpenPrintSale(s);
+              } else if (actionType === 'edit') {
+                handleOpenEditSale(s);
+              } else if (actionType === 'void') {
+                setAnulandoSale(s);
+              } else if (actionType === 'return') {
+                void handleOpenReturnSale(s);
+              } else if (actionType === 'delete') {
+                handleDeleteDraft(s);
+              }
+            }}
+          />
         )}
 
         {/* TAB 2: COTIZACIONES */}
@@ -1482,13 +1303,16 @@ export default function SalesPage() {
                   {loadingCotizaciones ? (
                     <tr>
                       <td colSpan={7} className="px-4 py-12 text-center text-muted-foreground">
-                        Cargando cotizaciones desde Supabase...
+                        Cargando cotizaciones...
                       </td>
                     </tr>
                   ) : cotizaciones.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-4 py-12 text-center text-muted-foreground">
-                        No hay cotizaciones registradas
+                      <td colSpan={7} className="px-4 py-8">
+                        <SalesEmptyState
+                          tab="quotes"
+                          onNewQuote={() => setShowAddQuoteForm(true)}
+                        />
                       </td>
                     </tr>
                   ) : (
@@ -1572,13 +1396,18 @@ export default function SalesPage() {
                   {loadingDevoluciones ? (
                     <tr>
                       <td colSpan={8} className="px-4 py-12 text-center text-muted-foreground">
-                        Cargando devoluciones desde Supabase...
+                        Cargando devoluciones...
                       </td>
                     </tr>
                   ) : devoluciones.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="px-4 py-12 text-center text-muted-foreground">
-                        No hay devoluciones registradas
+                      <td colSpan={8} className="px-4 py-8">
+                        <SalesEmptyState
+                          tab="returns"
+                          onNewReturn={() => {
+                            toast.info('Para registrar una devolución, selecciona la factura en la pestaña Ventas.');
+                          }}
+                        />
                       </td>
                     </tr>
                   ) : (
@@ -1645,159 +1474,20 @@ export default function SalesPage() {
         </>
         )}
 
-        {/* MODAL 1: VIEW SALE DETAIL & TAX BREAKDOWN */}
-        {viewingSale &&
-          (
-            <div
-              className="dialog-inline-host"
-              onClick={() => setViewingSale(null)}
-            >
-              <div
-                className="card w-full max-w-xl my-auto max-h-[90vh] overflow-y-auto p-6 space-y-4 shadow-2xl border-primary/20"
-                onClick={(e) => e.stopPropagation()}
-              >
-              <div className="flex items-center justify-between border-b border-border pb-3">
-                <div>
-                  <h3 className="font-bold text-foreground text-lg flex items-center gap-2">
-                    <FileText className="text-primary" size={20} />
-                    Detalle de Factura {viewingSale.numero_factura}
-                  </h3>
-                  {viewingSale.ncf && (
-                    <p className="text-xs text-muted-foreground font-mono mt-0.5">NCF Fiscal: {viewingSale.ncf}</p>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setViewingSale(null)}
-                  className="p-1 text-muted-foreground hover:text-foreground"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-
-              {loadingSaleDetail ? (
-                <div className="py-8 text-center text-sm text-muted-foreground">Cargando productos de factura...</div>
-              ) : (
-                <div className="space-y-3 text-xs">
-                  {/* General Info */}
-                  <div className="grid grid-cols-2 gap-2 bg-secondary/30 rounded-xl p-3">
-                    <div>
-                      <span className="text-muted-foreground block">Cliente:</span>
-                      <span className="font-bold text-foreground">{viewingSale.cliente_nombre || 'Cliente general'}</span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground block">Fecha / Hora:</span>
-                      <span>{new Date(viewingSale.creado_en).toLocaleString('es-DO')}</span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground block">Cajero Solicitante:</span>
-                      <span>{viewingSale.cajero_nombre || 'Cajero'}</span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground block">Método de Pago:</span>
-                      <span className="badge-neutral font-medium">
-                        {metodoLabel[viewingSale.metodo_pago] || viewingSale.metodo_pago}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Detalle de productos */}
-                  <div className="space-y-1">
-                    <p className="font-bold text-muted-foreground uppercase text-[10px] tracking-wider">
-                      Ítems de Facturación ({viewingSale.detalle_ventas?.length || 0})
-                    </p>
-                    <div className="bg-secondary/40 rounded-xl p-3 max-h-40 overflow-y-auto space-y-2">
-                      {(viewingSale.detalle_ventas || []).map((item) => (
-                        <div
-                          key={item.id}
-                          className="flex justify-between items-center border-b border-border/40 pb-1.5 last:border-none"
-                        >
-                          <div>
-                            <span className="font-semibold text-foreground">{item.nombre_item}</span>
-                            <span className="text-[11px] text-muted-foreground block font-mono">
-                              {item.cantidad}x @ RD${' '}
-                              {item.precio_unitario.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                            </span>
-                          </div>
-                          <span className="font-bold font-mono text-foreground">
-                            RD$ {item.subtotal.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Transparencia Fiscal ITBIS */}
-                  <div className="border-t border-border pt-3 space-y-1.5">
-                    <p className="font-bold uppercase tracking-wider text-muted-foreground text-[10px]">
-                      Transparencia Fiscal y Costos
-                    </p>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Subtotal Neto:</span>
-                      <span className="font-mono">
-                        RD$ {viewingSale.subtotal.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Descuento Aplicado:</span>
-                      <span className="font-mono text-emerald-600">
-                        - RD$ {viewingSale.monto_descuento.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                      </span>
-                    </div>
-                    <div className="flex justify-between font-semibold">
-                      <span className="text-muted-foreground">ITBIS (18% Transparentado):</span>
-                      <span className="font-mono text-amber-600 dark:text-amber-400 font-bold">
-                        RD$ {viewingSale.monto_impuesto.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                      </span>
-                    </div>
-                    <div className="flex justify-between border-t border-border pt-2 text-sm font-bold">
-                      <span>Total Factura:</span>
-                      <span className="text-primary font-black text-base">
-                        RD$ {viewingSale.monto_total.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Rentabilidad */}
-                  <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 flex justify-between items-center text-xs">
-                    <div>
-                      <span className="text-muted-foreground font-medium block">Costo de Inversión:</span>
-                      <span className="font-mono text-foreground font-semibold">
-                        RD$ {viewingSale.costo_total.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                      </span>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-muted-foreground font-medium block">Ganancia Bruta:</span>
-                      <span className="font-mono text-emerald-600 dark:text-emerald-400 font-bold text-sm">
-                        RD${' '}
-                        {(viewingSale.monto_total - viewingSale.costo_total).toLocaleString('es-DO', {
-                          minimumFractionDigits: 2,
-                        })}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div className="flex justify-end gap-2 pt-3 border-t border-border">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const s = viewingSale;
-                    setViewingSale(null);
-                    setPrintingSale(s);
-                  }}
-                  className="btn-secondary flex items-center gap-1.5 text-xs py-2"
-                >
-                  <Printer size={14} /> Imprimir Factura
-                </button>
-                <button type="button" onClick={() => setViewingSale(null)} className="btn-primary text-xs py-2">
-                  Cerrar
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* SALE DRAWER (Apple Design) */}
+        <SaleDrawer
+          sale={viewingSale}
+          isLoading={loadingSaleDetail}
+          permissions={{
+            canEdit: canEditSales,
+            canDelete: canDeleteSales,
+            canCreate: canCreateSales,
+          }}
+          onClose={() => setViewingSale(null)}
+          onPrint={(s) => void handleOpenPrintSale(s)}
+          onReturn={(s) => void handleOpenReturnSale(s)}
+          onVoid={(s) => setAnulandoSale(s)}
+        />
 
         {/* VIEW QUOTE DETAIL */}
         {viewingQuote &&
@@ -1980,59 +1670,23 @@ export default function SalesPage() {
           </div>
         )}
 
-        {/* MODAL 5: ANULAR FACTURA */}
-        {anulandoSale &&
-          (
-            <div
-              className="dialog-inline-host"
-              onClick={() => setAnulandoSale(null)}
-            >
-              <div
-                className="card w-full max-w-md my-auto max-h-[90vh] overflow-y-auto p-6 space-y-4 shadow-2xl border-rose-500/30"
-                onClick={(e) => e.stopPropagation()}
-              >
-              <div className="flex items-center justify-between border-b border-border pb-3">
-                <div className="flex items-center gap-2 text-rose-600 dark:text-rose-400">
-                  <AlertTriangle size={24} />
-                  <h3 className="font-extrabold text-foreground text-lg">Anular Factura de Venta</h3>
-                </div>
-                <button type="button" onClick={() => setAnulandoSale(null)} className="p-1 text-muted-foreground hover:text-foreground">
-                  <X size={18} />
-                </button>
-              </div>
+        {/* VOID SALE DIALOG (Apple Design) */}
+        <VoidSaleDialog
+          sale={anulandoSale}
+          isOpen={Boolean(anulandoSale)}
+          isProcessing={procesandoAnular}
+          onClose={() => setAnulandoSale(null)}
+          onConfirm={(motivo) => void handleConfirmAnular(motivo)}
+        />
 
-              <p className="text-xs text-muted-foreground">
-                ¿Estás seguro de anular la factura <strong className="font-mono text-foreground">{anulandoSale.numero_factura}</strong> por{' '}
-                <strong className="text-rose-600 font-bold">
-                  RD$ {anulandoSale.monto_total.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                </strong>
-                ? El estado de la factura cambiará a &quot;Anulada&quot; y el stock será restaurado en la base de datos.
-              </p>
-
-              <div>
-                <label className="text-xs font-bold text-muted-foreground mb-1 block">Motivo de Anulación</label>
-                <input
-                  className="input-field text-xs py-1.5 w-full"
-                  value={anularMotivo}
-                  onChange={(e) => setAnularMotivo(e.target.value)}
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-3 border-t border-border">
-                <button type="button" onClick={() => setAnulandoSale(null)} className="btn-secondary text-xs py-2">
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  onClick={handleConfirmAnular}
-                  className="btn-primary text-xs py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold flex items-center gap-1.5"
-                >
-                  <Trash2 size={14} /> Confirmar Anulación
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* RETURN SALE DIALOG (Apple Design) */}
+        <ReturnSaleDialog
+          sale={returningSale}
+          isOpen={Boolean(returningSale)}
+          isProcessing={loadingReturnDetail || procesandoDevolucion}
+          onClose={() => setReturningSale(null)}
+          onConfirm={handleConfirmReturnSale}
+        />
 
         {/* MODAL: EDITAR FACTURA */}
         {editingSale &&

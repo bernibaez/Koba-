@@ -1,5 +1,6 @@
 import { getSupabase, isSupabaseConfigured, tryGetSupabase } from './clienteSupabase';
 import type { Cotizacion, EstadoCotizacion } from '@/types/database';
+export type { EstadoCotizacion };
 
 export interface ItemCotizacionPayload {
   producto_id?: string | null;
@@ -32,14 +33,75 @@ export interface CotizacionConDetalle extends Cotizacion {
   }[];
 }
 
-const LOCAL_COTIZACIONES_KEY = 'mercato_cotizaciones_local';
+const LOCAL_COTIZACIONES_KEY = 'mercato_cotizaciones_local_v2';
+
+const DEMO_COTIZACIONES: CotizacionConDetalle[] = [
+  {
+    id: 'cot-1',
+    codigo: 'COT-2026-001',
+    cliente_id: 'cli-1',
+    cliente_nombre: 'Minimarket La Familia',
+    vendedor_id: 'usr-1',
+    vendedor_nombre: 'Carlos López',
+    subtotal: 72033.9,
+    monto_impuesto: 12966.1,
+    monto_total: 85000,
+    estado: 'pendiente',
+    valida_hasta: new Date(Date.now() + 15 * 86400000).toISOString(),
+    creado_en: new Date(Date.now() - 2 * 86400000).toISOString(),
+    items: [
+      { id: 'it-1', nombre_item: 'Corte de Res Especial Importado (Caja 20kg)', cantidad: 3, precio_unitario: 18500, subtotal: 55500 },
+      { id: 'it-2', nombre_item: 'Queso Gouda Holandés Bloque', cantidad: 4, precio_unitario: 4133.47, subtotal: 16533.9 },
+    ],
+  },
+  {
+    id: 'cot-2',
+    codigo: 'COT-2026-002',
+    cliente_id: 'cli-2',
+    cliente_nombre: 'Grupo Gastronómico El Faro',
+    vendedor_id: 'usr-1',
+    vendedor_nombre: 'Carlos López',
+    subtotal: 105932.2,
+    monto_impuesto: 19067.8,
+    monto_total: 125000,
+    estado: 'aprobada',
+    valida_hasta: new Date(Date.now() + 10 * 86400000).toISOString(),
+    creado_en: new Date(Date.now() - 4 * 86400000).toISOString(),
+    items: [
+      { id: 'it-3', nombre_item: 'Aceite de Oliva Extra Virgen 5L', cantidad: 10, precio_unitario: 4500, subtotal: 45000 },
+      { id: 'it-4', nombre_item: 'Pechuga de Pollo Fresca al Granel', cantidad: 20, precio_unitario: 3046.61, subtotal: 60932.2 },
+    ],
+  },
+  {
+    id: 'cot-3',
+    codigo: 'COT-2026-003',
+    cliente_id: 'cli-3',
+    cliente_nombre: 'Panificadora Gómez',
+    vendedor_id: 'usr-2',
+    vendedor_nombre: 'Ana Morales',
+    subtotal: 161016.95,
+    monto_impuesto: 28983.05,
+    monto_total: 190000,
+    estado: 'convertida',
+    valida_hasta: new Date(Date.now() + 5 * 86400000).toISOString(),
+    creado_en: new Date(Date.now() - 8 * 86400000).toISOString(),
+    items: [
+      { id: 'it-5', nombre_item: 'Harina de Trigo Panificable Saco 50lb', cantidad: 40, precio_unitario: 2800, subtotal: 112000 },
+      { id: 'it-6', nombre_item: 'Mantequilla Industrial Repostería 25lb', cantidad: 8, precio_unitario: 6127.12, subtotal: 49016.95 },
+    ],
+  },
+];
 
 function getLocalCotizaciones(): CotizacionConDetalle[] {
   try {
     const raw = localStorage.getItem(LOCAL_COTIZACIONES_KEY);
-    return raw ? (JSON.parse(raw) as CotizacionConDetalle[]) : [];
+    if (!raw) {
+      localStorage.setItem(LOCAL_COTIZACIONES_KEY, JSON.stringify(DEMO_COTIZACIONES));
+      return DEMO_COTIZACIONES;
+    }
+    return JSON.parse(raw) as CotizacionConDetalle[];
   } catch {
-    return [];
+    return DEMO_COTIZACIONES;
   }
 }
 

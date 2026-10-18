@@ -1,30 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  ArrowUpDown,
-  ArrowUp,
-  ArrowDown,
-  Edit,
-  Trash2,
-  Eye,
-  Printer,
-  ToggleLeft,
-  ToggleRight,
-  CheckCircle,
-  XCircle,
-  MoreVertical,
-  Package,
-  AlertTriangle,
-  Calendar,
-  Scale,
-  ChevronLeft,
-  ChevronRight,
-} from 'lucide-react';
+  useReactTable,
+  getCoreRowModel,
+  getSortedRowModel,
+  type ColumnDef,
+  type SortingState,
+  type RowSelectionState,
+} from '@tanstack/react-table';
+import { ArrowUp, ArrowDown, Eye, Edit2, Printer, ToggleLeft, ToggleRight, Trash2, Download } from 'lucide-react';
 import type { Product } from './ProductManagementScreen';
-import CategoryIcon from '@/components/ui/CategoryIcon';
-import WeightBadge from '@/components/weight/WeightBadge';
-import { generateUniqueBarcode } from '@/lib/barcodeUtils';
-import { toast } from '@/lib/toast';
+import ProductRow from './ProductRow';
 
 interface ProductsTableProps {
   products: Product[];
@@ -39,24 +25,10 @@ interface ProductsTableProps {
   onToggleStatus: (id: string) => void;
   onView?: (p: Product) => void;
   onPrintLabel?: (products: Product[]) => void;
-  onUpdateProduct?: (product: Product) => void;
-}
-
-function SortIcon({
-  field,
-  sortField,
-  sortDir,
-}: {
-  field: keyof Product;
-  sortField: keyof Product;
-  sortDir: 'asc' | 'desc';
-}) {
-  if (field !== sortField) return <ArrowUpDown size={12} className="text-slate-400" />;
-  return sortDir === 'asc' ? (
-    <ArrowUp size={12} className="text-primary" />
-  ) : (
-    <ArrowDown size={12} className="text-primary" />
-  );
+  onClearFilters?: () => void;
+  onExportPdf?: () => void;
+  isLoading?: boolean;
+  onInlineUpdate?: (id: string, field: 'salePrice' | 'currentStock', value: number, previous: Product) => Promise<void>;
 }
 
 export default function ProductsTable({
@@ -72,59 +44,92 @@ export default function ProductsTable({
   onToggleStatus,
   onView,
   onPrintLabel,
-  onUpdateProduct,
+  onClearFilters,
+  onExportPdf,
+  isLoading = false,
+  onInlineUpdate,
 }: ProductsTableProps) {
+  // Actions Menu Popover State
   const [openActionsId, setOpenActionsId] = useState<string | null>(null);
   const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
 
-  // Pagination state
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  // TanStack Table Sorting State
+  const sorting = useMemo<SortingState>(
+    () => [{ id: String(sortField), desc: sortDir === 'desc' }],
+    [sortField, sortDir]
+  );
 
-  // Reset pagination when product list or sorting changes
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [products.length, sortField, sortDir]);
+  // TanStack Table Selection State
+  const rowSelection = useMemo<RowSelectionState>(() => {
+    const sel: RowSelectionState = {};
+    for (const id of selectedIds) {
+      sel[id] = true;
+    }
+    return sel;
+  }, [selectedIds]);
 
-  const totalPages = Math.max(1, Math.ceil(products.length / itemsPerPage));
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedProducts = products.slice(startIndex, startIndex + itemsPerPage);
+  const allFilteredSelected = products.length > 0 && selectedIds.size === products.length;
+  const someFilteredSelected = selectedIds.size > 0 && selectedIds.size < products.length;
 
-  const allSelected = products.length > 0 && selectedIds.size === products.length;
-  const someSelected = selectedIds.size > 0 && selectedIds.size < products.length;
+  const columns = useMemo<ColumnDef<Product, unknown>[]>(
+    () => [
+      {
+        id: 'select',
+        header: () => (
+          <input
+            type="checkbox"
+            checked={allFilteredSelected}
+            ref={(el) => {
+              if (el) el.indeterminate = someFilteredSelected;
+            }}
+            onChange={onSelectAll}
+            className="w-4 h-4 rounded border-[var(--line)] accent-[var(--accent)] cursor-pointer"
+            aria-label="Seleccionar todos los productos mostrados"
+          />
+        ),
+      },
+      {
+        accessorKey: 'name',
+        header: 'Producto',
+      },
+      {
+        accessorKey: 'category',
+        header: 'Categoría',
+      },
+      {
+        accessorKey: 'salePrice',
+        header: 'Precio',
+      },
+      {
+        accessorKey: 'currentStock',
+        header: 'Stock',
+      },
+      {
+        accessorKey: 'status',
+        header: 'Estado',
+      },
+      {
+        id: 'actions',
+        header: '',
+      },
+    ],
+    [allFilteredSelected, someFilteredSelected, onSelectAll]
+  );
 
-  const formatDate = (d: string | null) => {
-    if (!d) return { text: '—', badge: false, color: 'text-slate-400 font-medium' };
-    const parts = d.split('-');
-    if (parts.length !== 3) return { text: d, badge: false, color: 'text-slate-600 font-medium' };
-    const [yr, mo, day] = parts;
-    const months = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
-    const expiry = new Date(parseInt(yr), parseInt(mo) - 1, parseInt(day));
-    const today = new Date(2026, 6, 21);
-    const diffDays = Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-    const formatted = `${day} ${months[parseInt(mo) - 1]} ${yr}`;
-    if (diffDays <= 0)
-      return {
-        text: `${formatted} (Vencido)`,
-        badge: true,
-        color: 'bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-950/30 dark:text-rose-400 dark:border-rose-800',
-      };
-    if (diffDays <= 7)
-      return {
-        text: `${formatted} (${diffDays}d)`,
-        badge: true,
-        color: 'bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-950/30 dark:text-rose-400 dark:border-rose-800',
-      };
-    if (diffDays <= 30)
-      return {
-        text: `${formatted} (${diffDays}d)`,
-        badge: true,
-        color: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800',
-      };
-    return { text: formatted, badge: false, color: 'text-slate-600 dark:text-slate-300 font-medium' };
-  };
+  const table = useReactTable({
+    data: products,
+    columns,
+    state: {
+      sorting,
+      rowSelection,
+    },
+    getRowId: (row: Product) => row.id,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    enableRowSelection: true,
+  });
 
-  const handleToggleActions = (id: string, e: React.MouseEvent<HTMLButtonElement>) => {
+  const handleToggleActionsMenu = (id: string, e: React.MouseEvent<HTMLButtonElement>) => {
     if (openActionsId === id) {
       setOpenActionsId(null);
       setMenuPos(null);
@@ -144,328 +149,253 @@ export default function ProductsTable({
     setOpenActionsId(id);
   };
 
+  // Skeleton Loading State (discreto mientras carga)
+  if (isLoading) {
+    return (
+      <div className="w-full select-none">
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className="border-b border-[var(--line)]">
+              <th className="w-10 px-3.5 py-3" />
+              <th className="px-3.5 py-3 text-xs font-medium text-[var(--ink2)]">Producto</th>
+              <th className="px-3.5 py-3 text-xs font-medium text-[var(--ink2)] hidden md:table-cell">Categoría</th>
+              <th className="px-3.5 py-3 text-xs font-medium text-[var(--ink2)] text-right">Precio</th>
+              <th className="px-3.5 py-3 text-xs font-medium text-[var(--ink2)] text-right">Stock</th>
+              <th className="px-3.5 py-3 text-xs font-medium text-[var(--ink2)] hidden md:table-cell">Estado</th>
+              <th className="w-28 px-3 py-3" />
+            </tr>
+          </thead>
+          <tbody>
+            {Array.from({ length: 5 }).map((_, idx) => (
+              <tr key={`skeleton-${idx}`} className="border-b border-[var(--line)]">
+                <td className="px-3.5 py-3.5">
+                  <div className="w-4 h-4 rounded bg-[var(--chip)] animate-pulse" />
+                </td>
+                <td className="px-3.5 py-3.5">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-[10px] bg-[var(--chip)] animate-pulse flex-shrink-0" />
+                    <div className="space-y-1.5 flex-1">
+                      <div className="h-4 w-44 rounded bg-[var(--chip)] animate-pulse" />
+                      <div className="h-3 w-28 rounded bg-[var(--chip)] animate-pulse" />
+                    </div>
+                  </div>
+                </td>
+                <td className="px-3.5 py-3.5 hidden md:table-cell">
+                  <div className="h-3.5 w-20 rounded bg-[var(--chip)] animate-pulse" />
+                </td>
+                <td className="px-3.5 py-3.5 text-right">
+                  <div className="h-4 w-16 ml-auto rounded bg-[var(--chip)] animate-pulse" />
+                </td>
+                <td className="px-3.5 py-3.5 text-right">
+                  <div className="h-4 w-14 ml-auto rounded bg-[var(--chip)] animate-pulse" />
+                </td>
+                <td className="px-3.5 py-3.5 hidden md:table-cell">
+                  <div className="h-3.5 w-16 rounded bg-[var(--chip)] animate-pulse" />
+                </td>
+                <td className="px-3 py-3.5 text-right" />
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  // Estado Vacío: "Ningún producto coincide."
   if (products.length === 0) {
     return (
-      <div className="card border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-xs">
-        <div className="flex flex-col items-center justify-center py-20 gap-3">
-          <div className="w-16 h-16 rounded-full bg-secondary flex items-center justify-center">
-            <Package size={28} className="text-muted-foreground/40" />
-          </div>
-          <p className="text-base font-semibold text-foreground">No se encontraron productos</p>
-          <p className="text-sm text-muted-foreground text-center max-w-sm">
-            Ajusta los filtros de búsqueda o crea un nuevo producto para comenzar a gestionar tu inventario.
-          </p>
-        </div>
+      <div className="py-20 flex flex-col items-center justify-center text-center select-none border-b border-[var(--line)]">
+        <p className="text-base font-normal text-[var(--ink)]">
+          Ningún producto coincide.
+        </p>
+        <p className="text-xs text-[var(--ink2)] mt-1 max-w-sm">
+          Prueba cambiando la vista, ajustando la búsqueda o limpiando los filtros seleccionados.
+        </p>
+        {onClearFilters && (
+          <button
+            type="button"
+            onClick={onClearFilters}
+            className="apple-btn-ghost text-xs text-[var(--accent)] hover:text-[var(--accent)] mt-3"
+          >
+            Limpiar filtros
+          </button>
+        )}
       </div>
     );
   }
 
   return (
-    <div className="card border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-xs">
-      <div className="overflow-x-auto scrollbar-thin rounded-2xl">
-        <table className="w-full text-sm min-w-[720px]">
+    <div className="w-full select-none">
+      <div className="overflow-x-auto">
+        <table className="w-full text-left border-collapse table-fixed">
+          <colgroup>
+            <col className="w-12" />
+            <col className="w-auto" />
+            <col className="w-36 md:w-44 hidden md:table-column" />
+            <col className="w-32 md:w-36" />
+            <col className="w-28 md:w-32" />
+            <col className="w-28 md:w-32 hidden md:table-column" />
+            <col className="w-24" />
+          </colgroup>
+          {/* Encabezados en 12px, peso 500, gris, sentence case */}
           <thead>
-            <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/60 text-slate-600 dark:text-slate-400 text-xs font-bold uppercase tracking-wider">
-              <th className="px-4 py-3.5 w-10 text-left">
+            <tr className="border-b border-[var(--line)]">
+              {/* Checkbox select all */}
+              <th className="w-12 px-3.5 py-3">
                 <input
                   type="checkbox"
-                  checked={allSelected}
+                  checked={allFilteredSelected}
                   ref={(el) => {
-                    if (el) el.indeterminate = someSelected;
+                    if (el) el.indeterminate = someFilteredSelected;
                   }}
                   onChange={onSelectAll}
-                  className="w-4 h-4 rounded border-border accent-primary cursor-pointer"
+                  className="w-4 h-4 rounded border-[var(--line)] accent-[var(--accent)] cursor-pointer"
                   aria-label="Seleccionar todos los productos"
                 />
               </th>
-              <th className="px-5 py-3.5 text-left cursor-pointer select-none" onClick={() => onSort('name')}>
-                <div className="flex items-center gap-1.5">
-                  <span>PRODUCTO / SKU</span>
-                  <SortIcon field="name" sortField={sortField} sortDir={sortDir} />
+
+              {/* Columna Producto (ordenable) */}
+              <th
+                onClick={() => onSort('name')}
+                className="px-3.5 py-3 text-xs font-medium text-[var(--ink2)] cursor-pointer hover:text-[var(--ink)] transition-colors select-none"
+              >
+                <div className="flex items-center gap-1">
+                  <span>Producto</span>
+                  {sortField === 'name' && (
+                    sortDir === 'asc' ? (
+                      <ArrowUp size={12} strokeWidth={2} className="text-[var(--ink)]" />
+                    ) : (
+                      <ArrowDown size={12} strokeWidth={2} className="text-[var(--ink)]" />
+                    )
+                  )}
                 </div>
               </th>
-              <th className="px-4 py-3.5 text-left cursor-pointer select-none" onClick={() => onSort('category')}>
-                <div className="flex items-center gap-1.5">
-                  <span>CATEGORÍA</span>
-                  <SortIcon field="category" sortField={sortField} sortDir={sortDir} />
+
+              {/* Columna Categoría (ordenable, oculta en < 760px) */}
+              <th
+                onClick={() => onSort('category')}
+                className="px-3.5 py-3 text-xs font-medium text-[var(--ink2)] cursor-pointer hover:text-[var(--ink)] transition-colors select-none hidden md:table-cell"
+              >
+                <div className="flex items-center gap-1">
+                  <span>Categoría</span>
+                  {sortField === 'category' && (
+                    sortDir === 'asc' ? (
+                      <ArrowUp size={12} strokeWidth={2} className="text-[var(--ink)]" />
+                    ) : (
+                      <ArrowDown size={12} strokeWidth={2} className="text-[var(--ink)]" />
+                    )
+                  )}
                 </div>
               </th>
-              <th className="px-5 py-3.5 text-right cursor-pointer select-none" onClick={() => onSort('salePrice')}>
-                <div className="flex items-center gap-1.5 justify-end">
-                  <span>PRECIO VENTA</span>
-                  <SortIcon field="salePrice" sortField={sortField} sortDir={sortDir} />
+
+              {/* Columna Precio (ordenable, derecha) */}
+              <th
+                onClick={() => onSort('salePrice')}
+                className="px-3.5 py-3 text-xs font-medium text-[var(--ink2)] text-right cursor-pointer hover:text-[var(--ink)] transition-colors select-none"
+              >
+                <div className="flex items-center justify-end gap-1">
+                  <span>Precio</span>
+                  {sortField === 'salePrice' && (
+                    sortDir === 'asc' ? (
+                      <ArrowUp size={12} strokeWidth={2} className="text-[var(--ink)]" />
+                    ) : (
+                      <ArrowDown size={12} strokeWidth={2} className="text-[var(--ink)]" />
+                    )
+                  )}
                 </div>
               </th>
-              <th className="px-4 py-3.5 text-center cursor-pointer select-none" onClick={() => onSort('currentStock')}>
-                <div className="flex items-center gap-1.5 justify-center">
-                  <span>STOCK</span>
-                  <SortIcon field="currentStock" sortField={sortField} sortDir={sortDir} />
+
+              {/* Columna Stock (ordenable, izquierda alineada con el dot) */}
+              <th
+                onClick={() => onSort('currentStock')}
+                className="px-3.5 py-3 text-xs font-medium text-[var(--ink2)] text-left cursor-pointer hover:text-[var(--ink)] transition-colors select-none"
+              >
+                <div className="flex items-center justify-start gap-1">
+                  <span>Stock</span>
+                  {sortField === 'currentStock' && (
+                    sortDir === 'asc' ? (
+                      <ArrowUp size={12} strokeWidth={2} className="text-[var(--ink)]" />
+                    ) : (
+                      <ArrowDown size={12} strokeWidth={2} className="text-[var(--ink)]" />
+                    )
+                  )}
                 </div>
               </th>
-              <th className="px-4 py-3.5 text-center cursor-pointer select-none" onClick={() => onSort('status')}>
-                <div className="flex items-center gap-1.5 justify-center">
-                  <span>ESTADO</span>
-                  <SortIcon field="status" sortField={sortField} sortDir={sortDir} />
+
+              {/* Columna Estado (ordenable, oculta en < 760px) */}
+              <th
+                onClick={() => onSort('status')}
+                className="px-3.5 py-3 text-xs font-medium text-[var(--ink2)] text-left cursor-pointer hover:text-[var(--ink)] transition-colors select-none hidden md:table-cell"
+              >
+                <div className="flex items-center justify-start gap-1">
+                  <span>Estado</span>
+                  {sortField === 'status' && (
+                    sortDir === 'asc' ? (
+                      <ArrowUp size={12} strokeWidth={2} className="text-[var(--ink)]" />
+                    ) : (
+                      <ArrowDown size={12} strokeWidth={2} className="text-[var(--ink)]" />
+                    )
+                  )}
                 </div>
               </th>
-              <th className="px-5 py-3.5 text-right">ACCIONES</th>
+
+              {/* Columna Acciones */}
+              <th className="w-24 px-3 py-3" />
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-            {paginatedProducts.map((product) => {
+
+          {/* Filas */}
+          <tbody>
+            {table.getRowModel().rows.map((row) => {
+              const product = row.original;
               const isSelected = selectedIds.has(product.id);
-              const expiryInfo = formatDate(product.expiryDate);
 
               return (
-                <tr
+                <ProductRow
                   key={product.id}
-                  className={`hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors ${
-                    isSelected ? 'bg-emerald-50/30 dark:bg-emerald-950/20' : ''
-                  }`}
-                >
-                  {/* Checkbox */}
-                  <td className="px-4 py-3.5">
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      onChange={() => onToggleSelect(product.id)}
-                      className="w-4 h-4 rounded border-border accent-primary cursor-pointer"
-                      aria-label={`Seleccionar ${product.name}`}
-                    />
-                  </td>
-
-                  {/* Producto / SKU */}
-                  <td className="px-5 py-3.5">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-800 flex items-center justify-center text-emerald-600 dark:text-emerald-400 flex-shrink-0">
-                        <CategoryIcon category={product.category} name={product.name} size="sm" />
-                      </div>
-                      <div>
-                        <div className="font-mono text-slate-900 dark:text-white font-bold text-xs flex items-center gap-1.5 flex-wrap">
-                          <button
-                            type="button"
-                            onClick={() => onView && onView(product)}
-                            className="hover:text-emerald-600 dark:hover:text-emerald-400 hover:underline text-left cursor-pointer transition-colors"
-                            title="Ver vista previa del producto"
-                          >
-                            {product.name}
-                          </button>
-                          <WeightBadge
-                            saleType={product.saleType}
-                            weightUnit={product.weightUnit}
-                            isWeighted={product.isWeightProduct}
-                            size="sm"
-                          />
-                          {product.plu && (
-                            <span className="px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[10px] text-slate-700 dark:text-slate-300 font-mono font-bold" title="PLU de Balanza">
-                              PLU: {product.plu}
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5 mt-0.5 font-medium flex-wrap">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0 inline-block" />
-                          <span className="truncate max-w-[200px]">SKU: {product.sku}</span>
-                          {product.brand && product.brand !== 'Genérico' && product.brand !== '—' && (
-                            <>
-                              <span className="text-slate-300 dark:text-slate-700">•</span>
-                              <span className="text-slate-500 dark:text-slate-400">{product.brand}</span>
-                            </>
-                          )}
-                          {expiryInfo.badge && (
-                            <>
-                              <span className="text-slate-300 dark:text-slate-700">•</span>
-                              <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[10px] font-bold border ${expiryInfo.color}`}>
-                                <Calendar size={10} />
-                                {expiryInfo.text}
-                              </span>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-
-                  {/* Categoría */}
-                  <td className="px-4 py-3.5 text-xs">
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                      {product.category}
-                    </span>
-                  </td>
-
-                  {/* Precio Venta */}
-                  <td className="px-5 py-3.5 text-right text-xs">
-                    <div className="font-extrabold tabular-nums text-slate-900 dark:text-white">
-                      RD$ {product.salePrice.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                      {(product.saleType === 'weight' || product.saleType === 'both') && (
-                        <span className="text-[10px] text-emerald-600 font-bold ml-0.5">/{product.weightUnit || 'lb'}</span>
-                      )}
-                    </div>
-                    {product.wholesalePrice > 0 && (
-                      <div className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">
-                        Mayor: RD$ {product.wholesalePrice.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                      </div>
-                    )}
-                  </td>
-
-                  {/* Stock */}
-                  <td className="px-4 py-3.5 text-center">
-                    <span
-                      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${
-                        product.stockStatus === 'out'
-                          ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-400 dark:border-rose-800'
-                          : product.stockStatus === 'low'
-                            ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800'
-                            : 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800'
-                      }`}
-                    >
-                      {product.stockStatus === 'out' ? (
-                        <AlertTriangle size={13} />
-                      ) : product.stockStatus === 'low' ? (
-                        <AlertTriangle size={13} />
-                      ) : (
-                        <Package size={13} />
-                      )}
-                      <span>
-                        {product.stockStatus === 'out'
-                          ? 'Sin Stock'
-                          : product.stockStatus === 'low'
-                            ? `Bajo (${product.currentStock})`
-                            : `Normal (${product.currentStock})`}
-                      </span>
-                    </span>
-                  </td>
-
-                  {/* Estado */}
-                  <td className="px-4 py-3.5 text-center">
-                    <span
-                      className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold border ${
-                        product.status === 'active'
-                          ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800'
-                          : product.status === 'inactive'
-                            ? 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
-                            : 'bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-950/30 dark:text-rose-400 dark:border-rose-800'
-                      }`}
-                    >
-                      {product.status === 'active' ? (
-                        <>
-                          <CheckCircle size={13} />
-                          <span>Activo</span>
-                        </>
-                      ) : (
-                        <>
-                          <XCircle size={13} />
-                          <span className="capitalize">{product.status === 'inactive' ? 'Inactivo' : 'Descontinuado'}</span>
-                        </>
-                      )}
-                    </span>
-                  </td>
-
-                  {/* Acciones */}
-                  <td className="px-5 py-3.5 text-right">
-                    <div className="flex items-center justify-end gap-1.5">
-                      {onView && (
-                        <button
-                          type="button"
-                          onClick={() => onView(product)}
-                          className="p-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:text-emerald-600 hover:border-emerald-300 dark:hover:border-emerald-800 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/30 transition-all cursor-pointer shadow-2xs"
-                          title="Ver detalle del producto"
-                        >
-                          <Eye size={14} />
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={(e) => handleToggleActions(product.id, e)}
-                        className="px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 font-semibold text-xs flex items-center gap-1 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all cursor-pointer shadow-2xs inline-flex"
-                      >
-                        <span>Acciones</span>
-                        <MoreVertical size={13} className="text-slate-400" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
+                  product={product}
+                  isSelected={isSelected}
+                  onToggleSelect={onToggleSelect}
+                  onView={onView}
+                  onEdit={onEdit}
+                  onToggleStatus={onToggleStatus}
+                  onDelete={onDelete}
+                  onPrintLabel={onPrintLabel ? (p) => onPrintLabel([p]) : undefined}
+                  onToggleActionsMenu={handleToggleActionsMenu}
+                  onInlineUpdate={onInlineUpdate}
+                />
               );
             })}
           </tbody>
         </table>
       </div>
 
-      {/* Pagination Footer */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-5 py-3.5 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30 text-xs">
-        <div className="flex items-center gap-3 flex-wrap">
-          <span className="text-slate-600 dark:text-slate-400 font-medium">
-            Mostrando <span className="font-extrabold text-slate-900 dark:text-white">{startIndex + 1}</span> a{' '}
-            <span className="font-extrabold text-slate-900 dark:text-white">
-              {Math.min(startIndex + itemsPerPage, products.length)}
-            </span>{' '}
-            de <span className="font-extrabold text-slate-900 dark:text-white">{products.length}</span> productos
-          </span>
-
-          <div className="flex items-center gap-1.5 ml-2">
-            <span className="text-slate-500 text-xs">Filas:</span>
-            <select
-              value={itemsPerPage}
-              onChange={(e) => {
-                setItemsPerPage(Number(e.target.value));
-                setCurrentPage(1);
-              }}
-              className="px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-bold text-xs cursor-pointer"
-            >
-              <option value={10}>10</option>
-              <option value={20}>20</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
-          </div>
+      {/* Pie de tabla: "N productos" / "N seleccionados" + Exportar PDF */}
+      <footer className="flex items-center justify-between py-3.5 px-2 text-xs text-[var(--ink2)] border-t border-[var(--line)]">
+        <div>
+          {selectedIds.size > 0 ? (
+            <span className="font-medium text-[var(--ink)]">
+              {selectedIds.size} de {products.length} seleccionado{selectedIds.size !== 1 ? 's' : ''}
+            </span>
+          ) : (
+            <span>
+              {products.length} producto{products.length !== 1 ? 's' : ''}
+            </span>
+          )}
         </div>
 
-        <div className="flex items-center gap-1.5 self-end sm:self-auto">
+        {onExportPdf && (
           <button
             type="button"
-            disabled={currentPage === 1}
-            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-            className="px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 font-semibold text-xs disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center gap-1 cursor-pointer"
+            onClick={onExportPdf}
+            className="apple-btn-ghost text-xs text-[var(--ink2)] hover:text-[var(--ink)] font-normal"
           >
-            <ChevronLeft size={14} />
-            <span>Anterior</span>
+            Exportar PDF
           </button>
+        )}
+      </footer>
 
-          <div className="flex items-center gap-1">
-            {Array.from({ length: totalPages }, (_, i) => i + 1)
-              .filter((p) => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
-              .map((pageNum, idx, arr) => (
-                <React.Fragment key={`page-${pageNum}`}>
-                  {idx > 0 && arr[idx - 1] !== pageNum - 1 && (
-                    <span className="px-1 text-slate-400 font-bold">...</span>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setCurrentPage(pageNum)}
-                    className={`w-7 h-7 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                      currentPage === pageNum
-                        ? 'bg-emerald-600 text-white shadow-xs'
-                        : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-                    }`}
-                  >
-                    {pageNum}
-                  </button>
-                </React.Fragment>
-              ))}
-          </div>
-
-          <button
-            type="button"
-            disabled={currentPage === totalPages}
-            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-            className="px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 font-semibold text-xs disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center gap-1 cursor-pointer"
-          >
-            <span>Siguiente</span>
-            <ChevronRight size={14} />
-          </button>
-        </div>
-      </div>
-
-      {/* Action Menu Portal - Renders directly onto document.body above everything */}
+      {/* Menú flotante de acciones ("..." portal) */}
       {openActionsId && menuPos && (() => {
         const product = products.find((p) => p.id === openActionsId);
         if (!product) return null;
@@ -481,82 +411,89 @@ export default function ProductsTable({
             />
             <div
               style={{ top: `${menuPos.top}px`, left: `${menuPos.left}px` }}
-              className="fixed w-48 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-2xl z-[9999] py-1 divide-y divide-slate-100 dark:divide-slate-800 text-xs animate-in fade-in zoom-in-95"
+              role="menu"
+              className="fixed w-48 rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xl z-[9999] py-1 text-xs animate-in fade-in zoom-in-95"
             >
               <div className="py-1">
                 {onView && (
                   <button
                     type="button"
+                    role="menuitem"
                     onClick={() => {
                       setOpenActionsId(null);
                       setMenuPos(null);
                       onView(product);
                     }}
-                    className="w-full text-left px-3.5 py-2 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2.5 font-semibold transition-colors cursor-pointer"
+                    className="w-full text-left px-3.5 py-2 text-[var(--ink)] hover:bg-[var(--hover)] flex items-center gap-2.5 font-normal transition-colors cursor-pointer"
                   >
-                    <Eye size={15} className="text-emerald-600" />
-                    <span>Ver Detalle</span>
+                    <Eye size={14} strokeWidth={1.8} className="text-[var(--ink2)]" />
+                    <span>Ver detalle</span>
                   </button>
                 )}
                 <button
                   type="button"
+                  role="menuitem"
                   onClick={() => {
                     setOpenActionsId(null);
                     setMenuPos(null);
                     onEdit(product);
                   }}
-                  className="w-full text-left px-3.5 py-2 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2.5 font-semibold transition-colors cursor-pointer"
+                  className="w-full text-left px-3.5 py-2 text-[var(--ink)] hover:bg-[var(--hover)] flex items-center gap-2.5 font-normal transition-colors cursor-pointer"
                 >
-                  <Edit size={15} className="text-blue-600" />
-                  <span>Editar Producto</span>
+                  <Edit2 size={14} strokeWidth={1.8} className="text-[var(--ink2)]" />
+                  <span>Editar producto</span>
                 </button>
                 {onPrintLabel && (
                   <button
                     type="button"
+                    role="menuitem"
                     onClick={() => {
                       setOpenActionsId(null);
                       setMenuPos(null);
                       onPrintLabel([product]);
                     }}
-                    className="w-full text-left px-3.5 py-2 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2.5 font-semibold transition-colors cursor-pointer"
+                    className="w-full text-left px-3.5 py-2 text-[var(--ink)] hover:bg-[var(--hover)] flex items-center gap-2.5 font-normal transition-colors cursor-pointer"
                   >
-                    <Printer size={15} className="text-purple-600" />
-                    <span>Imprimir Etiqueta</span>
+                    <Printer size={14} strokeWidth={1.8} className="text-[var(--ink2)]" />
+                    <span>Imprimir etiqueta</span>
                   </button>
                 )}
                 <button
                   type="button"
+                  role="menuitem"
                   onClick={() => {
                     setOpenActionsId(null);
                     setMenuPos(null);
                     onToggleStatus(product.id);
                   }}
-                  className="w-full text-left px-3.5 py-2 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2.5 font-semibold transition-colors cursor-pointer"
+                  className="w-full text-left px-3.5 py-2 text-[var(--ink)] hover:bg-[var(--hover)] flex items-center gap-2.5 font-normal transition-colors cursor-pointer"
                 >
                   {product.status === 'active' ? (
                     <>
-                      <ToggleRight size={15} className="text-amber-600" />
+                      <ToggleRight size={14} strokeWidth={1.8} className="text-[var(--warn)]" />
                       <span>Desactivar</span>
                     </>
                   ) : (
                     <>
-                      <ToggleLeft size={15} className="text-emerald-600" />
+                      <ToggleLeft size={14} strokeWidth={1.8} className="text-[var(--ok)]" />
                       <span>Activar</span>
                     </>
                   )}
                 </button>
               </div>
-              <div className="py-1">
+              <div className="border-t border-[var(--line)] my-1" />
+              <div className="py-0.5">
                 <button
                   type="button"
+                  role="menuitem"
                   onClick={() => {
                     setOpenActionsId(null);
                     setMenuPos(null);
                     onDelete(product.id);
                   }}
-                  className="w-full text-left px-3.5 py-2 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 flex items-center gap-2.5 font-semibold transition-colors cursor-pointer"
+                  className="w-full text-left px-3.5 py-2 text-[var(--bad)] hover:bg-[var(--hover)] flex items-center gap-2.5 font-normal transition-colors cursor-pointer"
                 >
-                  <Trash2 size={15} className="text-rose-600" />
+                  <Trash2 size={14} strokeWidth={1.8} className="text-[var(--bad)]" />
                   <span>Eliminar</span>
                 </button>
               </div>

@@ -20,12 +20,20 @@ export interface ToastItem {
   description?: string;
   duration?: number;
   exiting?: boolean;
+  action?: {
+    label: string;
+    onClick: () => void;
+  };
 }
 
 export type ToastOptions = {
   description?: string;
   duration?: number;
   id?: string | number;
+  action?: {
+    label: string;
+    onClick: () => void;
+  };
   [key: string]: unknown;
 };
 
@@ -105,6 +113,7 @@ function addToast(type: ToastType, message: unknown, options?: ToastOptions): st
     description: options?.description,
     duration,
     exiting: false,
+    action: options?.action,
   };
 
   // La Isla Dinámica enfoca la notificación actual (morphing continuo)

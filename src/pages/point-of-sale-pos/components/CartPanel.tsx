@@ -17,7 +17,6 @@ import {
 import type { CartItem, Customer } from './POSTerminal';
 import { useClientes } from '@/hooks/useClientes';
 import { useProductos } from '@/hooks/useProductos';
-import { initialProducts } from '@/pages/product-management/components/ProductManagementScreen';
 import PosAddCustomerModal from './PosAddCustomerModal';
 import { toast } from '@/lib/toast';
 
@@ -81,16 +80,8 @@ export default function CartPanel({
 
   const { productosUi } = useProductos({ pagina: 1, limite: 200, estado: 'todos' });
 
-  // Merge store products and initialProducts for comprehensive local search matching
   const allProducts = useMemo(() => {
-    const list = [...productosUi];
-    const skus = new Set(list.map((p) => p.sku.toLowerCase()));
-    for (const p of initialProducts) {
-      if (!skus.has(p.sku.toLowerCase())) {
-        list.push(p as any);
-      }
-    }
-    return list;
+    return productosUi;
   }, [productosUi]);
 
   // Filtered search results for the floating autocomplete dropdown

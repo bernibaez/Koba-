@@ -3,7 +3,7 @@ import AppIcon from './AppIcon';
 import AppImage from './AppImage';
 import { getCompanyLogo, subscribeLogoChange, syncCompanyLogoFromDb } from '@/lib/companyLogo';
 
-const DEFAULT_LOGO = '/assets/images/app_logo.png';
+const DEFAULT_LOGO = '/assets/images/koba_icon.png';
 
 interface AppLogoProps {
   src?: string;

@@ -4,10 +4,15 @@ import AppLogo from './ui/AppLogo';
 import {
   LayoutDashboard, ShoppingCart, Package, Users, UserCheck, ShoppingBag, ArrowLeftRight, Sliders,
   BarChart2, Settings, ChevronRight, ChevronDown, Store, FileText, DollarSign, HandCoins, Wallet, Monitor,
-  RotateCcw, Briefcase, Lock, ShieldCheck, Filter, Boxes, X
+  RotateCcw, Briefcase, Lock, ShieldCheck, Filter, Boxes, X, Crown, Target
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { canAccessNav } from '@/lib/auth';
+import {
+  puedeUsuarioAccederModulo,
+  obtenerNombresModulosPersonalizados,
+  esModoSimulacionPlan,
+} from '@/services/subscriptionModules.service';
 
 interface NavItem {
   id: string;
@@ -30,6 +35,7 @@ const navItems: NavItem[] = [
   { id: 'nav-stock-adjust', label: 'Ajustes Stock', icon: <Sliders size={20} />, href: '/stock-adjustments', group: 'Inventario' },
   { id: 'nav-cajas', label: 'Cajas Registradoras', icon: <Monitor size={20} />, href: '/cajas', group: 'Finanzas' },
   { id: 'nav-contacts', label: 'Contactos', icon: <Users size={20} />, href: '/contacts', group: 'CRM' },
+  { id: 'nav-crm', label: 'CRM & Pipeline', icon: <Target size={20} />, href: '/crm', group: 'CRM' },
   { id: 'nav-cash-closure', label: 'Cierre de Caja', icon: <Lock size={20} />, href: '/cash-closure', group: 'Finanzas' },
   { id: 'nav-maleta', label: 'Maleta / Detalles', icon: <Briefcase size={20} />, href: '/maleta', group: 'Finanzas' },
   { id: 'nav-expenses', label: 'Gastos', icon: <DollarSign size={20} />, href: '/expenses', group: 'Finanzas' },
@@ -39,10 +45,10 @@ const navItems: NavItem[] = [
   { id: 'nav-audit', label: 'Auditoría', icon: <ShieldCheck size={20} />, href: '/audit', group: 'Configuración' },
   { id: 'nav-users', label: 'Usuarios', icon: <UserCheck size={20} />, href: '/users', group: 'Configuración' },
   { id: 'nav-settings', label: 'Configuración', icon: <Settings size={20} />, href: '/settings', group: 'Configuración' },
-  { id: 'nav-docs', label: 'Documentos', icon: <FileText size={20} />, href: '/documents', group: 'Configuración' },
+  { id: 'nav-superadmin', label: 'Kob Admin', icon: <Crown size={20} className="text-amber-500" />, href: '/superadmin', group: 'Plataforma' },
 ];
 
-const groups = ['Principal', 'Operaciones', 'Inventario', 'CRM', 'Finanzas', 'Análisis', 'Configuración'];
+const groups = ['Principal', 'Operaciones', 'Inventario', 'CRM', 'Finanzas', 'Análisis', 'Configuración', 'Plataforma'];
 
 interface SidebarProps {
   collapsed: boolean;
@@ -54,7 +60,32 @@ interface SidebarProps {
 export default function Sidebar({ collapsed, mobileOpen, onMobileClose, currentPath }: SidebarProps) {
   const { user } = useAuth();
   const role = user?.role ?? 'Cajero';
-  const visibleNav = navItems.filter((n) => canAccessNav(role, n.href));
+  const [subVersion, setSubVersion] = useState(0);
+  const [customNames, setCustomNames] = useState(obtenerNombresModulosPersonalizados);
+
+  useEffect(() => {
+    const handleSubChanged = () => {
+      setSubVersion((v) => v + 1);
+      setCustomNames(obtenerNombresModulosPersonalizados());
+    };
+    window.addEventListener('koba_subscription_config_changed', handleSubChanged);
+    return () => window.removeEventListener('koba_subscription_config_changed', handleSubChanged);
+  }, []);
+
+  const isSuperAdminNoSim = Boolean(user?.isSuperAdmin) && !esModoSimulacionPlan();
+
+  const visibleNav = navItems.filter((n) => {
+    // Para SuperAdmin real sin simulación, dejar el Dashboard personalizado y el CRM
+    if (isSuperAdminNoSim) {
+      return n.href === '/' || n.href === '/crm';
+    }
+    // "Kob Admin" nunca debe aparecer para ningún usuario de plan (Pro, Starter, etc.) ni en simulación
+    if (n.href === '/superadmin') {
+      return false;
+    }
+    if (!canAccessNav(role, n.href)) return false;
+    return puedeUsuarioAccederModulo(user, n.href);
+  });
 
   const navRef = useRef<HTMLElement | null>(null);
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
@@ -97,9 +128,14 @@ export default function Sidebar({ collapsed, mobileOpen, onMobileClose, currentP
         <div className={`flex items-center gap-3 h-20 px-5 border-b border-border/80 flex-shrink-0 ${collapsed ? 'justify-center px-2' : ''}`}>
           <AppLogo size={36} />
           {!collapsed && (
-            <span className="font-extrabold text-xl text-foreground tracking-tight">
-              Mercato
-            </span>
+            <div className="flex flex-col min-w-0">
+              <span className="font-extrabold text-xl text-foreground tracking-tight leading-none">
+                KOBA
+              </span>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 mt-1">
+                ERP · Cloud
+              </span>
+            </div>
           )}
         </div>
 
@@ -137,11 +173,14 @@ export default function Sidebar({ collapsed, mobileOpen, onMobileClose, currentP
                 {(!isGroupCollapsed || collapsed) &&
                   groupItems.map((item) => {
                     const active = isActive(item.href);
+                    const customName =
+                      customNames[item.id.replace('nav-', '')]?.label || item.label;
+
                     return (
                       <Link
                         key={item.id}
                         to={item.href}
-                        title={collapsed ? item.label : undefined}
+                        title={collapsed ? customName : undefined}
                         className={`
                           flex items-center gap-3.5 px-3.5 py-3 rounded-xl text-base font-semibold
                           transition-all duration-200 group relative
@@ -155,7 +194,7 @@ export default function Sidebar({ collapsed, mobileOpen, onMobileClose, currentP
                         <span className={`flex-shrink-0 transition-transform duration-200 group-hover:scale-110 ${active ? 'text-primary-foreground' : 'text-primary'}`}>
                           {item.icon}
                         </span>
-                        {!collapsed && <span className="flex-1 truncate">{item.label}</span>}
+                        {!collapsed && <span className="flex-1 truncate">{customName}</span>}
                         {!collapsed && item.badge && (
                           <span className={`flex-shrink-0 text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold ${active ? 'bg-white text-primary' : 'bg-primary text-primary-foreground'}`}>
                             {item.badge}
@@ -209,7 +248,14 @@ export default function Sidebar({ collapsed, mobileOpen, onMobileClose, currentP
         <div className="flex items-center justify-between h-20 px-5 border-b border-border flex-shrink-0">
           <div className="flex items-center gap-3">
             <AppLogo size={36} />
-            <span className="font-extrabold text-xl text-foreground tracking-tight">Mercato</span>
+            <div className="flex flex-col min-w-0">
+              <span className="font-extrabold text-xl text-foreground tracking-tight leading-none">
+                KOBA
+              </span>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 mt-1">
+                ERP · Cloud
+              </span>
+            </div>
           </div>
           <button
             onClick={onMobileClose}
@@ -241,6 +287,8 @@ export default function Sidebar({ collapsed, mobileOpen, onMobileClose, currentP
                 {!isGroupCollapsed &&
                   groupItems.map((item) => {
                     const active = isActive(item.href);
+                    const customName =
+                      customNames[item.id.replace('nav-', '')]?.label || item.label;
                     return (
                       <Link
                         key={`mobile-${item.id}`}
@@ -256,7 +304,7 @@ export default function Sidebar({ collapsed, mobileOpen, onMobileClose, currentP
                         `}
                       >
                         <span className={`flex-shrink-0 ${active ? 'text-primary-foreground' : 'text-primary'}`}>{item.icon}</span>
-                        <span className="flex-1 truncate">{item.label}</span>
+                        <span className="flex-1 truncate">{customName}</span>
                         {item.badge && (
                           <span className={`text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold ${active ? 'bg-white text-primary' : 'bg-primary text-primary-foreground'}`}>
                             {item.badge}

@@ -67,15 +67,10 @@ export async function procesarAjusteStockBloque(
   }
 
   if (nonUuidItems.length > 0) {
-    const { initialProducts } = await import('@/pages/product-management/components/ProductManagementScreen');
     const { updateProductStockInStore } = await import('@/lib/productStore');
-
     nonUuidItems.forEach((it) => {
-      const demoProd = initialProducts.find((p) => p.id === it.producto_id || p.sku === it.producto_id);
-      if (demoProd && it.cantidad_nueva != null) {
-        const delta = it.cantidad_nueva - demoProd.currentStock;
-        updateProductStockInStore(demoProd.id, delta);
-        demoProd.currentStock = it.cantidad_nueva;
+      if (it.cantidad_nueva != null) {
+        updateProductStockInStore(it.producto_id, it.cantidad_nueva);
       }
     });
   }

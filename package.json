@@ -1,5 +1,5 @@
 {
-  "name": "mercato",
+  "name": "koba-cloud",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -13,9 +13,11 @@
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",
+    "@hookform/resolvers": "^5.9.2",
     "@supabase/supabase-js": "^2.111.0",
     "@tailwindcss/forms": "^0.5.10",
     "@tailwindcss/typography": "^0.5.16",
+    "@tanstack/react-table": "^8.21.2",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.8",
     "lucide-react": "^1.7.0",
@@ -26,7 +28,8 @@
     "recharts": "^2.15.2",
     "sileo": "^0.1.5",
     "sonner": "^1.7.4",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "@types/node": "^22",

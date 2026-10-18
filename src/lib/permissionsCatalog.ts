@@ -102,6 +102,14 @@ export const PERMISSION_MODULES: PermissionModule[] = [
     actions: ['ver', 'crear', 'editar', 'eliminar'],
   },
   {
+    id: 'crm',
+    label: 'CRM Ventas',
+    group: 'CRM',
+    href: '/crm',
+    description: 'Pipeline de oportunidades, prospectos y seguimiento',
+    actions: ['ver', 'crear', 'editar', 'eliminar'],
+  },
+  {
     id: 'contactos',
     label: 'Contactos',
     group: 'CRM',
@@ -226,7 +234,7 @@ export function buildDefaultMatrix(): PermissionsMatrix {
   }
 
   const vendedor = empty();
-  for (const id of ['dashboard', 'ventas', 'pos', 'combos', 'contactos', 'cxc', 'cierre_caja', 'configuracion']) {
+  for (const id of ['dashboard', 'ventas', 'pos', 'combos', 'crm', 'contactos', 'cxc', 'cierre_caja', 'configuracion']) {
     const mod = PERMISSION_MODULES.find((m) => m.id === id);
     if (!mod) continue;
     vendedor[id] = {

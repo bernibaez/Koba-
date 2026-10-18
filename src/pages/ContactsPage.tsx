@@ -1,6 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import AppLayout from '@/components/AppLayout';
-import { Users, Truck, Tag, Plus, Search, Filter, Edit2, Trash2, Download, Eye, Phone, MapPin, CreditCard } from 'lucide-react';
+import { Users, Truck, Tag, Plus, Search, Filter, Edit2, Trash2, Download, Eye, Phone, MapPin, CreditCard, Briefcase } from 'lucide-react';
 import { exportTableToPdf, formatMoneyPdf } from '@/lib/exportPdf';
 import { useClientes } from '@/hooks/useClientes';
 import { useProveedores } from '@/hooks/useProveedores';
@@ -8,6 +9,7 @@ import { useGrupos } from '@/hooks/useGrupos';
 import { toast } from '@/lib/toast';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 import type { TipoCliente } from '@/types/database';
+import CRMClienteExpediente from '@/components/crm/CRMClienteExpediente';
 
 const TIPO_CLIENTE_OPTIONS: { value: TipoCliente; label: string }[] = [
   { value: 'final', label: 'Final' },
@@ -28,7 +30,12 @@ type Tab = 'customers' | 'suppliers' | 'groups';
 type FormMode = 'create' | 'edit' | 'view';
 
 export default function ContactsPage() {
-  const [tab, setTab] = useState<Tab>('customers');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+
+  const initialTab = (searchParams.get('tab') as Tab) || 'customers';
+  const [tab, setTab] = useState<Tab>(initialTab);
+  const [selectedExpedienteCustomer, setSelectedExpedienteCustomer] = useState<Customer | null>(null);
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [formMode, setFormMode] = useState<FormMode>('create');
@@ -96,6 +103,19 @@ export default function ContactsPage() {
     const activos = filteredSuppliers.filter((s) => s.status === 'active').length;
     return { total, activos };
   }, [filteredSuppliers]);
+
+  useEffect(() => {
+    const cid = searchParams.get('clienteId') || searchParams.get('id');
+    if (cid && filteredCustomers.length > 0) {
+      const match = filteredCustomers.find((c) => c.id === cid);
+      if (match) setSelectedExpedienteCustomer(match);
+    }
+  }, [searchParams, filteredCustomers]);
+
+  const handleSelectTab = (newTab: Tab) => {
+    setTab(newTab);
+    setSearchParams({ tab: newTab });
+  };
 
   const tabs = [
     { id: 'customers' as Tab, label: 'Clientes', icon: <Users size={16} /> },
@@ -504,237 +524,349 @@ export default function ContactsPage() {
   return (
     <AppLayout>
       <div className="space-y-6 slide-up">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">Contactos</h1>
-            <p className="text-sm text-muted-foreground mt-1">Gestiona clientes, proveedores y grupos</p>
-          </div>
-          <button onClick={openCreate} className="btn-primary flex items-center gap-2 w-fit">
-            <Plus size={16} /> Nuevo {tab === 'customers' ? 'Cliente' : tab === 'suppliers' ? 'Proveedor' : 'Grupo'}
-          </button>
-        </div>
+        {/* Renderizado Condicional de Detalles de Cuenta / Expediente si hay un cliente seleccionado */}
+        {selectedExpedienteCustomer ? (
+          <CRMClienteExpediente
+            cliente={selectedExpedienteCustomer}
+            onClose={() => setSelectedExpedienteCustomer(null)}
+            onCrearCotizacion={() => navigate('/sales')}
+            onNuevaVenta={() => navigate('/point-of-sale-pos')}
+          />
+        ) : (
+          <>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h1 className="text-2xl font-black text-foreground tracking-tight">
+                  Contactos & Directorio
+                </h1>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  Gestiona clientes, proveedores y grupos de precios.
+                </p>
+              </div>
 
-        <div className="flex gap-1 bg-secondary rounded-xl p-1 w-fit">
-          {tabs.map(t => (
-            <button key={t.id} onClick={() => setTab(t.id)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${tab === t.id ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
-              {t.icon}{t.label}
-            </button>
-          ))}
-        </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => navigate('/crm')}
+                  className="px-3.5 py-2 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 hover:bg-purple-500/20 text-xs font-bold border border-purple-500/20 flex items-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <Briefcase size={14} />
+                  <span>Ir a CRM Ventas</span>
+                </button>
 
-        {/* Stats Row */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {tab === 'customers' && <>
-            <div className="card p-4"><p className="text-xs text-muted-foreground">Total Clientes</p><p className="text-2xl font-bold text-foreground mt-1">{customerStats.total}</p></div>
-            <div className="card p-4"><p className="text-xs text-muted-foreground">Activos</p><p className="text-2xl font-bold text-success mt-1">{customerStats.activos}</p></div>
-            <div className="card p-4"><p className="text-xs text-muted-foreground">Crédito Total</p><p className="text-2xl font-bold text-info mt-1">{formatK(customerStats.credito)}</p></div>
-            <div className="card p-4"><p className="text-xs text-muted-foreground">Saldo Pendiente</p><p className="text-2xl font-bold text-warning mt-1">{formatK(customerStats.saldo)}</p></div>
-          </>}
-          {tab === 'suppliers' && <>
-            <div className="card p-4"><p className="text-xs text-muted-foreground">Total Proveedores</p><p className="text-2xl font-bold text-foreground mt-1">{supplierStats.total}</p></div>
-            <div className="card p-4"><p className="text-xs text-muted-foreground">Activos</p><p className="text-2xl font-bold text-success mt-1">{supplierStats.activos}</p></div>
-            <div className="card p-4"><p className="text-xs text-muted-foreground">Compras este mes</p><p className="text-2xl font-bold text-info mt-1">—</p></div>
-            <div className="card p-4"><p className="text-xs text-muted-foreground">Saldo por pagar</p><p className="text-2xl font-bold text-warning mt-1">—</p></div>
-          </>}
-          {tab === 'groups' && <>
-            <div className="card p-4"><p className="text-xs text-muted-foreground">Total Grupos</p><p className="text-2xl font-bold text-foreground mt-1">{grupos.length}</p></div>
-            <div className="card p-4"><p className="text-xs text-muted-foreground">Clientes Asignados</p><p className="text-2xl font-bold text-success mt-1">{grupos.reduce((s, g) => s + (g.clientes_count ?? 0), 0)}</p></div>
-          </>}
-        </div>
-
-        <div className="card p-4 flex flex-col sm:flex-row gap-3">
-          <div className="relative flex-1">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <input className="input-field pl-9" placeholder="Buscar..." value={search} onChange={e => setSearch(e.target.value)} />
-          </div>
-          <div className="flex gap-2">
-            <button className="btn-secondary flex items-center gap-2"><Filter size={16} />Filtrar</button>
-            <button type="button" onClick={handleExportPdf} className="btn-secondary flex items-center gap-2"><Download size={16} />Exportar PDF</button>
-          </div>
-        </div>
-
-        {/* Customers Table */}
-        {tab === 'customers' && (
-          <div className="card overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border bg-secondary/50">
-                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Cliente</th>
-                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden md:table-cell">Grupo</th>
-                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden lg:table-cell">Crédito</th>
-                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden lg:table-cell">Compras</th>
-                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden xl:table-cell">Saldo</th>
-                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Estado</th>
-                    <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredCustomers.map((c, i) => (
-                    <tr key={c.id} className={`border-b border-border hover:bg-secondary/30 transition-colors ${i % 2 === 0 ? '' : 'bg-secondary/10'}`}>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-info/20 flex items-center justify-center text-info font-bold text-sm flex-shrink-0">{c.name.charAt(0)}</div>
-                          <div>
-                            <p className="font-medium text-foreground">{c.name}</p>
-                            <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
-                              <Phone size={10} />{c.phone}
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 hidden md:table-cell"><span className="badge-neutral">{c.group}</span></td>
-                      <td className="px-4 py-3 hidden lg:table-cell">
-                        <div className="flex items-center gap-1 text-muted-foreground"><CreditCard size={12} />RD$ {c.credit.toLocaleString()}</div>
-                      </td>
-                      <td className="px-4 py-3 hidden lg:table-cell text-muted-foreground">{c.purchases} compras</td>
-                      <td className="px-4 py-3 hidden xl:table-cell">
-                        <span className={c.balance > 0 ? 'text-warning font-semibold' : 'text-success font-semibold'}>
-                          {c.balance > 0 ? `RD$ ${c.balance.toLocaleString()}` : 'Al día'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3"><span className={c.status === 'active' ? 'badge-success' : 'badge-danger'}>{c.status === 'active' ? 'Activo' : 'Inactivo'}</span></td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-end gap-1">
-                          <button type="button" onClick={() => openPreviewCustomer(c)} className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors" title="Ver"><Eye size={14} /></button>
-                          <button type="button" onClick={() => openEditCustomer(c)} className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors" title="Editar"><Edit2 size={14} /></button>
-                          <button type="button" onClick={() => setDeleteTarget({ type: 'customer', id: c.id, name: c.name })} className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-danger transition-colors" title="Eliminar"><Trash2 size={14} /></button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="px-4 py-3 border-t border-border flex items-center justify-between text-sm text-muted-foreground">
-              <span>Mostrando {filteredCustomers.length} clientes</span>
-              <div className="flex gap-1">
-                <button className="px-3 py-1 rounded-lg hover:bg-secondary transition-colors">Anterior</button>
-                <button className="px-3 py-1 rounded-lg bg-primary text-primary-foreground">1</button>
-                <button className="px-3 py-1 rounded-lg hover:bg-secondary transition-colors">Siguiente</button>
+                <button onClick={openCreate} className="btn-primary flex items-center gap-2 text-xs font-bold w-fit">
+                  <Plus size={16} /> Nuevo {tab === 'customers' ? 'Cliente' : tab === 'suppliers' ? 'Proveedor' : 'Grupo'}
+                </button>
               </div>
             </div>
-          </div>
-        )}
 
-        {/* Suppliers Table */}
-        {tab === 'suppliers' && (
-          <div className="card overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border bg-secondary/50">
-                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Proveedor</th>
-                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden md:table-cell">Contacto</th>
-                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden lg:table-cell">Compras</th>
-                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden lg:table-cell">Saldo</th>
-                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Estado</th>
-                    <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredSuppliers.map((s, i) => (
-                    <tr key={s.id} className={`border-b border-border hover:bg-secondary/30 transition-colors ${i % 2 === 0 ? '' : 'bg-secondary/10'}`}>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-warning/20 flex items-center justify-center text-warning font-bold text-sm flex-shrink-0">{s.name.charAt(0)}</div>
-                          <div>
-                            <p className="font-medium text-foreground">{s.name}</p>
-                            <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
-                              <MapPin size={10} />{s.address ? (s.address.length > 30 ? `${s.address.substring(0, 30)}...` : s.address) : '—'}
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 hidden md:table-cell">
-                        <p className="text-foreground text-sm">{s.contact || '—'}</p>
-                        <p className="text-xs text-muted-foreground">{s.phone}</p>
-                      </td>
-                      <td className="px-4 py-3 hidden lg:table-cell text-muted-foreground">{s.purchases} órdenes</td>
-                      <td className="px-4 py-3 hidden lg:table-cell">
-                        <span className={s.balance > 0 ? 'text-warning font-semibold' : 'text-success font-semibold'}>
-                          {s.balance > 0 ? `RD$ ${s.balance.toLocaleString()}` : 'Al día'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3"><span className={s.status === 'active' ? 'badge-success' : 'badge-danger'}>{s.status === 'active' ? 'Activo' : 'Inactivo'}</span></td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-end gap-1">
-                          <button type="button" onClick={() => openPreviewSupplier(s)} className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors" title="Ver"><Eye size={14} /></button>
-                          <button type="button" onClick={() => openEditSupplier(s)} className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors" title="Editar"><Edit2 size={14} /></button>
-                          <button type="button" onClick={() => setDeleteTarget({ type: 'supplier', id: s.id, name: s.name })} className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-danger transition-colors" title="Eliminar"><Trash2 size={14} /></button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="flex gap-1 bg-secondary rounded-xl p-1 w-fit overflow-x-auto max-w-full">
+              {tabs.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => handleSelectTab(t.id)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all cursor-pointer whitespace-nowrap ${tab === t.id
+                      ? 'bg-card text-foreground shadow-xs ring-1 ring-border'
+                      : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                >
+                  {t.icon}
+                  {t.label}
+                </button>
+              ))}
             </div>
-          </div>
-        )}
 
-        {/* Groups Table */}
-        {tab === 'groups' && (
-          <div className="card overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border bg-secondary/50">
-                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Grupo</th>
-                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Descripción</th>
-                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden md:table-cell">Descuento</th>
-                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden md:table-cell">Clientes</th>
-                    <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {grupos.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
-                        No hay grupos registrados en la base de datos
-                      </td>
-                    </tr>
-                  ) : (
-                    grupos.map((g, i) => (
-                      <tr
-                        key={g.id}
-                        className={`border-b border-border hover:bg-secondary/30 transition-colors ${i % 2 === 0 ? '' : 'bg-secondary/10'}`}
-                      >
-                        <td className="px-4 py-3 font-medium text-foreground">{g.nombre}</td>
-                        <td className="px-4 py-3 text-muted-foreground">{g.descripcion || '—'}</td>
-                        <td className="px-4 py-3 hidden md:table-cell">
-                          <span className="badge-success">{g.porcentaje_descuento}%</span>
-                        </td>
-                        <td className="px-4 py-3 hidden md:table-cell text-muted-foreground">
-                          {g.clientes_count ?? 0} clientes
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center justify-end gap-1">
-                            <button
-                              type="button"
-                              onClick={() => openEditGroup(g)}
-                              className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
-                            >
-                              <Edit2 size={14} />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setDeleteTarget({ type: 'group', id: g.id, name: g.nombre })
-                              }
-                              className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-danger transition-colors"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        </td>
+            {/* Stats Row */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              {tab === 'customers' && (
+                <>
+                  <div className="card p-4">
+                    <p className="text-xs text-muted-foreground">Total Clientes</p>
+                    <p className="text-2xl font-bold text-foreground mt-1">{customerStats.total}</p>
+                  </div>
+                  <div className="card p-4">
+                    <p className="text-xs text-muted-foreground">Activos</p>
+                    <p className="text-2xl font-bold text-success mt-1">{customerStats.activos}</p>
+                  </div>
+                  <div className="card p-4">
+                    <p className="text-xs text-muted-foreground">Crédito Total</p>
+                    <p className="text-2xl font-bold text-info mt-1">{formatK(customerStats.credito)}</p>
+                  </div>
+                  <div className="card p-4">
+                    <p className="text-xs text-muted-foreground">Saldo Pendiente</p>
+                    <p className="text-2xl font-bold text-warning mt-1">{formatK(customerStats.saldo)}</p>
+                  </div>
+                </>
+              )}
+              {tab === 'suppliers' && (
+                <>
+                  <div className="card p-4">
+                    <p className="text-xs text-muted-foreground">Total Proveedores</p>
+                    <p className="text-2xl font-bold text-foreground mt-1">{supplierStats.total}</p>
+                  </div>
+                  <div className="card p-4">
+                    <p className="text-xs text-muted-foreground">Activos</p>
+                    <p className="text-2xl font-bold text-success mt-1">{supplierStats.activos}</p>
+                  </div>
+                  <div className="card p-4">
+                    <p className="text-xs text-muted-foreground">Compras este mes</p>
+                    <p className="text-2xl font-bold text-info mt-1">—</p>
+                  </div>
+                  <div className="card p-4">
+                    <p className="text-xs text-muted-foreground">Saldo por pagar</p>
+                    <p className="text-2xl font-bold text-warning mt-1">—</p>
+                  </div>
+                </>
+              )}
+              {tab === 'groups' && (
+                <>
+                  <div className="card p-4">
+                    <p className="text-xs text-muted-foreground">Total Grupos</p>
+                    <p className="text-2xl font-bold text-foreground mt-1">{grupos.length}</p>
+                  </div>
+                  <div className="card p-4">
+                    <p className="text-xs text-muted-foreground">Clientes Asignados</p>
+                    <p className="text-2xl font-bold text-success mt-1">
+                      {grupos.reduce((s, g) => s + (g.clientes_count ?? 0), 0)}
+                    </p>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="card p-4 flex flex-col sm:flex-row gap-3">
+              <div className="relative flex-1">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  className="input-field pl-9"
+                  placeholder="Buscar por nombre, teléfono o RNC..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
+              <div className="flex gap-2">
+                <button className="btn-secondary flex items-center gap-2">
+                  <Filter size={16} />
+                  Filtrar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExportPdf}
+                  className="btn-secondary flex items-center gap-2"
+                >
+                  <Download size={16} />
+                  Exportar PDF
+                </button>
+              </div>
+            </div>
+
+            {/* Customers Table */}
+            {tab === 'customers' && (
+              <div className="card overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border bg-secondary/50">
+                        <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Cliente</th>
+                        <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden md:table-cell">Grupo</th>
+                        <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden lg:table-cell">Crédito</th>
+                        <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden lg:table-cell">Compras</th>
+                        <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden xl:table-cell">Saldo</th>
+                        <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Estado</th>
+                        <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Acciones</th>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                    </thead>
+                    <tbody>
+                      {filteredCustomers.map((c, i) => (
+                        <tr key={c.id} className={`border-b border-border hover:bg-secondary/30 transition-colors ${i % 2 === 0 ? '' : 'bg-secondary/10'}`}>
+                          <td
+                            className="px-4 py-3 cursor-pointer group"
+                            onClick={() => setSelectedExpedienteCustomer(c)}
+                            title="Ver detalles de la cuenta"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-xl bg-[#5252e0]/10 text-[#5252e0] dark:bg-[#5252e0]/20 flex items-center justify-center font-bold text-sm flex-shrink-0 group-hover:scale-105 transition-transform">
+                                {c.name.charAt(0).toUpperCase()}
+                              </div>
+                              <div>
+                                <p className="font-semibold text-foreground group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                                  {c.name}
+                                </p>
+                                <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
+                                  <Phone size={10} />{c.phone || 'Sin teléfono'}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 hidden md:table-cell"><span className="badge-neutral">{c.group}</span></td>
+                          <td className="px-4 py-3 hidden lg:table-cell">
+                            <div className="flex items-center gap-1 text-muted-foreground"><CreditCard size={12} />RD$ {c.credit.toLocaleString()}</div>
+                          </td>
+                          <td className="px-4 py-3 hidden lg:table-cell text-muted-foreground">{c.purchases} compras</td>
+                          <td className="px-4 py-3 hidden xl:table-cell">
+                            <span className={c.balance > 0 ? 'text-warning font-semibold' : 'text-success font-semibold'}>
+                              {c.balance > 0 ? `RD$ ${c.balance.toLocaleString()}` : 'Al día'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3"><span className={c.status === 'active' ? 'badge-success' : 'badge-danger'}>{c.status === 'active' ? 'Activo' : 'Inactivo'}</span></td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center justify-end gap-1">
+                              <button
+                                type="button"
+                                onClick={() => setSelectedExpedienteCustomer(c)}
+                                className="px-2 py-1 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/20 text-xs font-bold flex items-center gap-1 transition-all cursor-pointer"
+                                title="Ver detalles de cuenta"
+                              >
+                                <Users size={13} />
+                                <span>Detalles</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setSelectedExpedienteCustomer(c)}
+                                className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                                title="Ver detalles"
+                              >
+                                <Eye size={14} />
+                              </button>
+                              <button type="button" onClick={() => openEditCustomer(c)} className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors cursor-pointer" title="Editar"><Edit2 size={14} /></button>
+                              <button type="button" onClick={() => setDeleteTarget({ type: 'customer', id: c.id, name: c.name })} className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-danger transition-colors cursor-pointer" title="Eliminar"><Trash2 size={14} /></button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="px-4 py-3 border-t border-border flex items-center justify-between text-sm text-muted-foreground">
+                  <span>Mostrando {filteredCustomers.length} clientes</span>
+                  <div className="flex gap-1">
+                    <button className="px-3 py-1 rounded-lg hover:bg-secondary transition-colors">Anterior</button>
+                    <button className="px-3 py-1 rounded-lg bg-primary text-primary-foreground">1</button>
+                    <button className="px-3 py-1 rounded-lg hover:bg-secondary transition-colors">Siguiente</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Suppliers Table */}
+            {tab === 'suppliers' && (
+              <div className="card overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border bg-secondary/50">
+                        <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Proveedor</th>
+                        <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden md:table-cell">Contacto</th>
+                        <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden lg:table-cell">Compras</th>
+                        <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden lg:table-cell">Saldo</th>
+                        <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Estado</th>
+                        <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredSuppliers.map((s, i) => (
+                        <tr key={s.id} className={`border-b border-border hover:bg-secondary/30 transition-colors ${i % 2 === 0 ? '' : 'bg-secondary/10'}`}>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-warning/20 flex items-center justify-center text-warning font-bold text-sm flex-shrink-0">{s.name.charAt(0)}</div>
+                              <div>
+                                <p className="font-medium text-foreground">{s.name}</p>
+                                <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
+                                  <MapPin size={10} />{s.address ? (s.address.length > 30 ? `${s.address.substring(0, 30)}...` : s.address) : '—'}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 hidden md:table-cell">
+                            <p className="text-foreground text-sm">{s.contact || '—'}</p>
+                            <p className="text-xs text-muted-foreground">{s.phone}</p>
+                          </td>
+                          <td className="px-4 py-3 hidden lg:table-cell text-muted-foreground">{s.purchases} órdenes</td>
+                          <td className="px-4 py-3 hidden lg:table-cell">
+                            <span className={s.balance > 0 ? 'text-warning font-semibold' : 'text-success font-semibold'}>
+                              {s.balance > 0 ? `RD$ ${s.balance.toLocaleString()}` : 'Al día'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3"><span className={s.status === 'active' ? 'badge-success' : 'badge-danger'}>{s.status === 'active' ? 'Activo' : 'Inactivo'}</span></td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center justify-end gap-1">
+                              <button type="button" onClick={() => openPreviewSupplier(s)} className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors" title="Ver"><Eye size={14} /></button>
+                              <button type="button" onClick={() => openEditSupplier(s)} className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors" title="Editar"><Edit2 size={14} /></button>
+                              <button type="button" onClick={() => setDeleteTarget({ type: 'supplier', id: s.id, name: s.name })} className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-danger transition-colors" title="Eliminar"><Trash2 size={14} /></button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Groups Table */}
+            {tab === 'groups' && (
+              <div className="card overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border bg-secondary/50">
+                        <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Grupo</th>
+                        <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Descripción</th>
+                        <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden md:table-cell">Descuento</th>
+                        <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden md:table-cell">Clientes</th>
+                        <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {grupos.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
+                            No hay grupos registrados en la base de datos
+                          </td>
+                        </tr>
+                      ) : (
+                        grupos.map((g, i) => (
+                          <tr
+                            key={g.id}
+                            className={`border-b border-border hover:bg-secondary/30 transition-colors ${i % 2 === 0 ? '' : 'bg-secondary/10'}`}
+                          >
+                            <td className="px-4 py-3 font-medium text-foreground">{g.nombre}</td>
+                            <td className="px-4 py-3 text-muted-foreground">{g.descripcion || '—'}</td>
+                            <td className="px-4 py-3 hidden md:table-cell">
+                              <span className="badge-success">{g.porcentaje_descuento}%</span>
+                            </td>
+                            <td className="px-4 py-3 hidden md:table-cell text-muted-foreground">
+                              {g.clientes_count ?? 0} clientes
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center justify-end gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => openEditGroup(g)}
+                                  className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+                                >
+                                  <Edit2 size={14} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setDeleteTarget({ type: 'group', id: g.id, name: g.nombre })
+                                  }
+                                  className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-danger transition-colors"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
 

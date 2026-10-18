@@ -1,5 +1,7 @@
 import { getSupabase, isSupabaseConfigured, tryGetSupabase } from './clienteSupabase';
 import { VENTA_COLUMNS, type MetodoPago, type Venta, type DetalleVenta } from '@/types/database';
+import { verificarLimiteFacturasMes, esModoSimulacionPlan } from './subscriptionModules.service';
+import { getStoredUser } from '@/lib/auth';
 
 export type ItemVentaPayload = {
   producto_id?: string | null;
@@ -14,6 +16,7 @@ export type ItemVentaPayload = {
 };
 
 export type PayloadVenta = {
+  empresa_id?: string | null;
   numero_factura?: string;
   ncf?: string | null;
   tipo_ncf?: string | null;
@@ -51,10 +54,16 @@ export interface VentaConDetalle extends Venta {
 const LOCAL_VENTAS_KEY = 'mercato_ventas_local';
 const LOCAL_DETALLE_KEY = 'mercato_detalle_ventas_local';
 
-function getLocalVentas(): VentaConDetalle[] {
+export function getLocalVentas(targetEmpresaId?: string | null): VentaConDetalle[] {
   try {
     const raw = localStorage.getItem(LOCAL_VENTAS_KEY);
-    return raw ? (JSON.parse(raw) as VentaConDetalle[]) : [];
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as (VentaConDetalle & { empresa_id?: string | null })[];
+    if (!Array.isArray(parsed)) return [];
+    if (targetEmpresaId) {
+      return parsed.filter((v) => !v.empresa_id || v.empresa_id === targetEmpresaId);
+    }
+    return parsed;
   } catch {
     return [];
   }
@@ -65,6 +74,14 @@ function saveLocalVentas(ventas: VentaConDetalle[]) {
 }
 
 export async function procesarVenta(payload: PayloadVenta): Promise<ResultadoVenta> {
+  // Verificar cuota mensual de facturas según la suscripción del negocio
+  const checkLimites = await verificarLimiteFacturasMes();
+  if (!checkLimites.permitido) {
+    throw new Error(
+      checkLimites.mensaje || 'Has alcanzado el límite mensual de facturas para tu plan de suscripción.'
+    );
+  }
+
   if (!isSupabaseConfigured()) {
     const id = crypto.randomUUID();
     const numero =
@@ -85,8 +102,12 @@ export async function procesarVenta(payload: PayloadVenta): Promise<ResultadoVen
       subtotal: it.subtotal,
     }));
 
+    const user = getStoredUser();
+    const empresaId = payload.empresa_id || user?.empresaId || null;
+
     const venta: VentaConDetalle = {
       id,
+      empresa_id: empresaId,
       numero_factura: numero,
       ncf: payload.ncf ?? null,
       tipo_ncf: payload.tipo_ncf ?? null,
@@ -108,8 +129,8 @@ export async function procesarVenta(payload: PayloadVenta): Promise<ResultadoVen
       devuelta_entregada: payload.devuelta_entregada ?? 0,
       estado: 'completada',
       creado_en: new Date().toISOString(),
-      cliente_nombre: 'Cliente General',
-      cajero_nombre: 'Cajero',
+      cliente_nombre: payload.cliente_id ? 'Cliente' : 'Cliente General',
+      cajero_nombre: user?.name || 'Cajero',
       detalle_ventas: items,
     };
 
@@ -173,8 +194,19 @@ export async function obtenerHistorialVentas(params: {
   cajaId?: string | string[];
   cajeroId?: string;
   excluirAnuladas?: boolean;
+  empresaId?: string;
   signal?: AbortSignal;
 }): Promise<{ datos: VentaConDetalle[]; total: number }> {
+  const user = getStoredUser();
+  const isSimulating = esModoSimulacionPlan();
+
+  // Privacidad de clientes: SuperAdmin no ve ventas a menos que esté simulando o filtrando explícitamente una empresa
+  if (user?.isSuperAdmin && !isSimulating && !params.empresaId && !user?.empresaId) {
+    return { datos: [], total: 0 };
+  }
+
+  const targetEmpresaId = params.empresaId || user?.empresaId;
+
   const pagina = params.pagina ?? 1;
   const limite = params.limite ?? 50;
   const desde = (pagina - 1) * limite;
@@ -182,7 +214,7 @@ export async function obtenerHistorialVentas(params: {
 
   const sb = tryGetSupabase();
   if (!sb) {
-    let list = getLocalVentas();
+    let list = getLocalVentas(targetEmpresaId);
     if (params.busqueda?.trim()) {
       const q = params.busqueda.trim().toLowerCase();
       list = list.filter(
@@ -220,6 +252,10 @@ export async function obtenerHistorialVentas(params: {
     .select('*, clientes(nombre), perfiles!cajero_id(nombre_completo)', { count: 'exact' })
     .order('creado_en', { ascending: false })
     .range(desde, hasta);
+
+  if (targetEmpresaId) {
+    query = query.eq('empresa_id', targetEmpresaId);
+  }
 
   if (params.busqueda?.trim()) {
     const q = params.busqueda.trim();

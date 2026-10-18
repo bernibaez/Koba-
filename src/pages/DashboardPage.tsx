@@ -1,4 +1,7 @@
 import React from 'react';
+import { useAuth } from '@/context/AuthContext';
+import { esModoSimulacionPlan } from '@/services/subscriptionModules.service';
+import SuperAdminPage from './SuperAdminPage';
 import AppLayout from '@/components/AppLayout';
 import DashboardHeader from './dashboard/DashboardHeader';
 import DashboardBentoGrid from './dashboard/DashboardBentoGrid';
@@ -8,6 +11,13 @@ import RecentTransactions from './dashboard/RecentTransactions';
 import RecentActivity from './dashboard/RecentActivity';
 
 export default function DashboardPage() {
+  const { user } = useAuth();
+  const isSuperAdminNoSim = Boolean(user?.isSuperAdmin) && !esModoSimulacionPlan();
+
+  if (isSuperAdminNoSim) {
+    return <SuperAdminPage />;
+  }
+
   return (
     <AppLayout>
       <div className="space-y-5 max-w-[1600px] mx-auto pb-6">

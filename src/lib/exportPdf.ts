@@ -50,7 +50,7 @@ export function exportTableToPdf({
 
   doc.setFontSize(16);
   doc.setTextColor(22, 163, 74);
-  doc.text('Mercato', 14, 16);
+  doc.text('KOBA', 14, 16);
 
   doc.setFontSize(13);
   doc.setTextColor(15, 23, 42);

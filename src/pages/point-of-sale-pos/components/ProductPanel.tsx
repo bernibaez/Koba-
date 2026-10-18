@@ -7,7 +7,6 @@ import ComboStockAlertModal from '@/pages/combos/components/ComboStockAlertModal
 import { toast } from '@/lib/toast';
 import { useProductos } from '@/hooks/useProductos';
 import { useCombos } from '@/hooks/useCombos';
-import { initialProducts } from '@/pages/product-management/components/ProductManagementScreen';
 import { extractPluFromCode, isVariableWeightBarcode, productMatchesScanCode } from '@/lib/scaleBarcode';
 import type { SaleType, WeightUnit } from '@/types/database';
 
@@ -89,39 +88,7 @@ export default function ProductPanel({
       };
     });
 
-    const storeSkus = new Set(fromStore.map((p) => p.sku.toLowerCase()));
-    const demoExtras: Product[] = initialProducts
-      .filter((ip) => !storeSkus.has(ip.sku.toLowerCase()))
-      .map((ip) => {
-        const isWeight =
-          ip.isWeightProduct ||
-          ip.saleType === 'weight' ||
-          ip.saleType === 'both' ||
-          ip.unit.toLowerCase().includes('lb') ||
-          ip.unit.toLowerCase().includes('kg');
-        return {
-          id: ip.id,
-          sku: ip.sku,
-          barcode: ip.barcode,
-          plu: ip.plu,
-          name: ip.name,
-          category: ip.category,
-          price: ip.salePrice,
-          wholesalePrice: ip.wholesalePrice ? Number(ip.wholesalePrice) : undefined,
-          cost: ip.costPrice,
-          stock: ip.currentStock,
-          unit: ip.unit,
-          tax: ip.tax,
-          image: ip.image,
-          lowStock: ip.stockStatus === 'low',
-          outOfStock: ip.stockStatus === 'out',
-          isWeighted: isWeight,
-          saleType: ip.saleType ?? (isWeight ? 'weight' : 'unit'),
-          weightUnit: ip.weightUnit ?? 'lb',
-        };
-      });
-
-    return [...fromStore, ...demoExtras];
+    return fromStore;
   }, [productosUi]);
 
   const allCombos = combos.filter((c) => c.active && c.visibleInPos);

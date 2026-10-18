@@ -46,6 +46,9 @@ export function perfilToAuthUser(perfil: Perfil): AuthUser {
     initials: initialsFromName(perfil.nombre_completo),
     sucursalId: perfil.sucursal_id,
     rolDb: perfil.rol,
+    empresaId: perfil.empresa_id,
+    empresaPlan: perfil.empresa?.plan ?? 'pro',
+    isSuperAdmin: Boolean(perfil.es_superadmin || perfil.rol === 'super_admin'),
   };
 }
 
@@ -54,6 +57,24 @@ export type AuthResult = { ok: true; user: AuthUser } | { ok: false; error: stri
 async function cargarPerfil(userId: string): Promise<Perfil | null> {
   const sb = tryGetSupabase();
   if (!sb) return null;
+
+  try {
+    const { data, error } = await sb
+      .from('perfiles')
+      .select(`
+        ${PERFIL_COLUMNS},
+        empresa:empresas(*)
+      `)
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (!error && data) {
+      return data as unknown as Perfil;
+    }
+  } catch {
+    // Si la relación anidada falla, fallback a consulta simple
+  }
+
   const { data, error } = await sb
     .from('perfiles')
     .select(PERFIL_COLUMNS)
@@ -74,11 +95,38 @@ export async function iniciarSesion(
   }
 
   const input = usuarioOEmail.trim();
-  const email = input.includes('@') ? input.toLowerCase() : `${input.toLowerCase()}@mercato.do`;
+  let email = input.toLowerCase();
+
+  // Si el usuario escribió un username o nombre sin '@', buscar su correo en la tabla perfiles
+  if (!email.includes('@')) {
+    try {
+      const { data: perfilMatch } = await sb
+        .from('perfiles')
+        .select('correo')
+        .or(`correo.ilike.${email}@%,nombre_completo.ilike.%${email}%`)
+        .limit(1)
+        .maybeSingle();
+
+      if (perfilMatch?.correo) {
+        email = perfilMatch.correo.toLowerCase();
+      } else {
+        email = `${email}@kobcloud.com`;
+      }
+    } catch {
+      email = `${email}@kobcloud.com`;
+    }
+  }
 
   const { data, error } = await sb.auth.signInWithPassword({ email, password });
   if (error || !data.user) {
-    return { ok: false, error: error?.message ?? 'Usuario o contraseña incorrectos' };
+    console.error('[iniciarSesion] Error en Supabase Auth:', error);
+    let msg = error?.message ?? 'Usuario o contraseña incorrectos';
+    if (msg.toLowerCase().includes('invalid login credentials')) {
+      msg = 'Credenciales inválidas. Verifica que el correo y la contraseña coincidan exactamente.';
+    } else if (msg.toLowerCase().includes('email not confirmed')) {
+      msg = 'El correo no está confirmado en Supabase. Puedes autoconfirmarlo en Supabase SQL Editor.';
+    }
+    return { ok: false, error: msg };
   }
 
   try {

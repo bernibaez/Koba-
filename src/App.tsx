@@ -16,12 +16,15 @@ import CashClosurePage from './pages/CashClosurePage';
 import MaletaPage from './pages/MaletaPage';
 import AuditPage from './pages/AuditPage';
 import ContactsPage from './pages/ContactsPage';
+import CRMPage from './pages/CRMPage';
 import ExpensesPage from './pages/ExpensesPage';
 import AccountsReceivablePage from './pages/AccountsReceivablePage';
 import AccountsPayablePage from './pages/AccountsPayablePage';
 import ReportsPage from './pages/ReportsPage';
 import UsersPage from './pages/UsersPage';
 import SettingsPage from './pages/SettingsPage';
+import SuperAdminPage from './pages/SuperAdminPage';
+import PlanesPage from './pages/PlanesPage';
 import NotFoundPage from './pages/NotFoundPage';
 
 function Guard({ children }: { children: ReactNode }) {
@@ -46,12 +49,15 @@ export default function App() {
       <Route path="/maleta" element={<Guard><MaletaPage /></Guard>} />
       <Route path="/audit" element={<Guard><AuditPage /></Guard>} />
       <Route path="/contacts" element={<Guard><ContactsPage /></Guard>} />
+      <Route path="/crm" element={<Guard><CRMPage /></Guard>} />
       <Route path="/expenses" element={<Guard><ExpensesPage /></Guard>} />
       <Route path="/accounts-receivable" element={<Guard><AccountsReceivablePage /></Guard>} />
       <Route path="/accounts-payable" element={<Guard><AccountsPayablePage /></Guard>} />
       <Route path="/reports" element={<Guard><ReportsPage /></Guard>} />
       <Route path="/users" element={<Guard><UsersPage /></Guard>} />
       <Route path="/settings" element={<Guard><SettingsPage /></Guard>} />
+      <Route path="/superadmin" element={<Guard><SuperAdminPage /></Guard>} />
+      <Route path="/planes" element={<Guard><PlanesPage /></Guard>} />
       <Route path="*" element={<Guard><NotFoundPage /></Guard>} />
     </Routes>
   );

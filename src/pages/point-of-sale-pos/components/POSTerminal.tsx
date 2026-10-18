@@ -36,7 +36,6 @@ import { useAuth } from '@/context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useProductos } from '@/hooks/useProductos';
 import { useCombos } from '@/hooks/useCombos';
-import { initialProducts } from '@/pages/product-management/components/ProductManagementScreen';
 import { parseScaleBarcode } from '../utils/scaleUtils';
 import { decodeVariableWeightBarcode, isVariableWeightBarcode, productMatchesScanCode } from '@/lib/scaleBarcode';
 import { buscarProductoPorCodigoEscaneado, productoAUi } from '@/services/productos.service';
@@ -474,35 +473,7 @@ export default function POSTerminal() {
       saleType: p.saleType,
     }));
 
-    const storeSkus = new Set(storeProducts.map((p) => p.sku.toLowerCase()));
-    const demoExtras = initialProducts
-      .filter((ip) => !storeSkus.has(ip.sku.toLowerCase()))
-      .map((ip) => ({
-        id: ip.id,
-        sku: ip.sku,
-        barcode: ip.barcode || '',
-        plu: ip.plu || '',
-        name: ip.name,
-        price: ip.salePrice,
-        wholesalePrice: ip.wholesalePrice ? Number(ip.wholesalePrice) : undefined,
-        cost: ip.costPrice,
-        stock: ip.currentStock,
-        unit: ip.unit,
-        tax: ip.tax,
-        image: ip.image,
-        outOfStock: ip.stockStatus === 'out',
-        isWeighted:
-          ip.isWeightProduct ||
-          ip.saleType === 'weight' ||
-          ip.saleType === 'both' ||
-          ip.unit.toLowerCase().includes('lb') ||
-          ip.unit.toLowerCase().includes('kg'),
-        saleType: ip.saleType,
-      }));
-
-    const allProds = [...storeProducts, ...demoExtras];
-
-    return allProds.map((p) => ({
+    return storeProducts.map((p) => ({
       productId: p.id,
       name: p.name,
       sku: p.sku,
@@ -638,31 +609,7 @@ export default function POSTerminal() {
             p.unit.toLowerCase().includes('kg'),
           saleType: p.saleType,
         }));
-        const storeSkus = new Set(storeProducts.map((p) => p.sku.toLowerCase()));
-        const demoExtras = initialProducts
-          .filter((ip) => !storeSkus.has(ip.sku.toLowerCase()))
-          .map((ip) => ({
-            id: ip.id,
-            sku: ip.sku,
-            barcode: ip.barcode || '',
-            plu: ip.plu || '',
-            name: ip.name,
-            price: ip.salePrice,
-            cost: ip.costPrice,
-            stock: ip.currentStock,
-            unit: ip.unit,
-            tax: ip.tax,
-            image: ip.image,
-            outOfStock: ip.stockStatus === 'out',
-            isWeighted:
-              ip.isWeightProduct ||
-              ip.saleType === 'weight' ||
-              ip.saleType === 'both' ||
-              ip.unit.toLowerCase().includes('lb') ||
-              ip.unit.toLowerCase().includes('kg'),
-            saleType: ip.saleType,
-          }));
-        const allProds = [...storeProducts, ...demoExtras];
+        const allProds = storeProducts;
 
         let matchedProd = allProds.find((p) => productMatchesScanCode(p, q));
         if (!matchedProd) {
@@ -838,33 +785,7 @@ export default function POSTerminal() {
         saleType: p.saleType,
       }));
 
-      const storeSkus = new Set(storeProducts.map((p) => p.sku.toLowerCase()));
-      const demoExtras = initialProducts
-        .filter((ip) => !storeSkus.has(ip.sku.toLowerCase()))
-        .map((ip) => ({
-          id: ip.id,
-          sku: ip.sku,
-          barcode: ip.barcode || '',
-          plu: ip.plu || '',
-          name: ip.name,
-          price: ip.salePrice,
-          wholesalePrice: ip.wholesalePrice ? Number(ip.wholesalePrice) : undefined,
-          cost: ip.costPrice,
-          stock: ip.currentStock,
-          unit: ip.unit,
-          tax: ip.tax,
-          image: ip.image,
-          outOfStock: ip.stockStatus === 'out',
-          isWeighted:
-            ip.isWeightProduct ||
-            ip.saleType === 'weight' ||
-            ip.saleType === 'both' ||
-            ip.unit.toLowerCase().includes('lb') ||
-            ip.unit.toLowerCase().includes('kg'),
-          saleType: ip.saleType,
-        }));
-
-      const allProds = [...storeProducts, ...demoExtras];
+      const allProds = storeProducts;
       const qLower = q.toLowerCase();
 
       let matchedProd = allProds.find((p) => productMatchesScanCode(p, q));

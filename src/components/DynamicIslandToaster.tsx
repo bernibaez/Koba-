@@ -88,7 +88,20 @@ export const DynamicIslandToaster: React.FC = () => {
           </div>
 
           {/* Indicador derecho estilo Live Activity de Dynamic Island */}
-          <div className="flex-shrink-0 flex items-center gap-1 pl-1">
+          <div className="flex-shrink-0 flex items-center gap-1.5 pl-1">
+            {currentToast.action && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  currentToast.action?.onClick();
+                  dismissToast(currentToast.id);
+                }}
+                className="px-2.5 py-0.5 text-xs font-semibold rounded-full bg-white/20 hover:bg-white/30 text-white transition-colors cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-white"
+              >
+                {currentToast.action.label}
+              </button>
+            )}
             {currentToast.type === 'loading' ? (
               <div className="flex items-center gap-0.5">
                 <span className="w-1 h-3 rounded-full bg-sky-400/80 animate-pulse" />

@@ -106,10 +106,20 @@ const MODULE_MAP: Record<string, ModuleInfo> = {
       { label: 'Productos', href: '/product-management', icon: <Package size={14} /> },
     ],
   },
+  '/crm': {
+    name: 'CRM Empresarial',
+    group: 'CRM',
+    actions: [
+      { label: 'Pipeline', href: '/crm', icon: <Briefcase size={14} />, variant: 'primary' },
+      { label: 'Contactos', href: '/contacts', icon: <Users size={14} /> },
+      { label: 'Cotizaciones', href: '/sales', icon: <ShoppingCart size={14} /> },
+    ],
+  },
   '/contacts': {
     name: 'Contactos',
     group: 'CRM',
     actions: [
+      { label: 'Ir al CRM', href: '/crm', icon: <Briefcase size={14} />, variant: 'primary' },
       { label: 'Ventas', href: '/sales', icon: <ShoppingCart size={14} /> },
       { label: 'Cuentas por Cobrar', href: '/accounts-receivable', icon: <HandCoins size={14} /> },
     ],

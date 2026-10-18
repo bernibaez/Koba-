@@ -2,27 +2,29 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import AppLayout from '@/components/AppLayout';
 import { ShoppingBag, RotateCcw, Plus, Search, Filter, Download, Eye, Edit2, Trash2, X, PackagePlus, Check, CheckCircle2, ShoppingCart, Minus, Package } from 'lucide-react';
-import { exportTableToPdf, formatMoneyPdf } from '@/lib/exportPdf';
+import { exportTableToPdf, exportTableToExcel, formatMoneyPdf } from '@/lib/exportPdf';
 import type { ProductItem } from '@/lib/productStore';
 import { useProductos } from '@/hooks/useProductos';
 import { useProveedores } from '@/hooks/useProveedores';
 import { crearProducto, uiAProductoInsert } from '@/services/productos.service';
 import { crearCompra, obtenerCompras, obtenerDetalleCompra, anularCompra, type CompraDetalle } from '@/services/compras.service';
 import { toast } from '@/lib/toast';
-import ModalShell from '@/components/ui/ModalShell';
 
-interface Purchase {
-  id: string;
-  code: string;
-  supplier: string;
-  date: string;
-  items: number;
-  subtotal: number;
-  tax: number;
-  total: number;
-  status: 'received' | 'pending' | 'partial' | 'anulada';
-  payment: string;
-}
+import '@/styles/apple-tokens.css';
+import PurchasesHeader from './purchases/components/PurchasesHeader';
+import PurchasesMetrics from './purchases/components/PurchasesMetrics';
+import PurchasesToolbar from './purchases/components/PurchasesToolbar';
+import PurchasesTable from './purchases/components/PurchasesTable';
+import PurchaseDrawer from './purchases/components/PurchaseDrawer';
+import VoidPurchaseDialog from './purchases/components/VoidPurchaseDialog';
+import {
+  type Purchase,
+  type PurchasesTab,
+  type PurchasesPeriod,
+  type PurchaseStatus,
+  fromCompraListaToPurchase,
+  calculatePeriodDates,
+} from './purchases/types';
 
 interface ReturnItem {
   id: number;
@@ -46,7 +48,6 @@ export interface PurchaseLineItem {
   taxPercent: number;
 }
 
-type Tab = 'list' | 'returns';
 
 const statusMap: Record<string, { label: string; cls: string }> = {
   received: { label: 'Recibido', cls: 'badge-success' },
@@ -69,7 +70,13 @@ function nextPurchaseInvoice() {
 }
 
 export default function PurchasesPage() {
-  const [tab, setTab] = useState<Tab>('list');
+  const [tab, setTab] = useState<PurchasesTab>('purchases');
+  const [period, setPeriod] = useState<PurchasesPeriod>('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [statusFilter, setStatusFilter] = useState<PurchaseStatus | 'all'>('all');
+  const [sortField, setSortField] = useState('date');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [purchasesList, setPurchasesList] = useState<Purchase[]>([]);
   const [returnsList] = useState<ReturnItem[]>([]);
   const [loadingList, setLoadingList] = useState(true);
@@ -81,6 +88,15 @@ export default function PurchasesPage() {
   const [paymentMethod, setPaymentMethod] = useState('Transferencia');
   const [purchaseDate, setPurchaseDate] = useState(() => new Date().toISOString().split('T')[0]);
   const { proveedores } = useProveedores();
+
+  const handlePeriodChange = (newPeriod: PurchasesPeriod) => {
+    setPeriod(newPeriod);
+    if (newPeriod !== 'custom') {
+      const dates = calculatePeriodDates(newPeriod);
+      setDateFrom(dates.from);
+      setDateTo(dates.to);
+    }
+  };
 
   const [purchaseItems, setPurchaseItems] = useState<PurchaseLineItem[]>([]);
 
@@ -120,20 +136,7 @@ export default function PurchasesPage() {
     setLoadingList(true);
     try {
       const rows = await obtenerCompras();
-      setPurchasesList(
-        rows.map((r) => ({
-          id: r.id,
-          code: r.codigo,
-          supplier: r.proveedor,
-          date: r.fecha,
-          items: r.items,
-          subtotal: r.subtotal,
-          tax: r.impuesto,
-          total: r.total,
-          status: mapEstadoUi(r.estado),
-          payment: r.metodo_pago,
-        }))
-      );
+      setPurchasesList(rows.map(fromCompraListaToPurchase));
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Error al cargar compras');
     } finally {
@@ -148,20 +151,7 @@ export default function PurchasesPage() {
       try {
         const rows = await obtenerCompras();
         if (!alive) return;
-        setPurchasesList(
-          rows.map((r) => ({
-            id: r.id,
-            code: r.codigo,
-            supplier: r.proveedor,
-            date: r.fecha,
-            items: r.items,
-            subtotal: r.subtotal,
-            tax: r.impuesto,
-            total: r.total,
-            status: mapEstadoUi(r.estado),
-            payment: r.metodo_pago,
-          }))
-        );
+        setPurchasesList(rows.map(fromCompraListaToPurchase));
       } catch (e) {
         toast.error(e instanceof Error ? e.message : 'Error al cargar compras');
       } finally {
@@ -172,6 +162,59 @@ export default function PurchasesPage() {
       alive = false;
     };
   }, []);
+
+  // Global Keyboard Shortcuts (N para Nueva Compra, Esc para cerrar)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const activeEl = document.activeElement;
+      const isInputFocused =
+        activeEl?.tagName === 'INPUT' ||
+        activeEl?.tagName === 'TEXTAREA' ||
+        activeEl?.tagName === 'SELECT' ||
+        (activeEl as HTMLElement)?.isContentEditable;
+
+      if (e.key === 'Escape') {
+        if (showProductModal) {
+          setShowProductModal(false);
+          return;
+        }
+        if (showAddForm) {
+          setShowAddForm(false);
+          return;
+        }
+        if (confirmDeleteId) {
+          setConfirmDeleteId(null);
+          return;
+        }
+        if (viewingPurchase) {
+          setViewingPurchase(null);
+          return;
+        }
+      }
+
+      if (
+        isInputFocused ||
+        showAddForm ||
+        showProductModal ||
+        viewingPurchase ||
+        confirmDeleteId
+      ) {
+        return;
+      }
+
+      // N o Alt+N: Nueva compra
+      if ((e.key === 'n' || e.key === 'N') && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        setInvoiceNumber(nextPurchaseInvoice());
+        setPurchaseItems([]);
+        setSupplierId('');
+        setShowAddForm(true);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showAddForm, showProductModal, viewingPurchase, confirmDeleteId]);
 
   const handleViewPurchase = async (id: string) => {
     setLoadingPurchaseDetail(true);
@@ -205,10 +248,24 @@ export default function PurchasesPage() {
     }
   };
 
-  const filteredPurchases = purchasesList.filter(p =>
-    p.code.toLowerCase().includes(search.toLowerCase()) ||
-    p.supplier.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredPurchases = useMemo(() => {
+    return purchasesList.filter((p) => {
+      if (search.trim()) {
+        const q = search.toLowerCase();
+        const matchCode = p.code?.toLowerCase().includes(q);
+        const matchSupplier = p.supplier?.toLowerCase().includes(q);
+        if (!matchCode && !matchSupplier) return false;
+      }
+      if (statusFilter !== 'all') {
+        const pStatus = p.status === 'anulada' ? 'voided' : p.status;
+        const targetStatus = statusFilter === 'anulada' ? 'voided' : statusFilter;
+        if (pStatus !== targetStatus) return false;
+      }
+      if (dateFrom && p.date && p.date < dateFrom) return false;
+      if (dateTo && p.date && p.date > dateTo) return false;
+      return true;
+    });
+  }, [purchasesList, search, statusFilter, dateFrom, dateTo]);
 
   const filteredSystemProducts = systemProducts.filter(p =>
     p.name.toLowerCase().includes(modalSearch.toLowerCase()) ||
@@ -453,7 +510,7 @@ export default function PurchasesPage() {
   };
 
   const handleExportPdf = () => {
-    if (tab === 'list') {
+    if (tab === 'purchases') {
       exportTableToPdf({
         title: 'Órdenes de Compra',
         filename: 'compras',
@@ -466,7 +523,7 @@ export default function PurchasesPage() {
           formatMoneyPdf(p.subtotal),
           formatMoneyPdf(p.tax),
           formatMoneyPdf(p.total),
-          p.payment,
+          p.payment || p.paymentMethod || '—',
           statusMap[p.status]?.label ?? p.status,
         ]),
         landscape: true,
@@ -489,202 +546,60 @@ export default function PurchasesPage() {
     });
   };
 
-  if (viewingPurchase || loadingPurchaseDetail) {
-    return (
-      <AppLayout>
-        <div className="space-y-6 slide-up">
-          {/* Header with back button */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center font-bold">
-                <ShoppingBag size={26} />
-              </div>
-              <div>
-                <div className="flex items-center gap-3 flex-wrap">
-                  <h1 className="text-2xl font-black text-foreground tracking-tight">
-                    Detalle de Compra {viewingPurchase?.codigo || ''}
-                  </h1>
-                  {viewingPurchase && (
-                    <span className={statusMap[mapEstadoUi(viewingPurchase.estado)]?.cls ?? 'badge-neutral'}>
-                      {statusMap[mapEstadoUi(viewingPurchase.estado)]?.label ?? viewingPurchase.estado}
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Vista detallada y desglose fiscal de la orden de compra registrada
-                </p>
-              </div>
-            </div>
+  const handleExportExcel = () => {
+    if (tab === 'purchases') {
+      exportTableToExcel({
+        title: 'Órdenes de Compra',
+        filename: 'compras',
+        headers: ['Orden', 'Fecha', 'Proveedor', 'Ítems', 'Subtotal', 'ITBIS', 'Total', 'Pago', 'Estado'],
+        rows: filteredPurchases.map((p) => [
+          p.code,
+          p.date,
+          p.supplier,
+          p.items,
+          p.subtotal,
+          p.tax,
+          p.total,
+          p.payment || p.paymentMethod || '—',
+          statusMap[p.status]?.label ?? p.status,
+        ]),
+      });
+      return;
+    }
+    exportTableToExcel({
+      title: 'Devoluciones de Compra',
+      filename: 'devoluciones-compra',
+      headers: ['Código', 'Orden', 'Proveedor', 'Fecha', 'Total', 'Motivo', 'Estado'],
+      rows: returnsList.map((r) => [
+        r.code,
+        r.purchaseCode,
+        r.supplier,
+        r.date,
+        r.total,
+        r.reason,
+        statusMap[r.status]?.label ?? r.status,
+      ]),
+    });
+  };
 
-            <button
-              type="button"
-              onClick={() => {
-                setViewingPurchase(null);
-                setLoadingPurchaseDetail(false);
-              }}
-              className="btn-secondary text-xs font-bold py-2.5 px-4 flex items-center gap-2 self-start sm:self-auto shadow-xs"
-            >
-              ← Volver a Compras
-            </button>
-          </div>
 
-          {loadingPurchaseDetail && !viewingPurchase ? (
-            <div className="card p-12 text-center text-sm text-muted-foreground">
-              Cargando detalle de la compra…
-            </div>
-          ) : viewingPurchase ? (
-            <div className="space-y-6">
-              {/* Summary Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="card p-4 space-y-1">
-                  <span className="text-xs text-muted-foreground font-semibold">Proveedor</span>
-                  <p className="text-lg font-black text-foreground truncate">{viewingPurchase.proveedor}</p>
-                </div>
-                <div className="card p-4 space-y-1">
-                  <span className="text-xs text-muted-foreground font-semibold">Fecha de Orden</span>
-                  <p className="text-lg font-bold font-mono text-foreground">{viewingPurchase.fecha}</p>
-                </div>
-                <div className="card p-4 space-y-1">
-                  <span className="text-xs text-muted-foreground font-semibold">Método de Pago</span>
-                  <p className="text-lg font-bold text-foreground">{viewingPurchase.metodo_pago || 'Contado'}</p>
-                </div>
-                <div className="card p-4 space-y-1 bg-primary/5 border-primary/20">
-                  <span className="text-xs text-muted-foreground font-semibold">Monto Total Compra</span>
-                  <p className="text-xl font-black text-primary font-mono">
-                    RD$ {viewingPurchase.total.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                  </p>
-                </div>
-              </div>
-
-              {viewingPurchase.notas && (
-                <div className="card p-4 bg-secondary/30 text-xs">
-                  <span className="font-bold text-muted-foreground block mb-1">Notas u Observaciones:</span>
-                  <p className="text-foreground">{viewingPurchase.notas}</p>
-                </div>
-              )}
-
-              {/* Items Table */}
-              <div className="card overflow-hidden">
-                <div className="p-4 border-b border-border bg-secondary/40 flex justify-between items-center">
-                  <h3 className="font-bold text-foreground text-sm uppercase tracking-wider">
-                    Productos de la Orden ({viewingPurchase.lineas.length})
-                  </h3>
-                </div>
-
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-secondary/50 border-b border-border">
-                      <tr>
-                        <th className="text-left px-4 py-3 font-semibold text-muted-foreground">#</th>
-                        <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Producto / Descripción</th>
-                        <th className="text-center px-4 py-3 font-semibold text-muted-foreground">Cantidad</th>
-                        <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Costo Unit.</th>
-                        <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Subtotal</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {viewingPurchase.lineas.length === 0 ? (
-                        <tr>
-                          <td colSpan={5} className="p-6 text-center text-muted-foreground">
-                            No hay productos registrados en esta compra
-                          </td>
-                        </tr>
-                      ) : (
-                        viewingPurchase.lineas.map((line, idx) => (
-                          <tr key={line.id || idx} className="hover:bg-secondary/20 transition-colors">
-                            <td className="px-4 py-3 text-muted-foreground font-mono text-xs">{idx + 1}</td>
-                            <td className="px-4 py-3 font-semibold text-foreground">{line.nombre}</td>
-                            <td className="px-4 py-3 text-center font-mono font-bold">{line.cantidad}</td>
-                            <td className="px-4 py-3 text-right font-mono tabular-nums text-muted-foreground">
-                              RD$ {line.precio_costo.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                            </td>
-                            <td className="px-4 py-3 text-right font-mono tabular-nums font-bold text-foreground">
-                              RD$ {line.subtotal.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Fiscal Totals Footer */}
-                <div className="p-4 border-t border-border bg-secondary/20 flex flex-col sm:flex-row justify-between items-end sm:items-center gap-4">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      exportTableToPdf({
-                        title: `ORDEN DE COMPRA - ${viewingPurchase.codigo}`,
-                        subtitle: `Proveedor: ${viewingPurchase.proveedor} | Fecha: ${viewingPurchase.fecha}`,
-                        filename: `compra-${viewingPurchase.codigo}`,
-                        headers: ['#', 'Producto', 'Cant.', 'Precio Costo', 'Subtotal'],
-                        rows: viewingPurchase.lineas.map((line, idx) => [
-                          idx + 1,
-                          line.nombre,
-                          line.cantidad,
-                          formatMoneyPdf(line.precio_costo),
-                          formatMoneyPdf(line.subtotal),
-                        ]),
-                      });
-                    }}
-                    className="btn-secondary text-xs py-2 px-3 font-semibold flex items-center gap-1.5"
-                  >
-                    <Download size={14} /> Exportar PDF
-                  </button>
-
-                  <div className="w-full sm:w-72 space-y-1.5 text-xs">
-                    <div className="flex justify-between text-muted-foreground">
-                      <span>Subtotal Neto:</span>
-                      <span className="font-mono font-medium">
-                        RD$ {viewingPurchase.subtotal.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-amber-600 dark:text-amber-400 font-semibold">
-                      <span>ITBIS (Impuesto):</span>
-                      <span className="font-mono">
-                        RD$ {viewingPurchase.impuesto.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                      </span>
-                    </div>
-                    <div className="flex justify-between border-t border-border pt-2 text-base font-black text-foreground">
-                      <span>Total General:</span>
-                      <span className="text-primary font-mono">
-                        RD$ {viewingPurchase.total.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Bottom Actions */}
-              <div className="flex justify-start">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setViewingPurchase(null);
-                    setLoadingPurchaseDetail(false);
-                  }}
-                  className="btn-secondary text-xs font-bold py-2.5 px-5"
-                >
-                  ← Volver a Compras
-                </button>
-              </div>
-            </div>
-          ) : null}
-        </div>
-      </AppLayout>
-    );
-  }
 
   if (showAddForm) {
     return (
-      <AppLayout>
-        <div className="space-y-6 slide-up">
-          <div className="flex items-center justify-between">
+      <AppLayout fullWidth>
+        <div className="apple-scope space-y-6">
+          <div className="flex items-center justify-between pb-3 border-b border-[var(--line)]">
             <div>
-              <h1 className="text-2xl font-bold text-foreground">Nueva Compra</h1>
-              <p className="text-sm text-muted-foreground mt-1">Registrar orden de compra y actualizar existencias</p>
+              <h1 className="text-xl font-semibold text-[var(--ink)] tracking-tight">Nueva compra</h1>
+              <p className="text-xs text-[var(--ink2)] mt-0.5">Registra la orden de compra y actualiza el stock y costos de inventario</p>
             </div>
-            <button onClick={() => setShowAddForm(false)} className="btn-secondary">← Volver a Compras</button>
+            <button
+              type="button"
+              onClick={() => setShowAddForm(false)}
+              className="apple-btn-secondary text-xs !h-8 !px-3.5 cursor-pointer"
+            >
+              ← Volver a Compras
+            </button>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -757,9 +672,9 @@ export default function PurchasesPage() {
                       setModalTab('catalog');
                       setShowProductModal(true);
                     }}
-                    className="btn-primary flex items-center gap-2 text-xs py-2 px-3.5 shadow-md"
+                    className="apple-btn-primary !h-8 !px-3.5 !text-xs inline-flex items-center gap-1.5 cursor-pointer"
                   >
-                    <Plus size={16} />
+                    <Plus size={14} />
                     Agregar producto
                   </button>
                 </div>
@@ -902,7 +817,7 @@ export default function PurchasesPage() {
                 type="button"
                 onClick={() => void handleSavePurchase()}
                 disabled={saving || purchaseItems.length === 0}
-                className="btn-primary w-full py-3 text-base font-bold shadow-md flex items-center justify-center gap-2 disabled:opacity-50"
+                className="apple-btn-primary w-full !h-11 !text-sm font-semibold flex items-center justify-center gap-2 cursor-pointer shadow-md disabled:opacity-50"
               >
                 <Check size={18} />
                 {saving ? 'Guardando…' : 'Guardar Compra'}
@@ -1358,128 +1273,80 @@ export default function PurchasesPage() {
   }
 
   return (
-    <AppLayout>
-      <div className="space-y-6 slide-up">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">Compras</h1>
-            <p className="text-sm text-muted-foreground mt-1">Gestiona órdenes de compra y devoluciones</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => {
+    <AppLayout fullWidth>
+      <div className="apple-scope space-y-6">
+        {/* Apple Design Header */}
+        <PurchasesHeader
+          onNewPurchase={() => {
+            setInvoiceNumber(nextPurchaseInvoice());
+            setPurchaseItems([]);
+            setSupplierId('');
+            setShowAddForm(true);
+          }}
+        />
+
+        {/* Apple Design Metrics */}
+        <PurchasesMetrics purchases={purchasesList} />
+
+        {/* Apple Design Toolbar: Vistas, Periodos, Búsqueda debounced y Exportar */}
+        <PurchasesToolbar
+          currentTab={tab}
+          onTabChange={setTab}
+          tabCounts={{
+            purchases: purchasesList.length,
+            returns: returnsList.length,
+          }}
+          currentPeriod={period}
+          onPeriodChange={handlePeriodChange}
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          onCustomDateChange={(from, to) => {
+            setDateFrom(from);
+            setDateTo(to);
+            setPeriod('custom');
+          }}
+          selectedStatus={statusFilter}
+          onStatusChange={setStatusFilter}
+          search={search}
+          onSearchChange={setSearch}
+          onExportPdf={handleExportPdf}
+          onExportExcel={handleExportExcel}
+        />
+
+        {tab === 'purchases' && (
+          <PurchasesTable
+            purchases={filteredPurchases}
+            isLoading={loadingList}
+            sortField={sortField}
+            sortDir={sortDir}
+            onSortChange={(field, dir) => {
+              setSortField(field);
+              setSortDir(dir);
+            }}
+            onRowClick={(purchase) => {
+              void handleViewPurchase(purchase.id);
+            }}
+            onViewDetail={(purchase) => {
+              void handleViewPurchase(purchase.id);
+            }}
+            onVoidPurchase={(purchase) => {
+              setConfirmDeleteId(purchase.id);
+            }}
+            hasFilters={Boolean(search || dateFrom || dateTo || period !== 'all' || statusFilter !== 'all')}
+            onClearFilters={() => {
+              setSearch('');
+              setDateFrom('');
+              setDateTo('');
+              setPeriod('all');
+              setStatusFilter('all');
+            }}
+            onNewPurchase={() => {
               setInvoiceNumber(nextPurchaseInvoice());
               setPurchaseItems([]);
               setSupplierId('');
               setShowAddForm(true);
             }}
-            className="btn-primary flex items-center gap-2 w-fit shadow-md"
-          >
-            <Plus size={16} />Nueva Compra
-          </button>
-        </div>
-
-        {/* Stats */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="card p-4"><p className="text-xs text-muted-foreground">Total compras</p><p className="text-2xl font-bold text-foreground mt-1">RD$ {purchasesList.reduce((s, p) => s + p.total, 0).toLocaleString('es-DO')}</p></div>
-          <div className="card p-4"><p className="text-xs text-muted-foreground">Órdenes totales</p><p className="text-2xl font-bold text-info mt-1">{loadingList ? '…' : purchasesList.length}</p></div>
-          <div className="card p-4"><p className="text-xs text-muted-foreground">Pendientes</p><p className="text-2xl font-bold text-warning mt-1">{purchasesList.filter((p) => p.status === 'pending').length}</p></div>
-          <div className="card p-4"><p className="text-xs text-muted-foreground">Devoluciones</p><p className="text-2xl font-bold text-danger mt-1">2</p></div>
-        </div>
-
-        <div className="flex gap-1 bg-secondary rounded-xl p-1 w-fit">
-          {[{ id: 'list' as Tab, label: 'Lista de Compras', icon: <ShoppingBag size={16} /> }, { id: 'returns' as Tab, label: 'Devoluciones', icon: <RotateCcw size={16} /> }].map(t => (
-            <button key={t.id} onClick={() => setTab(t.id)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${tab === t.id ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
-              {t.icon}{t.label}
-            </button>
-          ))}
-        </div>
-
-        <div className="card p-4 flex flex-col sm:flex-row gap-3">
-          <div className="relative flex-1">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <input className="input-field pl-9" placeholder="Buscar por código o proveedor..." value={search} onChange={e => setSearch(e.target.value)} />
-          </div>
-          <div className="flex gap-2">
-            <button className="btn-secondary flex items-center gap-2"><Filter size={16} />Filtrar</button>
-            <button type="button" onClick={handleExportPdf} className="btn-secondary flex items-center gap-2"><Download size={16} />Exportar PDF</button>
-          </div>
-        </div>
-
-        {tab === 'list' && (
-          <div className="card overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border bg-secondary/50">
-                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Código</th>
-                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Proveedor</th>
-                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden md:table-cell">Fecha</th>
-                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden lg:table-cell">Productos</th>
-                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden lg:table-cell">ITBIS</th>
-                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Total</th>
-                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden md:table-cell">Estado</th>
-                    <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredPurchases.map((p, i) => (
-                    <tr key={p.id} className={`border-b border-border hover:bg-secondary/30 transition-colors ${i % 2 === 0 ? '' : 'bg-secondary/10'}`}>
-                      <td className="px-4 py-3 font-mono text-primary font-medium">{p.code}</td>
-                      <td className="px-4 py-3 font-medium text-foreground">{p.supplier}</td>
-                      <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">{p.date}</td>
-                      <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell">{p.items} items</td>
-                      <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell">RD$ {p.tax.toLocaleString()}</td>
-                      <td className="px-4 py-3 font-bold text-foreground">RD$ {p.total.toLocaleString()}</td>
-                      <td className="px-4 py-3 hidden md:table-cell"><span className={statusMap[p.status].cls}>{statusMap[p.status].label}</span></td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-end gap-1">
-                          <button
-                            type="button"
-                            className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
-                            title="Ver detalle"
-                            onClick={() => void handleViewPurchase(p.id)}
-                          >
-                            <Eye size={14} />
-                          </button>
-                          <button
-                            type="button"
-                            className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
-                            title="Editar"
-                            onClick={() =>
-                              toast.info(
-                                'Las compras recibidas no se editan; anula y crea otra'
-                              )
-                            }
-                          >
-                            <Edit2 size={14} />
-                          </button>
-                          <button
-                            type="button"
-                            className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-danger transition-colors"
-                            title="Anular compra"
-                            disabled={p.status === 'anulada'}
-                            onClick={() => setConfirmDeleteId(p.id)}
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="px-4 py-3 border-t border-border flex items-center justify-between text-sm text-muted-foreground">
-              <span>Mostrando {filteredPurchases.length} de {purchasesList.length} compras</span>
-              <div className="flex gap-1">
-                <button className="px-3 py-1 rounded-lg hover:bg-secondary transition-colors">Anterior</button>
-                <button className="px-3 py-1 rounded-lg bg-primary text-primary-foreground">1</button>
-                <button className="px-3 py-1 rounded-lg hover:bg-secondary transition-colors">Siguiente</button>
-              </div>
-            </div>
-          </div>
+          />
         )}
 
         {tab === 'returns' && (
@@ -1532,41 +1399,27 @@ export default function PurchasesPage() {
 
 
 
-      <ModalShell
-        open={!!confirmDeleteId}
-        onClose={() => !anulando && setConfirmDeleteId(null)}
-        size="sm"
-        busy={anulando}
-        busyLabel="Anulando…"
-        className="p-6 space-y-4"
-      >
-        <div className="flex items-center gap-2">
-          <Trash2 className="text-danger" size={20} />
-          <h3 className="font-bold text-foreground text-lg">Anular compra</h3>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          ¿Anular esta compra? Esta acción marca el documento como anulado. Para corregir,
-          anula y crea otra compra.
-        </p>
-        <div className="flex gap-3 pt-2">
-          <button
-            type="button"
-            className="btn-secondary flex-1"
-            disabled={anulando}
-            onClick={() => setConfirmDeleteId(null)}
-          >
-            Cancelar
-          </button>
-          <button
-            type="button"
-            className="btn-primary flex-1 bg-rose-600 hover:bg-rose-700 text-white"
-            disabled={anulando}
-            onClick={() => void handleConfirmAnular()}
-          >
-            Confirmar anulación
-          </button>
-        </div>
-      </ModalShell>
+        {/* Apple Design Drawer para detalle de orden de compra */}
+        <PurchaseDrawer
+          purchase={viewingPurchase}
+          isLoading={loadingPurchaseDetail}
+          onClose={() => {
+            setViewingPurchase(null);
+            setLoadingPurchaseDetail(false);
+          }}
+          onVoid={(p) => {
+            setConfirmDeleteId(p.id);
+          }}
+        />
+
+        {/* Diálogo de anulación Apple Design */}
+        <VoidPurchaseDialog
+          purchase={purchasesList.find((p) => p.id === confirmDeleteId) || null}
+          isOpen={!!confirmDeleteId}
+          isProcessing={anulando}
+          onClose={() => !anulando && setConfirmDeleteId(null)}
+          onConfirm={() => void handleConfirmAnular()}
+        />
     </AppLayout>
   );
 }

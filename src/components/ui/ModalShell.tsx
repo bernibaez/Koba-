@@ -8,6 +8,8 @@ const SIZE: Record<string, string> = {
   xl: 'max-w-xl',
   '2xl': 'max-w-2xl',
   '3xl': 'max-w-3xl',
+  '4xl': 'max-w-6xl',
+  '5xl': 'max-w-[1240px]',
   full: 'max-w-5xl',
 };
 

@@ -1,7 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import ProductsHeader from './ProductsHeader';
 import ProductsToolbar from './ProductsToolbar';
 import ProductsTable from './ProductsTable';
+import MetricStat from './MetricStat';
+import type { QuickView, SegmentOption } from './SegmentedControl';
+import ProductDrawer from './ProductDrawer';
+import BulkActionBar from './BulkActionBar';
+import CommandPalette from './CommandPalette';
 import ProductFormModal from './ProductFormModal';
 import PriceLabelModal from './PriceLabelModal';
 import ProductImportModal from './ProductImportModal';
@@ -10,6 +16,7 @@ import { X, Package, Scale, ShoppingCart, Edit, Printer, Calendar, CheckCircle }
 import { toast } from '@/lib/toast';
 import { exportTableToPdf, formatMoneyPdf } from '@/lib/exportPdf';
 import { useProductos } from '@/hooks/useProductos';
+import '@/styles/apple-tokens.css';
 import {
   actualizarProducto,
   crearProducto,
@@ -72,37 +79,82 @@ export const initialProducts: Product[] = [
 
 export default function ProductManagementScreen() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [search, setSearch] = useState('');
-  const [filterCategory, setFilterCategory] = useState('all');
-  const [filterStatus, setFilterStatus] = useState('all');
-  const [filterStock, setFilterStock] = useState('all');
-  const [productTypeTab, setProductTypeTab] = useState<'all' | 'normal' | 'balanza'>('all');
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // URL state synchronization
+  const quickView = (searchParams.get('tab') as QuickView) || 'all';
+  const search = searchParams.get('q') || '';
+  const filterCategory = searchParams.get('cat') || 'all';
+  const filterStatus = searchParams.get('status') || 'all';
+  const sortField = (searchParams.get('sort') as keyof Product) || 'name';
+  const sortDir = (searchParams.get('order') as 'asc' | 'desc') || 'asc';
+
+  const updateUrlParam = (key: string, value: string | undefined, defaultValue = 'all') => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (!value || value === defaultValue || value.trim() === '') {
+          next.delete(key);
+        } else {
+          next.set(key, value.trim());
+        }
+        return next;
+      },
+      { replace: true }
+    );
+  };
+
+  const handleSearchChange = (val: string) => {
+    updateUrlParam('q', val, '');
+  };
+
+  const handleCategoryChange = (val: string) => {
+    updateUrlParam('cat', val, 'all');
+  };
+
+  const handleStatusChange = (val: string) => {
+    updateUrlParam('status', val, 'all');
+  };
+
+  const handleQuickViewChange = (val: QuickView) => {
+    updateUrlParam('tab', val, 'all');
+  };
+
+  const handleClearFilters = () => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('q');
+        next.delete('cat');
+        next.delete('status');
+        next.delete('tab');
+        return next;
+      },
+      { replace: true }
+    );
+  };
+
   const [isNewScaleProductMode, setIsNewScaleProductMode] = useState(false);
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [importIsScaleMode, setImportIsScaleMode] = useState(false);
   const [editProduct, setEditProduct] = useState<Product | null>(null);
-  const [viewingProduct, setViewingProduct] = useState<Product | null>(null);
+  const [drawerProductId, setDrawerProductId] = useState<string | null>(null);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [triggerElement, setTriggerElement] = useState<HTMLElement | null>(null);
   const [deleteBusyId, setDeleteBusyId] = useState<string | null>(null);
-  const [sortField, setSortField] = useState<keyof Product>('name');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [labelModalProducts, setLabelModalProducts] = useState<Product[] | null>(null);
 
-  const estadoDb =
-    filterStatus === 'active'
-      ? ('activo' as const)
-      : filterStatus === 'inactive'
-        ? ('inactivo' as const)
-        : filterStatus === 'discontinued'
-          ? ('descontinuado' as const)
-          : ('todos' as const);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const barcodeBufferRef = useRef<string>('');
+  const lastKeyTimeRef = useRef<number>(0);
 
-  const { productosUi, crear, actualizar, eliminar, refetch } = useProductos({
+  const { productosUi, crear, actualizar, eliminar, refetch, loading } = useProductos({
     pagina: 1,
     limite: 2000,
     busqueda: search,
     categoria: filterCategory === 'all' ? undefined : filterCategory,
-    estado: estadoDb,
+    estado: 'todos',
   });
 
   const products = productosUi;
@@ -110,36 +162,313 @@ export default function ProductManagementScreen() {
   const isVariableWeight = (p: Product) =>
     Boolean(p.isWeightProduct || p.saleType === 'weight' || p.saleType === 'both');
 
-  const normalCount = products.filter((p) => !isVariableWeight(p)).length;
+  const isLowStock = (p: Product) =>
+    p.currentStock <= p.minStock || p.currentStock === 0 || p.stockStatus === 'low' || p.stockStatus === 'out';
 
-  const scaleCount = products.filter((p) => isVariableWeight(p)).length;
+  const isInactive = (p: Product) =>
+    p.status === 'inactive' || p.status === 'discontinued';
 
-  const filtered = products
-    .filter((p) => {
-      const isScale = isVariableWeight(p);
-      if (productTypeTab === 'normal') return !isScale;
-      if (productTypeTab === 'balanza') return isScale;
-      return true;
-    })
-    .filter((p) => filterStock === 'all' || p.stockStatus === filterStock)
-    .sort((a, b) => {
-      const av = a[sortField];
-      const bv = b[sortField];
-      if (typeof av === 'string' && typeof bv === 'string') {
-        return sortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+  const quickViewOptions: SegmentOption[] = useMemo(
+    () => [
+      { id: 'all', label: 'Todos', count: products.length },
+      { id: 'low_stock', label: 'Stock bajo', count: products.filter(isLowStock).length },
+      { id: 'scale', label: 'Balanza', count: products.filter(isVariableWeight).length },
+      { id: 'inactive', label: 'Inactivos', count: products.filter(isInactive).length },
+    ],
+    [products]
+  );
+
+  const categories = useMemo(() => {
+    const set = new Set<string>();
+    for (const p of products) {
+      if (p.category) set.add(p.category);
+    }
+    return Array.from(set).sort();
+  }, [products]);
+
+  const filtered = useMemo(() => {
+    return products
+      .filter((p) => {
+        if (quickView === 'low_stock') return isLowStock(p);
+        if (quickView === 'scale') return isVariableWeight(p);
+        if (quickView === 'inactive') return isInactive(p);
+        return true;
+      })
+      .filter((p) => {
+        if (filterCategory === 'all') return true;
+        return p.category === filterCategory;
+      })
+      .filter((p) => {
+        if (filterStatus === 'all') return true;
+        return p.status === filterStatus;
+      })
+      .filter((p) => {
+        if (!search || !search.trim()) return true;
+        const term = search.toLowerCase().trim();
+        return (
+          p.name.toLowerCase().includes(term) ||
+          (p.sku && p.sku.toLowerCase().includes(term)) ||
+          (p.barcode && p.barcode.toLowerCase().includes(term)) ||
+          (p.plu && p.plu.toLowerCase().includes(term))
+        );
+      })
+      .sort((a, b) => {
+        const av = a[sortField];
+        const bv = b[sortField];
+        if (typeof av === 'string' && typeof bv === 'string') {
+          return sortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+        }
+        if (typeof av === 'number' && typeof bv === 'number') {
+          return sortDir === 'asc' ? av - bv : bv - av;
+        }
+        return 0;
+      });
+  }, [products, quickView, filterCategory, filterStatus, search, sortField, sortDir]);
+
+  const drawerIndex = filtered.findIndex((p) => p.id === drawerProductId);
+  const drawerProduct = drawerIndex >= 0 ? filtered[drawerIndex] : null;
+  const hasPrev = drawerIndex > 0;
+  const hasNext = drawerIndex >= 0 && drawerIndex < filtered.length - 1;
+
+  const handleNavigatePrev = () => {
+    if (hasPrev) {
+      setDrawerProductId(filtered[drawerIndex - 1].id);
+    }
+  };
+
+  const handleNavigateNext = () => {
+    if (hasNext) {
+      setDrawerProductId(filtered[drawerIndex + 1].id);
+    }
+  };
+
+  // Atajos de teclado globales y soporte de escáner de código de barras
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      // 1. Atajo ⌘K / Ctrl+K para abrir/cerrar paleta de comandos
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault();
+        setCommandPaletteOpen((prev) => !prev);
+        return;
       }
-      if (typeof av === 'number' && typeof bv === 'number') {
-        return sortDir === 'asc' ? av - bv : bv - av;
+
+      // Si la paleta de comandos o modales están abiertos, no capturar otras teclas
+      if (commandPaletteOpen || addModalOpen || importModalOpen || labelModalProducts || drawerProductId) {
+        return;
       }
-      return 0;
+
+      const activeEl = document.activeElement;
+      const isInputFocused =
+        activeEl &&
+        (activeEl.tagName === 'INPUT' ||
+          activeEl.tagName === 'TEXTAREA' ||
+          activeEl.tagName === 'SELECT' ||
+          (activeEl as HTMLElement).isContentEditable);
+
+      // 2. Atajo '/' para enfocar la barra de búsqueda rápida
+      if (e.key === '/' && !isInputFocused && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+        return;
+      }
+
+      // 3. Atajo 'N' o 'n' para crear nuevo producto
+      if ((e.key === 'n' || e.key === 'N') && !isInputFocused && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        setEditProduct(null);
+        setIsNewScaleProductMode(quickView === 'scale');
+        setAddModalOpen(true);
+        return;
+      }
+
+      // 4. Soporte para lector de código de barras físico:
+      const now = Date.now();
+      const timeDiff = now - lastKeyTimeRef.current;
+      lastKeyTimeRef.current = now;
+
+      // Si el tiempo entre caracteres es mayor a 80ms, reiniciar el búfer
+      if (timeDiff > 80) {
+        barcodeBufferRef.current = '';
+      }
+
+      if (e.key === 'Enter') {
+        const scannedCode = barcodeBufferRef.current.trim();
+        if (scannedCode.length >= 3) {
+          const found = products.find(
+            (p) =>
+              p.barcode === scannedCode ||
+              p.sku === scannedCode ||
+              p.plu === scannedCode ||
+              p.id === scannedCode
+          );
+
+          if (found) {
+            e.preventDefault();
+            barcodeBufferRef.current = '';
+            setDrawerProductId(found.id);
+            toast.success(`Producto escaneado: ${found.name}`);
+            return;
+          }
+        }
+        barcodeBufferRef.current = '';
+      } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        barcodeBufferRef.current += e.key;
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [
+    commandPaletteOpen,
+    addModalOpen,
+    importModalOpen,
+    labelModalProducts,
+    drawerProductId,
+    products,
+    quickView,
+  ]);
+
+  const handleSaveDrawerProduct = async (updated: Partial<Product> & { id: string }) => {
+    const previous = products.find((p) => p.id === updated.id);
+    if (!previous) return;
+    const merged = { ...previous, ...updated };
+
+    try {
+      await actualizar(updated.id, merged);
+      toast.success('Cambios guardados', {
+        duration: 5000,
+        action: {
+          label: 'Deshacer',
+          onClick: async () => {
+            try {
+              await actualizar(previous.id, previous);
+              toast.success('Cambios deshechos');
+            } catch (err) {
+              await refetch();
+              toast.error('Error al deshacer cambios');
+            }
+          },
+        },
+      });
+    } catch (e) {
+      await refetch();
+      toast.error(e instanceof Error ? e.message : 'Error al guardar los cambios');
+      throw e;
+    }
+  };
+
+  const handleInlineUpdate = async (
+    id: string,
+    field: 'salePrice' | 'currentStock',
+    value: number,
+    previousProduct: Product
+  ) => {
+    const previousValue = previousProduct[field];
+    const updated = { ...previousProduct, [field]: value };
+    const fieldLabel = field === 'salePrice' ? 'Precio' : 'Stock';
+
+    try {
+      await actualizar(id, updated);
+      toast.success(`${fieldLabel} actualizado`, {
+        duration: 5000,
+        action: {
+          label: 'Deshacer',
+          onClick: async () => {
+            try {
+              await actualizar(id, { ...updated, [field]: previousValue });
+              toast.success(`${fieldLabel} restaurado`);
+            } catch (err) {
+              await refetch();
+              toast.error('Error al deshacer cambio');
+            }
+          },
+        },
+      });
+    } catch (err) {
+      await refetch();
+      toast.error(err instanceof Error ? err.message : 'Error al actualizar');
+    }
+  };
+
+  const handleBulkStatusChange = async (newStatus: 'active' | 'inactive') => {
+    const selectedList = products.filter((p) => selectedIds.has(p.id));
+    if (selectedList.length === 0) return;
+
+    const previousStatusMap = new Map<string, 'active' | 'inactive' | 'discontinued'>();
+    for (const p of selectedList) {
+      previousStatusMap.set(p.id, p.status);
+    }
+
+    try {
+      await Promise.all(
+        selectedList.map((p) => actualizar(p.id, { ...p, status: newStatus }))
+      );
+      const count = selectedList.length;
+      setSelectedIds(new Set());
+
+      toast.success(
+        `${count} producto${count !== 1 ? 's' : ''} marcado${count !== 1 ? 's' : ''} como ${newStatus === 'active' ? 'activo' : 'inactivo'}`,
+        {
+          duration: 5000,
+          action: {
+            label: 'Deshacer',
+            onClick: async () => {
+              try {
+                await Promise.all(
+                  selectedList.map((p) => {
+                    const prevStatus = previousStatusMap.get(p.id) || p.status;
+                    return actualizar(p.id, { ...p, status: prevStatus });
+                  })
+                );
+                toast.success('Estado masivo revertido');
+              } catch (err) {
+                await refetch();
+                toast.error('Error al revertir cambios');
+              }
+            },
+          },
+        }
+      );
+    } catch (err) {
+      await refetch();
+      toast.error(err instanceof Error ? err.message : 'Error al actualizar productos');
+    }
+  };
+
+  const handleBulkExport = () => {
+    const selectedProds = products.filter((p) => selectedIds.has(p.id));
+    if (selectedProds.length === 0) return;
+
+    exportTableToPdf({
+      title: 'Productos Seleccionados',
+      filename: 'productos_seleccionados',
+      headers: ['SKU', 'Nombre', 'Categoría', 'Marca', 'Stock', 'Costo', 'Precio', 'Estado'],
+      rows: selectedProds.map((p) => [
+        p.sku,
+        p.name,
+        p.category,
+        p.brand,
+        p.currentStock,
+        formatMoneyPdf(p.costPrice),
+        formatMoneyPdf(p.salePrice),
+        p.status === 'active' ? 'Activo' : p.status === 'inactive' ? 'Inactivo' : 'Descontinuado',
+      ]),
+      landscape: true,
     });
+  };
+
+  const handleBulkCancel = () => {
+    setSelectedIds(new Set());
+  };
 
   const handleSort = (field: keyof Product) => {
     if (sortField === field) {
-      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+      const nextDir = sortDir === 'asc' ? 'desc' : 'asc';
+      updateUrlParam('order', nextDir, 'asc');
     } else {
-      setSortField(field);
-      setSortDir('asc');
+      updateUrlParam('sort', String(field), 'name');
+      updateUrlParam('order', 'asc', 'asc');
     }
   };
 
@@ -322,7 +651,7 @@ export default function ProductManagementScreen() {
           }}
           product={editProduct}
           allProducts={products}
-          defaultIsScaleProduct={isNewScaleProductMode || productTypeTab === 'balanza'}
+          defaultIsScaleProduct={isNewScaleProductMode || quickView === 'scale'}
           onSave={handleSaveProduct}
           onPrintLabel={(p) => setLabelModalProducts([p])}
         />
@@ -357,392 +686,142 @@ export default function ProductManagementScreen() {
     );
   }
 
+  const totalCount = products.length;
+  const activeCount = products.filter((p) => p.status === 'active').length;
+  const lowStockCount = products.filter((p) => p.stockStatus === 'low' || p.stockStatus === 'out').length;
+  const totalInventoryValue = products.reduce((s, p) => s + p.costPrice * p.currentStock, 0);
+  const formattedInventoryValue = totalInventoryValue.toLocaleString('es-DO', { maximumFractionDigits: 0 });
+
   return (
-    <div className="space-y-6">
-      {!viewingProduct && (
-        <>
-          <ProductsHeader
-            onAdd={() => {
-              setEditProduct(null);
-              setIsNewScaleProductMode(productTypeTab === 'balanza');
-              setAddModalOpen(true);
-            }}
-            onExport={handleExportPdf}
-            onImport={() => {
-              setImportIsScaleMode(true);
-              setImportModalOpen(true);
-            }}
-            totalProducts={products.length}
-            activeProducts={products.filter((p) => p.status === 'active').length}
-            lowStockCount={products.filter((p) => p.stockStatus === 'low' || p.stockStatus === 'out').length}
-          />
+    <div className="apple-scope w-full min-h-full space-y-6">
+      <ProductsHeader
+        onAdd={() => {
+          setEditProduct(null);
+          setIsNewScaleProductMode(quickView === 'scale');
+          setAddModalOpen(true);
+        }}
+        onExport={handleExportPdf}
+        onImport={() => {
+          setImportIsScaleMode(true);
+          setImportModalOpen(true);
+        }}
+        onOpenCategories={() => toast.info('Gestión de categorías disponible próximamente')}
+        onOpenBrands={() => toast.info('Gestión de marcas disponible próximamente')}
+        onOpenCommandPalette={() => setCommandPaletteOpen(true)}
+      />
 
-          {/* Metric Cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="card p-4 hover:border-primary/40 transition-all">
-              <p className="text-xs text-muted-foreground font-medium">Productos en Catálogo</p>
-              <p className="text-2xl font-bold text-foreground mt-1">{products.length} productos</p>
-            </div>
-            <div className="card p-4 hover:border-emerald-500/40 transition-all">
-              <p className="text-xs text-muted-foreground font-medium">Productos Activos</p>
-              <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
-                {products.filter((p) => p.status === 'active').length}
-              </p>
-            </div>
-            <div className="card p-4 hover:border-amber-500/40 transition-all">
-              <p className="text-xs text-muted-foreground font-medium">Con Stock Bajo / Agotado</p>
-              <p className="text-2xl font-bold text-amber-600 dark:text-amber-400 mt-1">
-                {products.filter((p) => p.stockStatus === 'low' || p.stockStatus === 'out').length}
-              </p>
-            </div>
-            <div className="card p-4 hover:border-blue-500/40 transition-all">
-              <p className="text-xs text-muted-foreground font-medium">Valor en Inventario</p>
-              <p className="text-2xl font-bold text-info mt-1">
-                RD$ {products.reduce((s, p) => s + p.costPrice * p.currentStock, 0).toLocaleString('es-DO', { maximumFractionDigits: 0 })}
-              </p>
-            </div>
-          </div>
-
-          {/* Sección de pestañas de productos: Normales vs Balanza */}
-          <div className="flex items-center gap-2 border-b border-border pb-1 overflow-x-auto">
-            <button
-              type="button"
-              onClick={() => setProductTypeTab('all')}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-t-lg font-bold text-xs transition-all border-b-2 ${productTypeTab === 'all'
-                  ? 'border-primary text-primary bg-primary/10'
-                  : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-secondary/60'
-                }`}
-            >
-              <Package size={16} />
-              <span>Todos los Productos</span>
-              <span className="ml-1 text-[10px] px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-extrabold">
-                {products.length}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setProductTypeTab('normal')}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-t-lg font-bold text-xs transition-all border-b-2 ${productTypeTab === 'normal'
-                  ? 'border-blue-500 text-blue-600 dark:text-blue-400 bg-blue-500/10'
-                  : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-secondary/60'
-                }`}
-            >
-              <ShoppingCart size={16} />
-              <span>Productos Estándar (Unidades)</span>
-              <span className="ml-1 text-[10px] px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-extrabold">
-                {normalCount}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setProductTypeTab('balanza')}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-t-lg font-bold text-xs transition-all border-b-2 ${productTypeTab === 'balanza'
-                  ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10'
-                  : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-secondary/60'
-                }`}
-            >
-              <Scale size={16} />
-              <span>Productos de Balanza (mscale / PLU)</span>
-              <span className="ml-1 text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-extrabold">
-                {scaleCount}
-              </span>
-            </button>
-          </div>
-
-
-          <ProductsToolbar
-            search={search}
-            onSearch={setSearch}
-            filterCategory={filterCategory}
-            onFilterCategory={setFilterCategory}
-            filterStatus={filterStatus}
-            onFilterStatus={setFilterStatus}
-            filterStock={filterStock}
-            onFilterStock={setFilterStock}
-            selectedCount={selectedIds.size}
-            onBulkDelete={handleBulkDelete}
-            onPrintSelectedLabels={() => {
-              const selected = products.filter((p) => selectedIds.has(p.id));
-              if (selected.length > 0) setLabelModalProducts(selected);
-            }}
-            onAdd={() => {
-              setEditProduct(null);
-              setIsNewScaleProductMode(productTypeTab === 'balanza');
-              setAddModalOpen(true);
-            }}
-            totalFiltered={filtered.length}
-            onExportPdf={handleExportPdf}
-          />
-
-          <ProductsTable
-            products={filtered}
-            selectedIds={selectedIds}
-            onToggleSelect={handleToggleSelect}
-            onSelectAll={handleSelectAll}
-            sortField={sortField}
-            sortDir={sortDir}
-            onSort={handleSort}
-            onView={(p) => setViewingProduct(p)}
-            onEdit={(p) => { setEditProduct(p); setAddModalOpen(true); }}
-            onDelete={(id) => handleDelete(id)}
-            onToggleStatus={handleToggleStatus}
-            onPrintLabel={(prods) => setLabelModalProducts(prods)}
-            onUpdateProduct={async (p) => {
-              try {
-                await actualizar(p.id, p);
-              } catch (e) {
-                toast.error(e instanceof Error ? e.message : 'Error al actualizar');
-                await refetch();
-              }
-            }}
-          />
-
-        </>
-      )}
-
-      <ModalShell
-        open={!!viewingProduct}
-        onClose={() => setViewingProduct(null)}
-        size="lg"
-        className="p-6 max-h-[90vh] overflow-y-auto"
+      {/* Métricas Minimalistas Estilo Apple (sin tarjetas ni bordes) */}
+      <section
+        aria-label="Resumen de métricas de inventario"
+        className="grid grid-cols-2 md:grid-cols-4 gap-6 pt-1 pb-3"
       >
-        {viewingProduct && (() => {
-          const marginVal = viewingProduct.salePrice - viewingProduct.costPrice;
-          const marginPct = viewingProduct.salePrice > 0 ? ((marginVal / viewingProduct.salePrice) * 100).toFixed(1) : '0';
+        <MetricStat
+          label="En catálogo"
+          value={totalCount}
+        />
+        <MetricStat
+          label="Activos"
+          value={activeCount}
+        />
+        <MetricStat
+          label="Stock bajo o agotado"
+          value={lowStockCount}
+          highlightWarn={true}
+        />
+        <MetricStat
+          label="Valor del inventario"
+          prefix="RD$"
+          value={formattedInventoryValue}
+        />
+      </section>
 
-          const getExpiryTag = (d: string | null) => {
-            if (!d) return { text: 'Sin fecha asignada', badge: false, color: 'text-slate-400' };
-            const parts = d.split('-');
-            if (parts.length !== 3) return { text: d, badge: false, color: 'text-slate-600' };
-            const [yr, mo, day] = parts;
-            const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-            const expiry = new Date(parseInt(yr), parseInt(mo) - 1, parseInt(day));
-            const today = new Date();
-            const diffDays = Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-            const formatted = `${day} ${months[parseInt(mo) - 1]} ${yr}`;
-            if (diffDays < 0) {
-              return { text: `${formatted} (Vencido hace ${Math.abs(diffDays)}d)`, badge: true, color: 'text-rose-600 bg-rose-50 border-rose-200 dark:bg-rose-950/40 dark:border-rose-800' };
-            }
-            if (diffDays <= 7) {
-              return { text: `${formatted} (Vence en ${diffDays}d)`, badge: true, color: 'text-rose-600 bg-rose-50 border-rose-200 dark:bg-rose-950/40 dark:border-rose-800' };
-            }
-            if (diffDays <= 30) {
-              return { text: `${formatted} (Vence en ${diffDays}d)`, badge: true, color: 'text-amber-700 bg-amber-50 border-amber-200 dark:bg-amber-950/40 dark:border-amber-800' };
-            }
-            return { text: formatted, badge: false, color: 'text-slate-700 dark:text-slate-300' };
-          };
+      {/* Barra de filtros integrada con SegmentedControl y búsqueda */}
+      <ProductsToolbar
+        search={search}
+        onSearch={handleSearchChange}
+        filterCategory={filterCategory}
+        onFilterCategory={handleCategoryChange}
+        filterStatus={filterStatus}
+        onFilterStatus={handleStatusChange}
+        quickView={quickView}
+        onChangeQuickView={handleQuickViewChange}
+        quickViewOptions={quickViewOptions}
+        categories={categories}
+        searchInputRef={searchInputRef}
+      />
 
-          const expiryTag = getExpiryTag(viewingProduct.expiryDate);
+      {/* Tabla Minimalista con TanStack Table */}
+      <ProductsTable
+        products={filtered}
+        selectedIds={selectedIds}
+        onToggleSelect={handleToggleSelect}
+        onSelectAll={handleSelectAll}
+        sortField={sortField}
+        sortDir={sortDir}
+        onSort={handleSort}
+        onView={(p) => {
+          setTriggerElement(document.activeElement as HTMLElement | null);
+          setDrawerProductId(p.id);
+        }}
+        onEdit={(p) => {
+          setEditProduct(p);
+          setAddModalOpen(true);
+        }}
+        onDelete={(id) => handleDelete(id)}
+        onToggleStatus={handleToggleStatus}
+        onPrintLabel={(prods) => setLabelModalProducts(prods)}
+        onClearFilters={handleClearFilters}
+        onExportPdf={handleExportPdf}
+        isLoading={loading}
+        onInlineUpdate={handleInlineUpdate}
+      />
 
-          return (
-            <>
-              {/* Header */}
-              <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3 mb-4">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 flex items-center justify-center font-bold">
-                    <Package size={20} />
-                  </div>
-                  <div>
-                    <h2 className="text-lg font-black text-slate-900 dark:text-white leading-tight">
-                      Vista Previa del Producto
-                    </h2>
-                    <p className="text-xs text-slate-500 font-medium">Especificaciones completas y datos técnicos</p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setViewingProduct(null)}
-                  className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                >
-                  <X size={18} />
-                </button>
-              </div>
+      {/* Panel de Detalle (Drawer lateral estilo Apple) */}
+      <ProductDrawer
+        open={Boolean(drawerProduct)}
+        onClose={() => setDrawerProductId(null)}
+        product={drawerProduct}
+        onSave={handleSaveDrawerProduct}
+        onNavigateNext={handleNavigateNext}
+        onNavigatePrev={handleNavigatePrev}
+        hasNext={hasNext}
+        hasPrev={hasPrev}
+        triggerElement={triggerElement}
+      />
 
-              <div className="space-y-4">
-                {/* Main Product Card */}
-                <div className="p-4 bg-slate-50 dark:bg-slate-900/60 rounded-2xl border border-slate-200/80 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div>
-                    <span className="text-[11px] font-bold text-slate-400 block uppercase tracking-wider mb-0.5">
-                      {viewingProduct.category}
-                    </span>
-                    <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
-                      {viewingProduct.name}
-                    </h3>
-                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                      <span className="font-mono text-xs text-slate-500 font-semibold">SKU: {viewingProduct.sku}</span>
-                      {viewingProduct.brand && viewingProduct.brand !== 'Genérico' && viewingProduct.brand !== '—' && (
-                        <span className="text-xs text-slate-500 font-medium">• Marca: {viewingProduct.brand}</span>
-                      )}
-                    </div>
-                  </div>
+      {/* Barra Flotante de Acciones Masivas (Pill oscura estilo Apple) */}
+      <BulkActionBar
+        selectedCount={selectedIds.size}
+        onChangeStatus={handleBulkStatusChange}
+        onExport={handleBulkExport}
+        onCancel={handleBulkCancel}
+      />
 
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold border ${viewingProduct.status === 'active'
-                        ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800'
-                        : 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
-                      }`}>
-                      {viewingProduct.status === 'active' ? <CheckCircle size={13} /> : <X size={13} />}
-                      <span className="capitalize">{viewingProduct.status === 'active' ? 'Activo' : 'Inactivo'}</span>
-                    </span>
-
-                    {(viewingProduct.isWeightProduct || viewingProduct.saleType === 'weight' || viewingProduct.saleType === 'both') && (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-extrabold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
-                        <Scale size={13} />
-                        <span>Balanza ({viewingProduct.weightUnit || 'lb'})</span>
-                      </span>
-                    )}
-
-                    {viewingProduct.plu && (
-                      <span className="px-2.5 py-1 rounded-full text-xs font-mono font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800">
-                        PLU {viewingProduct.plu}
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Sección 1: Precios y Rentabilidad */}
-                <div>
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">
-                    Precios y Rentabilidad
-                  </h4>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
-                    <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800">
-                      <span className="text-[10.5px] text-slate-400 font-bold block uppercase mb-0.5">Precio Venta</span>
-                      <span className="text-sm sm:text-base font-black text-slate-900 dark:text-white tabular-nums">
-                        RD$ {viewingProduct.salePrice.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                      </span>
-                    </div>
-
-                    <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800">
-                      <span className="text-[10.5px] text-slate-400 font-bold block uppercase mb-0.5">Precio Costo</span>
-                      <span className="text-sm sm:text-base font-bold text-slate-600 dark:text-slate-300 tabular-nums">
-                        RD$ {viewingProduct.costPrice.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                      </span>
-                    </div>
-
-                    <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800">
-                      <span className="text-[10.5px] text-slate-400 font-bold block uppercase mb-0.5">Margen Bruto</span>
-                      <span className="text-xs sm:text-sm font-black text-emerald-600 dark:text-emerald-400 tabular-nums">
-                        {marginPct}% (RD$ {marginVal.toFixed(2)})
-                      </span>
-                    </div>
-
-                    <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800">
-                      <span className="text-[10.5px] text-slate-400 font-bold block uppercase mb-0.5">Al por Mayor</span>
-                      <span className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-200 tabular-nums">
-                        {viewingProduct.wholesalePrice > 0
-                          ? `RD$ ${viewingProduct.wholesalePrice.toLocaleString('es-DO', { minimumFractionDigits: 2 })}`
-                          : '—'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Sección 2: Inventario y Control */}
-                <div>
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">
-                    Inventario y Control
-                  </h4>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs">
-                    <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800">
-                      <span className="text-[10.5px] text-slate-400 font-bold block uppercase mb-0.5">Stock Actual</span>
-                      <span className="text-sm font-black text-slate-900 dark:text-white tabular-nums">
-                        {viewingProduct.currentStock} {viewingProduct.unit || 'unidades'}
-                      </span>
-                    </div>
-
-                    <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800">
-                      <span className="text-[10.5px] text-slate-400 font-bold block uppercase mb-0.5">Stock Mínimo</span>
-                      <span className="text-sm font-bold text-slate-700 dark:text-slate-300 tabular-nums">
-                        {viewingProduct.minStock} {viewingProduct.unit || 'unidades'}
-                      </span>
-                    </div>
-
-                    <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800 col-span-2 sm:col-span-1">
-                      <span className="text-[10.5px] text-slate-400 font-bold block uppercase mb-0.5">Vencimiento</span>
-                      {expiryTag.badge ? (
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-bold border text-xs ${expiryTag.color}`}>
-                          <Calendar size={12} />
-                          {expiryTag.text}
-                        </span>
-                      ) : (
-                        <span className={`text-xs font-medium ${expiryTag.color}`}>{expiryTag.text}</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Sección 3: Códigos y Clasificación */}
-                <div>
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">
-                    Identificación & Códigos
-                  </h4>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs">
-                    <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800">
-                      <span className="text-[10.5px] text-slate-400 font-bold block uppercase mb-0.5">Código de Barras</span>
-                      <span className="font-mono text-emerald-700 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-200/60 inline-block text-[11px]">
-                        {viewingProduct.barcode || 'Sin Código'}
-                      </span>
-                    </div>
-
-                    <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800">
-                      <span className="text-[10.5px] text-slate-400 font-bold block uppercase mb-0.5">PLU Balanza</span>
-                      <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
-                        {viewingProduct.plu || '—'}
-                      </span>
-                    </div>
-
-                    <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800">
-                      <span className="text-[10.5px] text-slate-400 font-bold block uppercase mb-0.5">Proveedor</span>
-                      <span className="font-medium text-slate-700 dark:text-slate-300 truncate block">
-                        {viewingProduct.supplier || '—'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Acciones del Modal */}
-              <div className="flex items-center justify-end gap-2.5 mt-6 pt-4 border-t border-slate-100 dark:border-slate-800">
-                <button
-                  type="button"
-                  className="btn-secondary text-xs font-semibold px-4 py-2 cursor-pointer"
-                  onClick={() => setViewingProduct(null)}
-                >
-                  Cerrar
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const prod = viewingProduct;
-                    setViewingProduct(null);
-                    setLabelModalProducts([prod]);
-                  }}
-                  className="btn-secondary text-xs font-semibold px-4 py-2 flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Printer size={14} className="text-purple-600" />
-                  <span>Imprimir Etiqueta</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const prod = viewingProduct;
-                    setViewingProduct(null);
-                    setEditProduct(prod);
-                    setAddModalOpen(true);
-                  }}
-                  className="btn-primary text-xs font-bold px-4 py-2 flex items-center gap-1.5 cursor-pointer shadow-xs"
-                >
-                  <Edit size={14} />
-                  <span>Editar Producto</span>
-                </button>
-              </div>
-            </>
-          );
-        })()}
-      </ModalShell>
+      {/* Paleta de Comandos Accesible (⌘K / Ctrl+K) */}
+      <CommandPalette
+        open={commandPaletteOpen}
+        onClose={() => setCommandPaletteOpen(false)}
+        products={products}
+        onSelectProduct={(p) => {
+          setTriggerElement(document.activeElement as HTMLElement | null);
+          setDrawerProductId(p.id);
+        }}
+        onNewProduct={() => {
+          setEditProduct(null);
+          setIsNewScaleProductMode(quickView === 'scale');
+          setAddModalOpen(true);
+        }}
+        onFilterLowStock={() => handleQuickViewChange('low_stock')}
+        onFilterScale={() => handleQuickViewChange('scale')}
+        onFilterInactive={() => handleQuickViewChange('inactive')}
+        onOpenCategories={() => toast.info('Gestión de categorías disponible próximamente')}
+        onOpenBrands={() => toast.info('Gestión de marcas disponible próximamente')}
+        onImportScale={() => {
+          setImportIsScaleMode(true);
+          setImportModalOpen(true);
+        }}
+        onExportPdf={handleExportPdf}
+      />
     </div>
   );
 }

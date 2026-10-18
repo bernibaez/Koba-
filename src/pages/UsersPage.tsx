@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import AppLayout from '@/components/AppLayout';
 import {
@@ -32,6 +32,7 @@ import { isSupabaseConfigured } from '@/services/clienteSupabase';
 import { isMissingRolesTableError } from '@/services/roles.service';
 import { InlineLoader, TableRowSkeleton } from '@/components/ui/LoadingSkeleton';
 import ModalShell from '@/components/ui/ModalShell';
+import { verificarLimiteUsuarios } from '@/services/subscriptionModules.service';
 
 type Tab = 'users' | 'roles' | 'agents';
 
@@ -53,8 +54,15 @@ export default function UsersPage() {
   const [formDescRol, setFormDescRol] = useState('');
   const [formCodigoRol, setFormCodigoRol] = useState('');
   const [saving, setSaving] = useState(false);
+  const [limiteUsuariosInfo, setLimiteUsuariosInfo] = useState<{ actual: number; limite: number } | null>(null);
 
   const { usuarios, loading, crear, actualizar, alternarActivo, eliminar } = useUsuarios(search);
+
+  useEffect(() => {
+    verificarLimiteUsuarios()
+      .then((res) => setLimiteUsuariosInfo({ actual: res.actual, limite: res.limite }))
+      .catch(() => {});
+  }, [usuarios.length]);
   const {
     agentes,
     loading: loadingAgentes,
@@ -321,7 +329,15 @@ export default function UsersPage() {
         <>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Gestión de Usuarios</h1>
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="text-2xl font-bold text-foreground">Gestión de Usuarios</h1>
+              {limiteUsuariosInfo && (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
+                  <Users size={13} />
+                  Cuota: {usuarios.length} / {limiteUsuariosInfo.limite === -1 ? '∞ Ilimitados' : `${limiteUsuariosInfo.limite} usuarios`}
+                </span>
+              )}
+            </div>
             <p className="text-sm text-muted-foreground mt-1">
               Administra usuarios, roles y agentes comerciales
               {!isSupabaseConfigured() && ' (modo local — configura Supabase para altas reales)'}

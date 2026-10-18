@@ -33,7 +33,7 @@ export async function guardarLogoEmpresa(logoUrl: string | null): Promise<string
   }
 
   const { error } = await sb.from('configuracion_empresa').insert({
-    nombre_comercial: 'Mercato',
+    nombre_comercial: 'KOBA',
     logo_url: logoUrl,
     moneda: 'DOP',
     itbis_porcentaje: 18,

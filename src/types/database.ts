@@ -13,6 +13,36 @@ export type EstadoCaja = 'abierta' | 'cerrada';
 export type SaleType = 'unit' | 'weight' | 'both';
 export type WeightUnit = 'lb' | 'kg' | 'g' | 'oz';
 
+export type PlanEmpresa = 'free' | 'starter' | 'pro' | 'enterprise';
+export type EstadoEmpresa = 'activo' | 'suspendido' | 'trial' | 'cancelado';
+
+export interface Empresa {
+  id: string;
+  codigo: string;
+  nombre: string;
+  razon_social: string | null;
+  rnc: string | null;
+  plan: PlanEmpresa;
+  estado: EstadoEmpresa;
+  telefono: string | null;
+  correo: string | null;
+  direccion: string | null;
+  logo_url: string | null;
+  limite_usuarios: number;
+  limite_sucursales: number;
+  limite_cajas?: number;
+  limite_facturas_mes?: number;
+  moneda: string;
+  itbis_porcentaje: number;
+  fecha_renovacion?: string | null;
+  configuracion?: Record<string, any>;
+  creado_en?: string;
+  actualizado_en?: string;
+  total_usuarios?: number;
+  total_sucursales?: number;
+  volumen_ventas_historico?: number;
+}
+
 export interface Perfil {
   id: string;
   nombre_completo: string;
@@ -22,6 +52,9 @@ export interface Perfil {
   sucursal_id: string | null;
   codigo_acceso: string | null;
   activo: boolean;
+  empresa_id?: string | null;
+  es_superadmin?: boolean;
+  empresa?: Empresa | null;
   creado_en?: string;
   actualizado_en?: string;
 }
@@ -120,6 +153,7 @@ export interface Cliente {
 
 export interface Venta {
   id: string;
+  empresa_id?: string | null;
   numero_factura: string;
   ncf: string | null;
   tipo_ncf: string | null;
@@ -226,7 +260,7 @@ export const CIERRE_COLUMNS =
   'id, codigo, caja_id, cajero_id, sucursal_id, monto_apertura, monto_esperado, monto_real, monto_diferencia, total_ventas, total_efectivo, total_tarjeta, total_transferencia, estado, abierta_en, cerrada_en' as const;
 
 export const PERFIL_COLUMNS =
-  'id, nombre_completo, correo, telefono, rol, sucursal_id, codigo_acceso, activo, creado_en, actualizado_en' as const;
+  'id, nombre_completo, correo, telefono, rol, sucursal_id, codigo_acceso, activo, empresa_id, es_superadmin, creado_en, actualizado_en' as const;
 
 /* —— Extensiones ERP (migración 006) —— */
 

@@ -72,11 +72,24 @@ export default function POSHeader({
   const [timeStr, setTimeStr] = useState('');
   const [profileOpen, setProfileOpen] = useState(false);
   const [calcOpen, setCalcOpen] = useState(false);
+  const [quotaFacturas, setQuotaFacturas] = useState<{ actual: number; limite: number } | null>(null);
   const profileRef = useRef<HTMLDivElement>(null);
 
   const canSettings = canAccessRoute(user?.role ?? 'Cajero', '/settings');
   const canHome = canAccessRoute(user?.role ?? 'Cajero', '/');
   const canSales = canAccessRoute(user?.role ?? 'Cajero', '/sales');
+
+  useEffect(() => {
+    import('@/services/subscriptionModules.service')
+      .then(({ verificarLimiteFacturasMes }) => {
+        verificarLimiteFacturasMes()
+          .then((res) => {
+            setQuotaFacturas({ actual: res.actual, limite: res.limite });
+          })
+          .catch(() => {});
+      })
+      .catch(() => {});
+  }, [total]);
 
   useEffect(() => {
     const updateTime = () => {
@@ -133,6 +146,22 @@ export default function POSHeader({
             <span>{timeStr || '14-09-2026 09:18 AM'}</span>
             <span className="text-[13px] leading-none">⌨️</span>
           </div>
+
+          {/* Cuota mensual de facturas */}
+          {quotaFacturas && quotaFacturas.limite !== -1 && (
+            <div
+              className={`hidden md:flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-bold border select-none ${
+                quotaFacturas.actual >= quotaFacturas.limite
+                  ? 'bg-rose-500/10 text-rose-600 border-rose-500/30'
+                  : quotaFacturas.actual >= quotaFacturas.limite * 0.8
+                  ? 'bg-amber-500/10 text-amber-600 border-amber-500/30'
+                  : 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
+              }`}
+              title="Cuota de facturas del mes según plan de suscripción"
+            >
+              <span>🧾 {quotaFacturas.actual} / {quotaFacturas.limite} facturas</span>
+            </div>
+          )}
         </div>
 
         {/* Center / Actions: 7 Square Cards + Agregar Gasto */}

@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import AppLayout from '@/components/AppLayout';
-import { Plus, Download, Edit2, Monitor, Trash2, Power, Star, Search, ShieldCheck, X, CheckCircle } from 'lucide-react';
+import { Plus, Download, Edit2, Monitor, Trash2, Power, Star, Search, ShieldCheck, X, CheckCircle, Store } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { useCajas } from '@/hooks/useCajas';
 import { sugerirSiguienteCodigoCaja } from '@/services/cajas.service';
+import { verificarLimiteCajas } from '@/services/subscriptionModules.service';
 import { exportTableToPdf } from '@/lib/exportPdf';
 import type { Caja } from '@/types/database';
 import { InlineLoader, TableRowSkeleton } from '@/components/ui/LoadingSkeleton';
@@ -24,6 +25,13 @@ export default function CajasPage() {
   const [editingCaja, setEditingCaja] = useState<Caja | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [limiteInfo, setLimiteInfo] = useState<{ actual: number; limite: number } | null>(null);
+
+  useEffect(() => {
+    verificarLimiteCajas()
+      .then((res) => setLimiteInfo({ actual: res.actual, limite: res.limite }))
+      .catch(() => {});
+  }, [cajas.length]);
 
   const openCreate = async () => {
     setEditingCaja(null);
@@ -143,10 +151,18 @@ export default function CajasPage() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-foreground flex items-center gap-2.5">
-              <Monitor size={26} className="text-primary" />
-              <span>Gestión de Cajas Registradoras</span>
-            </h1>
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="text-2xl font-bold text-foreground flex items-center gap-2.5">
+                <Monitor size={26} className="text-primary" />
+                <span>Gestión de Cajas Registradoras</span>
+              </h1>
+              {limiteInfo && (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                  <Store size={13} />
+                  Cuota: {cajas.length} / {limiteInfo.limite === -1 ? '∞ Ilimitadas' : `${limiteInfo.limite} cajas`}
+                </span>
+              )}
+            </div>
             <p className="text-sm text-muted-foreground mt-1">
               Registra, configura y administra las cajas disponibles para el Punto de Venta (POS)
             </p>

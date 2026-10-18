@@ -1,4 +1,5 @@
 import type { UserRole } from '@/types/roles';
+import type { PlanEmpresa } from '@/types/database';
 
 export type { UserRole } from '@/types/roles';
 
@@ -15,6 +16,10 @@ export type AuthUser = {
   initials: string;
   sucursalId?: string | null;
   rolDb?: string;
+  empresaId?: string | null;
+  empresaNombre?: string;
+  empresaPlan?: PlanEmpresa;
+  isSuperAdmin?: boolean;
 };
 
 type AuthAccount = AuthUser & { password: string };
@@ -24,57 +29,73 @@ export const AUTH_ACCOUNTS: AuthAccount[] = [
   {
     id: '1',
     username: 'admin',
-    name: 'Admin General',
-    email: 'admin@mercato.do',
+    name: 'Admin General (Kob Cloud)',
+    email: 'admin@kobcloud.com',
     password: 'admin123',
     role: 'Administrador',
     status: 'active',
     phone: '809-555-0001',
     initials: 'AG',
+    isSuperAdmin: true,
+    empresaId: 'a0000000-0000-0000-0000-000000000001',
+    empresaNombre: 'KOBA Flagship Store',
+    empresaPlan: 'enterprise',
   },
   {
     id: '2',
     username: 'maria',
     name: 'María García',
-    email: 'maria@mercato.do',
+    email: 'maria@kobcloud.com',
     password: 'maria123',
     role: 'Cajero',
     status: 'active',
     phone: '809-555-0002',
     initials: 'MG',
+    isSuperAdmin: false,
+    empresaId: 'a0000000-0000-0000-0000-000000000001',
+    empresaNombre: 'KOBA Flagship Store',
   },
   {
     id: '3',
     username: 'carlos',
     name: 'Carlos López',
-    email: 'carlos@mercato.do',
+    email: 'carlos@kobcloud.com',
     password: 'carlos123',
     role: 'Vendedor',
     status: 'active',
     phone: '809-555-0003',
     initials: 'CL',
+    isSuperAdmin: false,
+    empresaId: 'a0000000-0000-0000-0000-000000000001',
+    empresaNombre: 'KOBA Flagship Store',
   },
   {
     id: '4',
     username: 'ana',
     name: 'Ana Martínez',
-    email: 'ana@mercato.do',
+    email: 'ana@kobcloud.com',
     password: 'ana123',
     role: 'Almacenista',
     status: 'inactive',
     phone: '809-555-0004',
     initials: 'AM',
+    isSuperAdmin: false,
+    empresaId: 'a0000000-0000-0000-0000-000000000001',
+    empresaNombre: 'KOBA Flagship Store',
   },
   {
     id: '5',
     username: 'pedro',
     name: 'Pedro Sánchez',
-    email: 'pedro@mercato.do',
+    email: 'pedro@kobcloud.com',
     password: 'pedro123',
     role: 'Contador',
     status: 'active',
     phone: '809-555-0005',
     initials: 'PS',
+    isSuperAdmin: false,
+    empresaId: 'a0000000-0000-0000-0000-000000000001',
+    empresaNombre: 'KOBA Flagship Store',
   },
 ];
 
@@ -92,7 +113,7 @@ const ALL_ROUTES = '*';
 export const ROLE_ROUTES: Record<UserRole, string[] | typeof ALL_ROUTES> = {
   Administrador: ALL_ROUTES,
   Cajero: ['/point-of-sale-pos', '/cash-closure', '/sales'],
-  Vendedor: ['/', '/sales', '/point-of-sale-pos', '/combos', '/contacts', '/accounts-receivable', '/cash-closure', '/settings'],
+  Vendedor: ['/', '/crm', '/sales', '/point-of-sale-pos', '/combos', '/contacts', '/accounts-receivable', '/cash-closure', '/settings'],
   Almacenista: [
     '/',
     '/product-management',

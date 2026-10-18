@@ -4,7 +4,7 @@ import ProductManagementScreen from './components/ProductManagementScreen';
 
 export default function ProductManagementPage() {
   return (
-    <AppLayout>
+    <AppLayout fullWidth>
       <ProductManagementScreen />
     </AppLayout>
   );

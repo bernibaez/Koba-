@@ -22,7 +22,6 @@ import type { ProductItem } from '@/lib/productStore';
 import type { StockAdjustmentItem } from '@/lib/stockAdjustmentStore';
 import { obtenerHistorialAjustes, procesarAjusteStockBloque } from '@/services/inventario.service';
 import { useProductos } from '@/hooks/useProductos';
-import { initialProducts } from '@/pages/product-management/components/ProductManagementScreen';
 import { toast } from '@/lib/toast';
 import { useAuth } from '@/context/AuthContext';
 
@@ -52,10 +51,7 @@ export default function StockAdjustmentsPage() {
   });
 
   const catalogProducts = useMemo(() => {
-    const fromStore = (productosUi || []) as ProductItem[];
-    const storeSkus = new Set(fromStore.map((p) => p.sku.toLowerCase()));
-    const demoExtras = initialProducts.filter((ip) => !storeSkus.has(ip.sku.toLowerCase())) as ProductItem[];
-    return [...fromStore, ...demoExtras];
+    return (productosUi || []) as ProductItem[];
   }, [productosUi]);
 
   const [physicalCounts, setPhysicalCounts] = useState<{ [productId: string]: number }>({});

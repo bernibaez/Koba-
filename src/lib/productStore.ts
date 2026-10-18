@@ -1,9 +1,25 @@
-import { Product as PMProduct, initialProducts } from '@/pages/product-management/components/ProductManagementScreen';
+import { Product as PMProduct } from '@/pages/product-management/components/ProductManagementScreen';
 import { isSupabaseConfigured } from '@/services/clienteSupabase';
 
 export type ProductItem = PMProduct;
 
 const STORAGE_KEY = 'mercato_products_store';
+
+const DEMO_PRODUCT_IDS = new Set([
+  'prod-001',
+  'prod-002',
+  'prod-003',
+  'prod-004',
+  'prod-005',
+  'prod-006',
+  'prod-007',
+  'prod-008',
+  'prod-009',
+  'prod-010',
+  'prod-011',
+  'prod-012',
+  'prod-00132',
+]);
 
 export function getStoredProducts(): ProductItem[] {
   // Con Supabase activo no devolvemos catálogo demo local.
@@ -11,12 +27,18 @@ export function getStoredProducts(): ProductItem[] {
 
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(initialProducts));
-      return initialProducts;
-    }
+    if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : initialProducts;
+    if (!Array.isArray(parsed)) return [];
+
+    // Purgar productos simulados de pruebas si quedaron en el almacenamiento local
+    const filtered = parsed.filter(
+      (p) => p && !DEMO_PRODUCT_IDS.has(p.id) && !String(p.id).startsWith('prod-00')
+    );
+    if (filtered.length !== parsed.length) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
+    }
+    return filtered;
   } catch {
     return [];
   }

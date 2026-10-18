@@ -24,35 +24,25 @@ const features = [
   { icon: UserRound, label: 'Gestión de clientes' },
 ];
 
-function MercatoLogo() {
+function KobaLogo({ className = '' }: { className?: string }) {
   return (
-    <div className="relative inline-block">
-      <span
-        className="text-5xl sm:text-6xl font-bold tracking-tight"
-        style={{ color: '#14532d', fontFamily: 'var(--font-sans)' }}
-      >
-        mercat
-        <span className="relative inline-block">
-          o
-          <svg
-            className="absolute -top-2 -right-1 w-5 h-5"
-            viewBox="0 0 20 20"
-            fill="none"
-            aria-hidden
-          >
-            <path
-              d="M6 14c2-6 6-9 10-10-1 4-3 7-6 9-1.5 1-3 1.5-4 1z"
-              fill="#4ade80"
-            />
-            <path
-              d="M10 6c1 2 2 3.5 2.5 5"
-              stroke="#166534"
-              strokeWidth="1"
-              strokeLinecap="round"
-            />
-          </svg>
-        </span>
-      </span>
+    <div className={`flex items-center gap-3.5 ${className}`}>
+      <img
+        src="/assets/images/koba_icon.png"
+        alt="KOBA"
+        className="w-14 h-14 rounded-2xl object-contain drop-shadow-md select-none"
+      />
+      <div>
+        <div className="flex items-baseline gap-2">
+          <span className="text-3xl sm:text-4xl font-black tracking-tight text-gray-900">
+            KOBA
+          </span>
+          <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 tracking-wide uppercase">
+            ERP · Cloud
+          </span>
+        </div>
+        <p className="text-xs text-gray-500 font-medium tracking-wide">Plataforma Empresarial</p>
+      </div>
     </div>
   );
 }
@@ -139,18 +129,18 @@ export default function LoginPage() {
         <div className="hidden lg:flex flex-col justify-between p-10 xl:p-12 border-r border-gray-100">
           <div className="flex items-center gap-2 text-sm text-gray-500">
             <ShieldCheck size={16} style={{ color: '#166534' }} />
-            <span>Sistema de gestión para tu supermercado</span>
+            <span>ERP Cloud Empresarial</span>
           </div>
 
           <div className="my-10">
-            <MercatoLogo />
+            <KobaLogo />
             <h2 className="mt-4 text-xl font-bold text-gray-800">
-              Sistema de gestión para supermercados
+              Gestión Integral para Empresas & Comercios
             </h2>
-            <div className="mt-3 w-12 h-1 rounded-full" style={{ backgroundColor: '#166534' }} />
+            <div className="mt-3 w-12 h-1 rounded-full bg-emerald-600" />
             <p className="mt-4 text-sm text-gray-500 leading-relaxed max-w-sm">
-              Administra tus ventas, inventario, clientes y más desde una sola plataforma eficiente y
-              segura.
+              Potencia tu negocio con control de ventas, inventario multisede, finanzas y facturación
+              desde una sola plataforma ágil y moderna.
             </p>
           </div>
 
@@ -167,8 +157,7 @@ export default function LoginPage() {
         {/* Right form */}
         <div className="p-8 sm:p-10 xl:p-12 flex flex-col justify-center">
           <div className="lg:hidden mb-8">
-            <MercatoLogo />
-            <p className="text-sm text-gray-500 mt-2">Sistema de gestión para supermercados</p>
+            <KobaLogo className="h-14" />
           </div>
 
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">Bienvenido de nuevo</h1>

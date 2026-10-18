@@ -1,5 +1,7 @@
 import { getSupabase, isSupabaseConfigured, tryGetSupabase } from './clienteSupabase';
 import type { MetricasDashboard } from '@/types/database';
+import { getStoredUser } from '@/lib/auth';
+import { esModoSimulacionPlan } from './subscriptionModules.service';
 
 const emptyMetricas = (periodo: MetricasDashboard['periodo']): MetricasDashboard => ({
   periodo,
@@ -17,6 +19,12 @@ export async function obtenerMetricasDashboard(
   periodo: 'hoy' | 'semana' | 'mes' = 'hoy',
   signal?: AbortSignal
 ): Promise<MetricasDashboard> {
+  const user = getStoredUser();
+  // El SuperAdmin no opera una tienda comercial: no ve ventas de clientes en su panel
+  if (user?.isSuperAdmin && !esModoSimulacionPlan()) {
+    return emptyMetricas(periodo);
+  }
+
   const sb = tryGetSupabase();
   if (!sb) return emptyMetricas(periodo);
 
@@ -63,7 +71,6 @@ export async function obtenerTendenciaVentas(
   dias: 7 | 30 = 7,
   signal?: AbortSignal
 ): Promise<PuntoTendenciaVenta[]> {
-  const sb = tryGetSupabase();
   const points: PuntoTendenciaVenta[] = [];
   const today = startOfDay(new Date());
   for (let i = dias - 1; i >= 0; i--) {
@@ -71,6 +78,13 @@ export async function obtenerTendenciaVentas(
     d.setDate(today.getDate() - i);
     points.push({ day: labelDia(d), ventas: 0 });
   }
+
+  const user = getStoredUser();
+  if (user?.isSuperAdmin && !esModoSimulacionPlan()) {
+    return points;
+  }
+
+  const sb = tryGetSupabase();
   if (!sb) return points;
 
   const desde = new Date(today);
@@ -81,6 +95,11 @@ export async function obtenerTendenciaVentas(
     .select('monto_total, creado_en, estado')
     .gte('creado_en', desde.toISOString())
     .neq('estado', 'anulada');
+
+  if (user?.empresaId) {
+    query = query.eq('empresa_id', user.empresaId);
+  }
+
   if (signal) query = query.abortSignal(signal);
   const { data, error } = await query;
   if (error) throw error;

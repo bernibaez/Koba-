@@ -1,5 +1,6 @@
 import { getSupabase, isSupabaseConfigured, tryGetSupabase } from './clienteSupabase';
 import { CAJA_COLUMNS, type Caja } from '@/types/database';
+import { verificarLimiteCajas } from './subscriptionModules.service';
 
 const LOCAL_CAJAS_KEY = 'mercato_local_cajas';
 
@@ -166,6 +167,14 @@ export async function crearCaja(payload: CrearCajaPayload): Promise<Caja> {
   const nombre = payload.nombre.trim();
   if (!codigo) throw new Error('El código de la caja es obligatorio');
   if (!nombre) throw new Error('El nombre de la caja es obligatorio');
+
+  // Validar límite de cajas según la suscripción
+  const checkLimites = await verificarLimiteCajas();
+  if (!checkLimites.permitido) {
+    throw new Error(
+      checkLimites.mensaje || 'Has alcanzado el límite de cajas permitidas para este negocio.'
+    );
+  }
 
   if (!isSupabaseConfigured()) {
     const list = getLocalCajas();
