@@ -7,6 +7,7 @@ interface StockAdjustmentsTableProps {
   adjustments: StockAdjustmentItem[];
   isLoading?: boolean;
   onSelect: (item: StockAdjustmentItem) => void;
+  onAdjustProduct?: (productId: string) => void;
   hasFilters?: boolean;
   onClearFilters?: () => void;
 }
@@ -15,6 +16,7 @@ export default function StockAdjustmentsTable({
   adjustments,
   isLoading = false,
   onSelect,
+  onAdjustProduct,
   hasFilters = false,
   onClearFilters,
 }: StockAdjustmentsTableProps) {
@@ -155,15 +157,28 @@ export default function StockAdjustmentsTable({
                     className="py-2.5 px-3 text-right whitespace-nowrap"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <button
-                      type="button"
-                      onClick={() => onSelect(a)}
-                      aria-label="Ver detalle del ajuste"
-                      title="Ver detalle"
-                      className="p-1 rounded-md text-[var(--ink2)] hover:text-[var(--ink)] hover:bg-[var(--surface2)] transition-colors cursor-pointer"
-                    >
-                      <Eye size={13} />
-                    </button>
+                    <div className="inline-flex items-center gap-1 justify-end">
+                      {onAdjustProduct && (
+                        <button
+                          type="button"
+                          onClick={() => onAdjustProduct(a.productId)}
+                          aria-label={`Ajustar stock de ${a.productName}`}
+                          title="Ajustar stock de este producto"
+                          className="p-1 rounded-md text-[var(--ink2)] hover:text-[var(--accent)] hover:bg-[var(--surface2)] transition-colors cursor-pointer"
+                        >
+                          <Sliders size={13} />
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => onSelect(a)}
+                        aria-label="Ver detalle del ajuste"
+                        title="Ver detalle"
+                        className="p-1 rounded-md text-[var(--ink2)] hover:text-[var(--ink)] hover:bg-[var(--surface2)] transition-colors cursor-pointer"
+                      >
+                        <Eye size={13} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               );

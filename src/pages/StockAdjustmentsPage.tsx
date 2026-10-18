@@ -12,6 +12,7 @@ import StockAdjustmentsHeader from './stock-adjustments/components/StockAdjustme
 import StockAdjustmentsMetrics from './stock-adjustments/components/StockAdjustmentsMetrics';
 import StockAdjustmentsToolbar from './stock-adjustments/components/StockAdjustmentsToolbar';
 import StockAdjustmentsTable from './stock-adjustments/components/StockAdjustmentsTable';
+import StockAdjustmentSingleModal from './stock-adjustments/components/StockAdjustmentSingleModal';
 import StockAdjustmentBlockModal from './stock-adjustments/components/StockAdjustmentBlockModal';
 import StockAdjustmentDetailDrawer from './stock-adjustments/components/StockAdjustmentDetailDrawer';
 
@@ -26,6 +27,8 @@ export default function StockAdjustmentsPage() {
   const [categoryFilter, setCategoryFilter] = useState('all');
 
   // Modals & Drawers
+  const [showSingleModal, setShowSingleModal] = useState(false);
+  const [singleModalProduct, setSingleModalProduct] = useState<ProductItem | null>(null);
   const [showBlockModal, setShowBlockModal] = useState(false);
   const [detailItem, setDetailItem] = useState<StockAdjustmentItem | null>(null);
 
@@ -80,7 +83,7 @@ export default function StockAdjustmentsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productosUi.length]);
 
-  // Global hotkey "A" to open block adjustment modal
+  // Global hotkeys: "N" for single product adjustment, "A" for block adjustment
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const activeEl = document.activeElement;
@@ -90,14 +93,20 @@ export default function StockAdjustmentsPage() {
         activeEl?.tagName === 'SELECT' ||
         (activeEl as HTMLElement)?.isContentEditable;
 
-      if ((e.key === 'a' || e.key === 'A') && !isInput && !showBlockModal && !detailItem) {
-        e.preventDefault();
-        setShowBlockModal(true);
+      if (!isInput && !showBlockModal && !showSingleModal && !detailItem) {
+        if (e.key === 'n' || e.key === 'N') {
+          e.preventDefault();
+          setSingleModalProduct(null);
+          setShowSingleModal(true);
+        } else if (e.key === 'a' || e.key === 'A') {
+          e.preventDefault();
+          setShowBlockModal(true);
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [showBlockModal, detailItem]);
+  }, [showBlockModal, showSingleModal, detailItem]);
 
   // Extract unique categories
   const categoriesList = useMemo(() => {
@@ -122,6 +131,38 @@ export default function StockAdjustmentsPage() {
       return matchSearch && matchType && matchCat;
     });
   }, [adjustments, search, typeFilter, categoryFilter]);
+
+  const handleApplySingleAdjustment = async (adj: {
+    product: ProductItem;
+    tipo: 'entrada' | 'salida' | 'perdida';
+    newQty: number;
+    reason: string;
+  }) => {
+    try {
+      await procesarAjusteStockBloque([
+        {
+          producto_id: adj.product.id,
+          tipo_ajuste: adj.tipo,
+          cantidad_nueva: adj.newQty,
+          motivo: adj.reason,
+          responsable_id: user?.id ?? null,
+        },
+      ]);
+      await refreshData();
+      toast.success(`Ajuste de stock aplicado a "${adj.product.name}"`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Error al aplicar el ajuste de stock');
+      throw e;
+    }
+  };
+
+  const handleAdjustProductById = (productId: string) => {
+    const prod = catalogProducts.find((p) => p.id === productId);
+    if (prod) {
+      setSingleModalProduct(prod);
+      setShowSingleModal(true);
+    }
+  };
 
   const handleApplyBlockAdjustments = async (
     adjustmentsToApply: { product: ProductItem; newQty: number; reason: string }[]
@@ -190,6 +231,10 @@ export default function StockAdjustmentsPage() {
       <div className="apple-scope space-y-4">
         {/* Header */}
         <StockAdjustmentsHeader
+          onOpenSingleModal={() => {
+            setSingleModalProduct(null);
+            setShowSingleModal(true);
+          }}
           onOpenBlockModal={() => setShowBlockModal(true)}
           totalAdjustmentsCount={adjustments.length}
         />
@@ -215,6 +260,7 @@ export default function StockAdjustmentsPage() {
           adjustments={filteredAdjustments}
           isLoading={loading && adjustments.length === 0}
           onSelect={(item) => setDetailItem(item)}
+          onAdjustProduct={handleAdjustProductById}
           hasFilters={hasFilters}
           onClearFilters={() => {
             setSearch('');
@@ -223,6 +269,18 @@ export default function StockAdjustmentsPage() {
           }}
         />
       </div>
+
+      {/* Single Product Adjustment Modal */}
+      <StockAdjustmentSingleModal
+        isOpen={showSingleModal}
+        onClose={() => {
+          setShowSingleModal(false);
+          setSingleModalProduct(null);
+        }}
+        catalogProducts={catalogProducts}
+        preselectedProduct={singleModalProduct}
+        onApplyAdjustment={handleApplySingleAdjustment}
+      />
 
       {/* Block Adjustment Modal */}
       <StockAdjustmentBlockModal

@@ -59,10 +59,10 @@ export default function StockAdjustmentBlockModal({
     return catalogProducts.filter((p) => {
       const matchSearch =
         !q ||
-        p.name.toLowerCase().includes(q) ||
-        p.sku.toLowerCase().includes(q) ||
-        p.category.toLowerCase().includes(q) ||
-        p.barcode.includes(q);
+        Boolean(p.name && p.name.toLowerCase().includes(q)) ||
+        Boolean(p.sku && p.sku.toLowerCase().includes(q)) ||
+        Boolean(p.category && p.category.toLowerCase().includes(q)) ||
+        Boolean(p.barcode && p.barcode.toLowerCase().includes(q));
 
       const matchCat = selectedCategory === 'all' || p.category === selectedCategory;
 

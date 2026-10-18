@@ -1,12 +1,14 @@
 import React from 'react';
-import { Sliders, Package } from 'lucide-react';
+import { Sliders, Plus } from 'lucide-react';
 
 interface StockAdjustmentsHeaderProps {
+  onOpenSingleModal: () => void;
   onOpenBlockModal: () => void;
   totalAdjustmentsCount: number;
 }
 
 export default function StockAdjustmentsHeader({
+  onOpenSingleModal,
   onOpenBlockModal,
   totalAdjustmentsCount,
 }: StockAdjustmentsHeaderProps) {
@@ -28,7 +30,7 @@ export default function StockAdjustmentsHeader({
             )}
           </div>
           <p className="text-xs text-[var(--ink2)] mt-0.5">
-            Auditoría de mermas, pérdidas, conteos físicos y regularización masiva por bloque o categoría
+            Selección individual de producto o regularización masiva por bloque y categoría
           </p>
         </div>
       </div>
@@ -36,12 +38,23 @@ export default function StockAdjustmentsHeader({
       <div className="flex items-center gap-2">
         <button
           type="button"
-          onClick={onOpenBlockModal}
-          aria-label="Ajustar stock por bloque o categoría"
+          onClick={onOpenSingleModal}
+          aria-label="Ajustar stock de un producto específico"
           className="apple-btn-primary text-xs !h-8 !px-3.5 inline-flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-98 transition-transform"
         >
+          <Plus size={14} />
+          <span>Ajustar Producto</span>
+          <kbd className="apple-kbd ml-1">N</kbd>
+        </button>
+
+        <button
+          type="button"
+          onClick={onOpenBlockModal}
+          aria-label="Ajustar stock por bloque o categoría"
+          className="apple-btn-secondary text-xs !h-8 !px-3.5 inline-flex items-center gap-1.5 cursor-pointer active:scale-98 transition-transform"
+        >
           <Sliders size={14} />
-          <span>Ajustar por bloque</span>
+          <span>Por bloque</span>
           <kbd className="apple-kbd ml-1">A</kbd>
         </button>
       </div>
