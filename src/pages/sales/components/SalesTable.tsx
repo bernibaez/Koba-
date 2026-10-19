@@ -209,229 +209,222 @@ export default function SalesTable({
         </div>
       )}
 
-      {/* Tabla con líneas divisorias de 1px */}
-      <div className="w-full overflow-x-auto">
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="border-b border-[var(--line)]">
-              {/* Factura */}
-              <th
-                onClick={() => handleHeaderClick('ncf')}
-                className="px-4 py-3 text-xs font-medium text-[var(--ink2)] cursor-pointer hover:text-[var(--ink)] transition-colors"
-              >
-                <div className="flex items-center gap-1">
-                  <span>Factura</span>
-                  {sortField === 'ncf' && (
-                    sortDir === 'desc' ? <ArrowDown size={12} strokeWidth={2} /> : <ArrowUp size={12} strokeWidth={2} />
-                  )}
-                </div>
-              </th>
+      {/* Tabla con contenedor de tarjeta elevado y bordes nítidos */}
+      <div className="w-full bg-[var(--surface)] border border-[var(--line)] rounded-2xl shadow-xs overflow-hidden">
+        <div className="w-full overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-[var(--line)] bg-[var(--surface2)]">
+                {/* Factura */}
+                <th
+                  onClick={() => handleHeaderClick('ncf')}
+                  className="px-4 py-3.5 text-xs sm:text-sm font-bold text-[var(--ink)] uppercase tracking-wider cursor-pointer hover:text-[var(--accent)] transition-colors"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span>Factura</span>
+                    {sortField === 'ncf' && (
+                      sortDir === 'desc' ? <ArrowDown size={14} strokeWidth={2.5} /> : <ArrowUp size={14} strokeWidth={2.5} />
+                    )}
+                  </div>
+                </th>
 
-              {/* Fecha (oculta < 820px) */}
-              <th
-                onClick={() => handleHeaderClick('date')}
-                className="px-4 py-3 text-xs font-medium text-[var(--ink2)] cursor-pointer hover:text-[var(--ink)] transition-colors hidden min-[820px]:table-cell"
-              >
-                <div className="flex items-center gap-1">
-                  <span>Fecha</span>
-                  {sortField === 'date' && (
-                    sortDir === 'desc' ? <ArrowDown size={12} strokeWidth={2} /> : <ArrowUp size={12} strokeWidth={2} />
-                  )}
-                </div>
-              </th>
+                {/* Fecha (oculta < 820px) */}
+                <th
+                  onClick={() => handleHeaderClick('date')}
+                  className="px-4 py-3.5 text-xs sm:text-sm font-bold text-[var(--ink)] uppercase tracking-wider cursor-pointer hover:text-[var(--accent)] transition-colors hidden min-[820px]:table-cell"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span>Fecha</span>
+                    {sortField === 'date' && (
+                      sortDir === 'desc' ? <ArrowDown size={14} strokeWidth={2.5} /> : <ArrowUp size={14} strokeWidth={2.5} />
+                    )}
+                  </div>
+                </th>
 
-              {/* Cliente (oculto < 820px) */}
-              <th
-                onClick={() => handleHeaderClick('client')}
-                className="px-4 py-3 text-xs font-medium text-[var(--ink2)] cursor-pointer hover:text-[var(--ink)] transition-colors hidden min-[820px]:table-cell"
-              >
-                <div className="flex items-center gap-1">
-                  <span>Cliente</span>
-                  {sortField === 'client' && (
-                    sortDir === 'desc' ? <ArrowDown size={12} strokeWidth={2} /> : <ArrowUp size={12} strokeWidth={2} />
-                  )}
-                </div>
-              </th>
+                {/* Cliente (oculto < 820px) */}
+                <th
+                  onClick={() => handleHeaderClick('client')}
+                  className="px-4 py-3.5 text-xs sm:text-sm font-bold text-[var(--ink)] uppercase tracking-wider cursor-pointer hover:text-[var(--accent)] transition-colors hidden min-[820px]:table-cell"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span>Cliente</span>
+                    {sortField === 'client' && (
+                      sortDir === 'desc' ? <ArrowDown size={14} strokeWidth={2.5} /> : <ArrowUp size={14} strokeWidth={2.5} />
+                    )}
+                  </div>
+                </th>
 
-              {/* Pago (oculto < 820px) */}
-              <th
-                onClick={() => handleHeaderClick('paymentMethod')}
-                className="px-4 py-3 text-xs font-medium text-[var(--ink2)] cursor-pointer hover:text-[var(--ink)] transition-colors hidden min-[820px]:table-cell"
-              >
-                <div className="flex items-center gap-1">
-                  <span>Pago</span>
-                  {sortField === 'paymentMethod' && (
-                    sortDir === 'desc' ? <ArrowDown size={12} strokeWidth={2} /> : <ArrowUp size={12} strokeWidth={2} />
-                  )}
-                </div>
-              </th>
+                {/* Pago (oculto < 820px) */}
+                <th
+                  onClick={() => handleHeaderClick('paymentMethod')}
+                  className="px-4 py-3.5 text-xs sm:text-sm font-bold text-[var(--ink)] uppercase tracking-wider cursor-pointer hover:text-[var(--accent)] transition-colors hidden min-[820px]:table-cell"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span>Pago</span>
+                    {sortField === 'paymentMethod' && (
+                      sortDir === 'desc' ? <ArrowDown size={14} strokeWidth={2.5} /> : <ArrowUp size={14} strokeWidth={2.5} />
+                    )}
+                  </div>
+                </th>
 
-              {/* Total */}
-              <th
-                onClick={() => handleHeaderClick('total')}
-                className="px-4 py-3 text-xs font-medium text-[var(--ink2)] text-right cursor-pointer hover:text-[var(--ink)] transition-colors"
-              >
-                <div className="flex items-center justify-end gap-1">
-                  <span>Total</span>
-                  {sortField === 'total' && (
-                    sortDir === 'desc' ? <ArrowDown size={12} strokeWidth={2} /> : <ArrowUp size={12} strokeWidth={2} />
-                  )}
-                </div>
-              </th>
+                {/* Total */}
+                <th
+                  onClick={() => handleHeaderClick('total')}
+                  className="px-4 py-3.5 text-xs sm:text-sm font-bold text-[var(--ink)] uppercase tracking-wider text-right cursor-pointer hover:text-[var(--accent)] transition-colors"
+                >
+                  <div className="flex items-center justify-end gap-1.5">
+                    <span>Total</span>
+                    {sortField === 'total' && (
+                      sortDir === 'desc' ? <ArrowDown size={14} strokeWidth={2.5} /> : <ArrowUp size={14} strokeWidth={2.5} />
+                    )}
+                  </div>
+                </th>
 
-              {/* Ganancia (oculta < 820px) */}
-              <th
-                onClick={() => handleHeaderClick('grossProfit')}
-                className="px-4 py-3 text-xs font-medium text-[var(--ink2)] text-right cursor-pointer hover:text-[var(--ink)] transition-colors hidden min-[820px]:table-cell"
-              >
-                <div className="flex items-center justify-end gap-1">
-                  <span>Ganancia</span>
-                  {sortField === 'grossProfit' && (
-                    sortDir === 'desc' ? <ArrowDown size={12} strokeWidth={2} /> : <ArrowUp size={12} strokeWidth={2} />
-                  )}
-                </div>
-              </th>
+                {/* Ganancia (oculta < 820px) */}
+                <th
+                  onClick={() => handleHeaderClick('grossProfit')}
+                  className="px-4 py-3.5 text-xs sm:text-sm font-bold text-[var(--ink)] uppercase tracking-wider text-right cursor-pointer hover:text-[var(--accent)] transition-colors hidden min-[820px]:table-cell"
+                >
+                  <div className="flex items-center justify-end gap-1.5">
+                    <span>Ganancia</span>
+                    {sortField === 'grossProfit' && (
+                      sortDir === 'desc' ? <ArrowDown size={14} strokeWidth={2.5} /> : <ArrowUp size={14} strokeWidth={2.5} />
+                    )}
+                  </div>
+                </th>
 
-              {/* Estado */}
-              <th
-                onClick={() => handleHeaderClick('status')}
-                className="px-4 py-3 text-xs font-medium text-[var(--ink2)] cursor-pointer hover:text-[var(--ink)] transition-colors"
-              >
-                <div className="flex items-center gap-1">
-                  <span>Estado</span>
-                  {sortField === 'status' && (
-                    sortDir === 'desc' ? <ArrowDown size={12} strokeWidth={2} /> : <ArrowUp size={12} strokeWidth={2} />
-                  )}
-                </div>
-              </th>
+                {/* Estado */}
+                <th
+                  onClick={() => handleHeaderClick('status')}
+                  className="px-4 py-3.5 text-xs sm:text-sm font-bold text-[var(--ink)] uppercase tracking-wider cursor-pointer hover:text-[var(--accent)] transition-colors"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span>Estado</span>
+                    {sortField === 'status' && (
+                      sortDir === 'desc' ? <ArrowDown size={14} strokeWidth={2.5} /> : <ArrowUp size={14} strokeWidth={2.5} />
+                    )}
+                  </div>
+                </th>
 
-              {/* Acciones */}
-              <th className="w-20 px-3 py-3" />
-            </tr>
-          </thead>
-
-          <tbody>
-            {sales.length === 0 ? (
-              <tr>
-                <td colSpan={8} className="py-12">
-                  <SalesEmptyState
-                    tab="sales"
-                    hasFilters={hasFilters}
-                    onClearFilters={onClearFilters}
-                    onNewSale={onNewSale}
-                  />
-                </td>
+                {/* Acciones */}
+                <th className="w-20 px-3 py-3.5" />
               </tr>
-            ) : (
-              sortedSales.map((sale) => {
-                const isVoided = sale.status === 'voided';
-                const { date, time } = formatDate(sale.date);
-                const marginPct =
-                  sale.total > 0
-                    ? ((sale.grossProfit / sale.total) * 100).toFixed(1)
-                    : '0.0';
+            </thead>
 
-                return (
-                  <tr
-                    key={sale.id}
-                    onClick={() => onRowClick?.(sale)}
-                    className={`border-b border-[var(--line)] transition-colors duration-100 hover:bg-[var(--hover)] group cursor-pointer ${
-                      isVoided ? 'opacity-55' : ''
-                    }`}
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        onRowClick?.(sale);
-                      }
-                    }}
-                    aria-label={`Factura ${sale.ncf}, total RD$ ${formatMoney(sale.total)}`}
-                  >
-                    {/* Factura */}
-                    <td className="px-4 py-3.5 align-middle">
-                      <div className="font-mono text-[13px] font-medium text-[var(--ink)] tracking-tight">
-                        {sale.ncf}
-                      </div>
-                      <div className="text-xs text-[var(--ink2)] mt-0.5">
-                        {sale.kind}
-                      </div>
-                    </td>
+            <tbody>
+              {sales.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="py-12">
+                    <SalesEmptyState
+                      tab="sales"
+                      hasFilters={hasFilters}
+                      onClearFilters={onClearFilters}
+                      onNewSale={onNewSale}
+                    />
+                  </td>
+                </tr>
+              ) : (
+                sortedSales.map((sale) => {
+                  const isVoided = sale.status === 'voided';
+                  const { date, time } = formatDate(sale.date);
+                  const marginPct =
+                    sale.total > 0
+                      ? ((sale.grossProfit / sale.total) * 100).toFixed(1)
+                      : '0.0';
 
-                    {/* Fecha (oculta < 820px) */}
-                    <td className="px-4 py-3.5 align-middle hidden min-[820px]:table-cell">
-                      <div className="text-xs text-[var(--ink)] font-normal tabular-nums">
-                        {date}
-                      </div>
-                      {time && (
-                        <div className="text-xs text-[var(--ink2)] tabular-nums mt-0.5">
-                          {time}
+                  return (
+                    <tr
+                      key={sale.id}
+                      onClick={() => onRowClick?.(sale)}
+                      className={`border-b border-[var(--line)] transition-colors duration-100 hover:bg-[var(--surface2)]/80 group cursor-pointer ${
+                        isVoided ? 'opacity-55' : ''
+                      }`}
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          onRowClick?.(sale);
+                        }
+                      }}
+                      aria-label={`Factura ${sale.ncf}, total RD$ ${formatMoney(sale.total)}`}
+                    >
+                      {/* Factura */}
+                      <td className="px-4 py-3.5 align-middle">
+                        <div className="font-mono text-sm font-bold text-[var(--ink)] tracking-tight">
+                          {sale.ncf}
                         </div>
-                      )}
-                    </td>
-
-                    {/* Cliente (oculto < 820px) */}
-                    <td className="px-4 py-3.5 align-middle hidden min-[820px]:table-cell">
-                      <div className="text-xs font-medium text-[var(--ink)] truncate max-w-[190px]">
-                        {sale.client}
-                      </div>
-                      <div className="text-xs text-[var(--ink2)] mt-0.5 truncate max-w-[190px]">
-                        {sale.cashier}
-                      </div>
-                    </td>
-
-                    {/* Pago (oculto < 820px) */}
-                    <td className="px-4 py-3.5 align-middle hidden min-[820px]:table-cell">
-                      <span className="text-xs text-[var(--ink2)]">
-                        {paymentLabels[sale.paymentMethod] || sale.paymentMethod}
-                      </span>
-                    </td>
-
-                    {/* Total (derecha) */}
-                    <td className="px-4 py-3.5 align-middle text-right">
-                      <div
-                        className={`text-xs sm:text-[13px] font-semibold tabular-nums ${
-                          isVoided ? 'text-[var(--ink2)]' : 'text-[var(--ink)]'
-                        }`}
-                      >
-                        RD$ {formatMoney(sale.total)}
-                      </div>
-                      {sale.itbis > 0 && (
-                        <div className="text-xs text-[var(--ink2)] tabular-nums mt-0.5">
-                          ITBIS {formatMoney(sale.itbis)}
+                        <div className="text-xs font-medium text-[var(--ink2)] mt-0.5">
+                          {sale.kind}
                         </div>
-                      )}
-                    </td>
+                      </td>
 
-                    {/* Ganancia (derecha, oculta < 820px) */}
-                    <td className="px-4 py-3.5 align-middle text-right hidden min-[820px]:table-cell">
-                      <div
-                        className={`text-xs sm:text-[13px] font-medium tabular-nums ${
-                          isVoided ? 'text-[var(--ink2)]' : 'text-[var(--ok)]'
-                        }`}
-                      >
-                        RD$ {formatMoney(sale.grossProfit)}
-                      </div>
-                      <div className="text-xs text-[var(--ink2)] tabular-nums mt-0.5">
-                        {marginPct} %
-                      </div>
-                    </td>
+                      {/* Fecha (oculta < 820px) */}
+                      <td className="px-4 py-3.5 align-middle hidden min-[820px]:table-cell">
+                        <div className="text-xs sm:text-sm text-[var(--ink)] font-semibold tabular-nums">
+                          {date}
+                        </div>
+                        {time && (
+                          <div className="text-xs text-[var(--ink2)] font-medium tabular-nums mt-0.5">
+                            {time}
+                          </div>
+                        )}
+                      </td>
 
-                    {/* Estado (punto de 7px + texto) */}
-                    <td className="px-4 py-3.5 align-middle">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="w-[7px] h-[7px] rounded-full flex-shrink-0"
-                          style={{
-                            backgroundColor:
-                              sale.status === 'completed'
-                                ? 'var(--ok)'
-                                : sale.status === 'draft'
-                                  ? 'var(--warn)'
-                                  : 'var(--ink3)',
-                          }}
-                        />
-                        <span
-                          className={`text-xs ${
+                      {/* Cliente (oculto < 820px) */}
+                      <td className="px-4 py-3.5 align-middle hidden min-[820px]:table-cell">
+                        <div className="text-xs sm:text-sm font-bold text-[var(--ink)] truncate max-w-[200px]">
+                          {sale.client}
+                        </div>
+                        <div className="text-xs text-[var(--ink2)] font-medium mt-0.5 truncate max-w-[200px]">
+                          {sale.cashier}
+                        </div>
+                      </td>
+
+                      {/* Pago (oculto < 820px) */}
+                      <td className="px-4 py-3.5 align-middle hidden min-[820px]:table-cell">
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-[var(--surface2)] border border-[var(--line)] text-xs font-semibold text-[var(--ink)]">
+                          {paymentLabels[sale.paymentMethod] || sale.paymentMethod}
+                        </span>
+                      </td>
+
+                      {/* Total (derecha) */}
+                      <td className="px-4 py-3.5 align-middle text-right">
+                        <div
+                          className={`text-sm sm:text-base font-bold tabular-nums ${
                             isVoided ? 'text-[var(--ink2)]' : 'text-[var(--ink)]'
+                          }`}
+                        >
+                          RD$ {formatMoney(sale.total)}
+                        </div>
+                        {sale.itbis > 0 && (
+                          <div className="text-xs text-[var(--ink2)] font-medium tabular-nums mt-0.5">
+                            ITBIS {formatMoney(sale.itbis)}
+                          </div>
+                        )}
+                      </td>
+
+                      {/* Ganancia (derecha, oculta < 820px) */}
+                      <td className="px-4 py-3.5 align-middle text-right hidden min-[820px]:table-cell">
+                        <div
+                          className={`text-sm sm:text-base font-bold tabular-nums ${
+                            isVoided ? 'text-[var(--ink2)]' : 'text-[var(--ok)]'
+                          }`}
+                        >
+                          RD$ {formatMoney(sale.grossProfit)}
+                        </div>
+                        <div className="text-xs text-[var(--ink2)] font-semibold tabular-nums mt-0.5">
+                          {marginPct} %
+                        </div>
+                      </td>
+
+                      {/* Estado */}
+                      <td className="px-4 py-3.5 align-middle">
+                        <span
+                          className={`apple-badge text-xs font-bold ${
+                            sale.status === 'completed'
+                              ? 'apple-badge-success'
+                              : sale.status === 'draft'
+                                ? 'apple-badge-warning'
+                                : 'apple-badge-neutral'
                           }`}
                         >
                           {sale.status === 'completed'
@@ -440,14 +433,13 @@ export default function SalesTable({
                               ? 'Borrador'
                               : 'Anulada'}
                         </span>
-                      </div>
-                    </td>
+                      </td>
 
-                    {/* Acciones */}
-                    <td
-                      className="w-20 px-3 py-3.5 align-middle text-right"
-                      onClick={(e) => e.stopPropagation()}
-                    >
+                      {/* Acciones */}
+                      <td
+                        className="w-20 px-3 py-3.5 align-middle text-right"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                       {renderRowActions ? (
                         renderRowActions(sale)
                       ) : onAction ? (
@@ -472,10 +464,11 @@ export default function SalesTable({
       </div>
 
       {/* Pie de tabla */}
-      <div className="flex items-center justify-between py-4 text-xs text-[var(--ink2)] select-none">
+      <div className="flex items-center justify-between px-4 py-3 border-t border-[var(--line)] bg-[var(--surface2)]/50 text-xs sm:text-sm font-semibold text-[var(--ink2)] select-none">
         <span>{sales.length} registros</span>
         {footerAction && <div>{footerAction}</div>}
       </div>
     </div>
-  );
+  </div>
+);
 }
